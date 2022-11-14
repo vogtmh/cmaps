@@ -2,8 +2,8 @@
 
 /*===================================================================
   
-  CompanyMaps v8.0 SharedLibs
-  Release date 2022-11-10
+  CompanyMaps 8.0 SharedLibs
+  Release date 2022-11-14
   Copyright (c) 2016-2022 by MavoDev
   see https://www.mavodev.de for more details
   

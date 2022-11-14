@@ -1,6 +1,6 @@
 <?php
-# CompanyMaps 5.2 Stats Sync
-# Release date 2020-10-20
+# CompanyMaps 8.0 Stats Sync
+# Release date 2022-11-14
 # Copyright (c) 2016-2020 by MavoDev
 # see https://www.mavodev.de for more details
 

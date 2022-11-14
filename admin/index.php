@@ -7,8 +7,8 @@ include '../shared.php';
 <!DOCTYPE HTML>
 <!-- ===================================================================
     
-  CompanyMaps 7.1 AdminPanel
-  Release date 2022-11-03
+  CompanyMaps 8.0 AdminPanel
+  Release date 2022-11-14
   Copyright (c) 2016-2022 by MavoDev
   see https://www.mavodev.de for more details
     
@@ -21,7 +21,7 @@ include '../shared.php';
   <title><?php echo $apptitle ?></title>
   <meta http-equiv="Content-Type" content="text/html; charset=us-ascii">
   <!--<link rel="stylesheet" type="text/css" href="../tools/stats.css">  -->
-  <link rel="stylesheet" type="text/css" href="../cmaps71.css">
+  <link rel="stylesheet" type="text/css" href="../cmaps80.css">
   
   <link rel="apple-touch-icon" sizes="57x57" href="../../favicons/apple-touch-icon-57x57.png">
   <link rel="apple-touch-icon" sizes="60x60" href="../favicons/apple-touch-icon-60x60.png">
@@ -50,10 +50,10 @@ include '../shared.php';
   
   <script src="../tools/Chart.min.js"></script>
   <script src="../tools/jquery3.js"></script>
-  <script src="../tools/resize71.js"></script>
+  <script src="../tools/resize80.js"></script>
   <script src="../tools/underscore.js"></script>
-  <script src="backend70.js"></script>
-  <script src="../user71.js"></script>
+  <script src="backend80.js"></script>
+  <script src="../user80.js"></script>
   <!--<script src="../tools/gcharts.js"></script>-->
   <link href='https://fonts.googleapis.com/css?family=Roboto' rel='stylesheet' type='text/css'>
 </head>

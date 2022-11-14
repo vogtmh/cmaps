@@ -1,4 +1,4 @@
-// Helper functions for admin mode only
+// Helper functions required for admins only
 
 function checkHealthStatus() {
   $.ajax({

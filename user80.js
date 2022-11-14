@@ -1978,7 +1978,7 @@ function checkMobile() {
       script.onload = function () {
         addMobileInterface()
       };
-      script.src = 'mobile70.js';
+      script.src = 'mobile80.js';
       document.head.appendChild(script);
     }
   }

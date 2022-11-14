@@ -4,8 +4,8 @@ session_start();
 header("Access-Control-Allow-Origin: *");
 header("Content-Type: application/json; charset=UTF-8");
 
-# CompanyMaps 7.0 Account API
-# Release date 2022-10-21
+# CompanyMaps 8.0 Account API
+# Release date 2022-11-14
 # Copyright (c) 2016-2022 by MavoDev
 # see https://www.mavodev.de for more details
 

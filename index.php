@@ -8,8 +8,8 @@
 <!DOCTYPE HTML>
 <!-- ===================================================================
   
-  CompanyMaps 7.1 Client
-  Release date 2022-11-03
+  CompanyMaps 8.0 Client
+  Release date 2022-11-14
   Copyright (c) 2016-2022 by MavoDev
   see https://www.mavodev.de for more details
   
@@ -22,7 +22,7 @@
   <title><?php echo $apptitle?></title>
   <!-- <meta http-equiv="Content-Type" content="text/html; charset=utf-8"> -->
   <meta charset="utf-8">
-  <link rel="stylesheet" type="text/css" href="cmaps71.css">
+  <link rel="stylesheet" type="text/css" href="cmaps80.css">
   <link href='https://fonts.googleapis.com/css?family=Roboto' rel='stylesheet' type='text/css'>
   <!-- FAVICONS -->
   <link rel="apple-touch-icon" sizes="57x57" href="favicons/apple-touch-icon-57x57.png">
@@ -53,8 +53,8 @@
   <!-- SCRIPTS -->
   <script src="tools/jquery3.js"></script>
   <script src="tools/jquery-migrate-1.4.1.min.js"></script>
-  <script src="user71.js"></script>
-  <script src="tools/resize71.js"></script>
+  <script src="user80.js"></script>
+  <script src="tools/resize80.js"></script>
   <script src="tools/underscore.js"></script>
 </head>
 
@@ -565,7 +565,7 @@
   
   if (isset($_SESSION['username'])) {
     if (permcheck($_SESSION['username'], 'desks') > 1) {
-      echo '<script src="admin70.js"></script>';
+      echo '<script src="admin80.js"></script>';
     }
     else {
       echo '<script src="tools/empty.js"></script>';

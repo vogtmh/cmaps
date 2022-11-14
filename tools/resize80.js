@@ -1,7 +1,9 @@
-// CompanyMaps AutoResizeJS v7.1
-// Release date 2022-11-03
+// CompanyMaps 8.0 AutoResizeJS
+// Release date 2022-11-14
 // Copyright (c) 2016-2020 by MavoDev
 // see https://www.mavodev.de for more details
+
+// This will ensure to resize all elements to the width of the browser
 
 var pageWidth, pageHeight;
 
