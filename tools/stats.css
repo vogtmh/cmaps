@@ -1,0 +1,26 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+:before, :after {
+  content: '';
+  display: block;
+  position: absolute;
+  box-sizing: border-box;
+}
+
+
+
+.wrapper {
+  padding: 50px 0;
+  border-bottom: 1px solid rgba(0,0,0,.1);
+  background: #fff;
+}
+
+#canvas {
+  display: block;
+  margin: 0 auto;
+  color: #fff;
+}

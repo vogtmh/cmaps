@@ -1,0 +1,1494 @@
+.rotated { 
+    -webkit-transform: rotate(90deg);
+    -moz-transform: rotate(90deg);
+    -o-transform: rotate(90deg);
+    -ms-transform: rotate(90deg);
+    transform: rotate(90deg);
+}
+
+.clock {
+    position:fixed; 
+    bottom:0px; 
+    width: 170px;
+    left: 50%;
+    margin-left: -95px; 
+    text-align:center;
+    background-color: #333;
+    border-radius: 10px 10px 0px 0px;
+    padding: 10px;
+    cursor: pointer;
+    z-index:1;
+}
+
+.clock:hover {
+    background-color: #555;
+}
+
+.datepicker {
+    position:fixed;
+    left:50%;
+    bottom:0px;
+    width:180px;
+    height:175px;
+    margin-left:-100px;
+    padding:15px 15px 10px 15px;
+    background-color:#333;
+    border-radius:10px 10px 0px 0px;
+    display:none;
+    z-index:0;
+}
+
+.datepicker_separator {
+    position:absolute;
+    left:17px;
+    bottom:45px;
+    width:166px;
+    height:2px;
+    background-color:#c0c0c0
+}
+
+.rightmeet_now {
+    height: 100%; 
+    width: 175px; 
+    padding-left:100px;
+    float:left; 
+    margin:0px;
+}
+
+.rightmeet_next {
+    height: 100%; 
+    width: 215px; 
+    float:right; 
+    margin:0px;
+}
+
+.meettext {
+    padding: 10px;
+    font-size: 1.1em;
+    line-height: 155%;
+}
+
+.leftmeet_now {
+    height: 100%; 
+    width: 215px; 
+    float:left; 
+    margin:0px;
+}
+
+.leftmeet_next {
+    height: 100%; 
+    width: 175px; 
+    padding-right: 100px;
+    float:right; 
+    margin:0px;
+}
+
+
+/* Pulsating for meeting rooms */
+
+@keyframes green-pulse
+{
+     0% {
+          box-shadow: 0 0 0 0px rgba(0, 255, 0, 0.9);
+     }
+     100% {
+          box-shadow: 0 0 0 10px rgba(0, 255, 0, 0);
+     }
+}
+
+@keyframes blue-pulse
+{
+     0% {
+          box-shadow: 0 0 0 0px rgba(0, 187, 255, 1);
+     }
+     100% {
+          box-shadow: 0 0 0 10px rgba(0, 187, 255, 0);
+     }
+}
+
+@keyframes red-pulse
+{
+     0% {
+          box-shadow: 0 0 0 0px rgba(255, 0, 0, 0.9);
+     }
+     100% {
+          box-shadow: 0 0 0 10px rgba(255, 0, 0, 0);
+     }
+}
+
+@keyframes orange-pulse
+{
+     0% {
+          box-shadow: 0 0 0 0px rgba(255, 127, 0, 0.9);
+     }
+     100% {
+          box-shadow: 0 0 0 10px rgba(255, 127, 0, 0);
+     }
+}
+
+@keyframes orange-teampulse
+{
+     0% {
+          box-shadow: 0 0 0 0px rgba(255, 127, 0, 0.9);
+     }
+     100% {
+          box-shadow: 0 0 0 100px rgba(255, 127, 0, 0);
+     }
+}
+
+/* Right mapplate */
+
+.rightmapplate {
+    height:200px; 
+    width:600px;
+    background-color: #333;
+    color: #fff;
+    border-radius: 100px 100px 100px 100px;
+    position: absolute;
+    z-index:101;
+    overflow: hidden;
+}
+
+.rightmapplate_top {
+    position: absolute; 
+    right: 86px; 
+    top:2px; 
+    left:100px;
+    height:50px; 
+    overflow:hidden;
+    background-color:#999; 
+    text-align: center;
+    line-height: 50px;
+    padding-left:100px;
+    font-size:24px;
+    border-radius: 0px 5px 0px 0px;
+}
+
+.rightmapplate_avatar {
+    position: absolute; 
+    top:2px; 
+    left: 2px; 
+    width:196px; 
+    height: 196px;
+    overflow:hidden; 
+    border-radius: 50%;
+}
+
+.rightmapplate_close {
+    position: absolute; 
+    top:2px; 
+    left: 2px; 
+    width:196px; 
+    height: 196px;
+    overflow:hidden; 
+    border-radius: 50%;
+    opacity: 0;
+}
+
+.rightmapplate_close:hover {
+    opacity: 1;
+}
+
+.rightmapplate_textbox {
+    position: absolute; 
+    right: 86px; 
+    top:52px; 
+    bottom:2px;
+    width: 300px; 
+    padding-left:5px; 
+    padding-right: 5px;
+    padding-top: 10px;
+    overflow:hidden; 
+    font-size: 14px;
+    line-height:155%;
+    background: #333;
+    border-radius: 0px 0px 5px 0px;
+}
+
+.rightmapplate_goto {
+    position: absolute; 
+    right: 2px; 
+    bottom:2px; 
+    top: 2px;
+    width: 100px; 
+    overflow:hidden; 
+    padding-left:5px; 
+    padding-right: 5px;
+    text-align: center;  
+    line-height: 196px; 
+    border-radius:0px 100px 100px 0px; 
+    font-size: 16px; 
+    background:#111;
+    opacity:0.7;
+}
+
+.rightmapplate_goto:hover {
+    opacity: 1;
+}
+
+.rightmapplate_copy {
+    position: absolute; 
+    right: 85px; 
+    bottom:2px; 
+    width: 30px; 
+    height:30px; 
+    overflow:hidden; 
+    padding-left:5px; 
+    padding-right: 5px;
+    text-align: center;  
+    line-height: 30px; 
+    border-radius:10px 0px 10px 0px; 
+    font-size: 16px; 
+    opacity: 0.7;
+    cursor: pointer;
+}
+
+.rightmapplate_copy:hover {
+    opacity: 1.0;
+}
+
+/* Left mapplate */
+
+.leftmapplate {
+    height:200px; 
+    width:600px;
+    background-color: #333;
+    color: #fff;
+    border-radius: 100px 100px 100px 100px;
+    position: absolute;
+    z-index:101;
+    overflow: hidden;
+}
+
+.leftmapplate_top {
+    position: absolute; 
+    left: 86px; 
+    top:2px; 
+    right:100px;
+    height:50px; 
+    overflow:hidden;
+    background-color:#999; 
+    text-align: center;
+    line-height: 50px;
+    padding-right:100px;
+    font-size:24px;
+    border-radius: 5px 0px 0px 0px;
+}
+
+.leftmapplate_avatar {
+    position: absolute; 
+    top:2px; 
+    right: 2px; 
+    width:196px; 
+    height: 196px;
+    overflow:hidden; 
+    border-radius: 50%;
+}
+
+.leftmapplate_close {
+    position: absolute; 
+    top:2px; 
+    right: 2px; 
+    width:196px; 
+    height: 196px;
+    overflow:hidden; 
+    border-radius: 50%;
+    opacity: 0;
+}
+
+.leftmapplate_close:hover {
+    opacity: 1;
+}
+
+.leftmapplate_textbox {
+    position: absolute; 
+    left: 86px; 
+    top:52px; 
+    bottom:2px;
+    width: 300px; 
+    padding-left:5px; 
+    padding-right: 5px;
+    padding-top: 10px;
+    overflow:hidden; 
+    font-size: 14px;
+    line-height:155%;
+    background: #333;
+    border-radius: 0px 0px 0px 5px;
+}
+
+.leftmapplate_goto {
+    position: absolute; 
+    left: 2px; 
+    bottom:2px; 
+    top: 2px;
+    width: 100px; 
+    overflow:hidden; 
+    padding-left:5px; 
+    padding-right: 5px;
+    text-align: center;  
+    line-height: 196px; 
+    border-radius:100px 0px 0px 100px; 
+    font-size: 16px; 
+    background:#111;
+    opacity:0.7;
+}
+
+.leftmapplate_goto:hover {
+    opacity: 1;
+}
+
+.leftmapplate_copy {
+    position: absolute; 
+    left: 85px; 
+    bottom:2px; 
+    width: 30px; 
+    height:30px; 
+    overflow:hidden; 
+    padding-left:5px; 
+    padding-right: 5px;
+    text-align: center; 
+    line-height: 30px; 
+    border-radius:0px 10px 0px 10px; 
+    font-size: 16px; 
+    opacity: 0.7;
+    cursor: pointer;
+}
+
+.leftmapplate_copy:hover {
+    opacity: 1.0;
+}
+
+/* SharedDesk */
+
+.shareddeskname {
+    background:#0564C8; 
+    width:100px; 
+    padding-left:5px;
+    margin-bottom:3px; 
+    border-radius:5px;
+    cursor: pointer;
+    opacity:0.7;
+}
+
+.shareddeskname:hover {
+    opacity:1.0;
+}
+
+/* Right nameplate */
+
+.rightnameplate {
+    height:200px; 
+    width:600px;
+    background-color: #333;
+    color: #fff;
+    border-radius: 100px 10px 10px 100px;
+    position: absolute;
+    z-index:101;
+    overflow: hidden;
+}
+
+.rightnameplate_top {
+    position: absolute; 
+    right: 2px; 
+    top:2px; 
+    width: 400px; 
+    height:50px; 
+    overflow:hidden;
+    background-color:#999; 
+    border-radius:0px 10px 0px 0px;
+    text-align: center;
+    line-height: 50px;
+    padding-left:100px;
+    font-size:24px;
+}
+
+.rightnameplate_avatar {
+    position: absolute; 
+    top:2px; 
+    left: 2px; 
+    width:196px; 
+    height: 196px;
+    overflow:hidden; 
+    border-radius: 50%;
+}
+
+.rightnameplate_close {
+    position: absolute; 
+    top:2px; 
+    left: 2px; 
+    width:196px; 
+    height: 196px;
+    overflow:hidden; 
+    border-radius: 50%;
+    opacity: 0;
+}
+
+.rightnameplate_close:hover {
+    opacity: 1;
+}
+
+.rightnameplate_textbox {
+    position: absolute; 
+    right: 2px; 
+    top:62px; 
+    width: 376px; 
+    height:136px; 
+    padding-left:5px; 
+    padding-right: 5px;
+    overflow:hidden; 
+    border-radius:0px 0px 10px 0px; 
+    font-size: 14px;
+    line-height:155%;
+}
+
+.rightnameplate_number {
+    position: absolute; 
+    right: 2px; 
+    bottom:2px; 
+    width: 150px; 
+    height:30px; 
+    overflow:hidden; 
+    padding-left:5px; 
+    padding-right: 5px;
+    text-align: center;  
+    line-height: 30px; 
+    border-radius:10px 0px 10px 0px; 
+    font-size: 16px; 
+    background:#555;
+}
+
+.rightnameplate_copy {
+    position: absolute; 
+    right: 158px; 
+    bottom:2px; 
+    width: 30px; 
+    height:30px; 
+    overflow:hidden; 
+    padding-left:5px; 
+    padding-right: 5px;
+    text-align: center;  
+    line-height: 30px; 
+    border-radius:10px 0px 10px 0px; 
+    font-size: 16px; 
+    opacity: 0.7;
+    cursor: pointer;
+}
+
+.rightnameplate_copy:hover {
+    opacity: 1.0;
+}
+
+/* Used by both nameplates */
+.nameplate_edit {
+    position: absolute; 
+    width:490px;
+    height:auto;
+    background:#444;
+    border-radius:0px 0px 10px 10px;
+    z-index:100;
+}
+
+/* Left nameplate */
+
+.leftnameplate {
+    height:200px; 
+    width:600px;
+    background-color: #333;
+    color: #fff;
+    border-radius: 10px 100px 100px 10px;
+    position: absolute;
+    z-index:101;
+    overflow:hidden;
+}
+
+.leftnameplate_top {
+    position: absolute; 
+    left: 2px; 
+    top:2px; 
+    width: 400px; 
+    height:50px; 
+    overflow:hidden;
+    background-color:#999; 
+    border-radius:10px 0px 00px 0px;
+    text-align: center;
+    line-height: 50px;
+    padding-right:100px;
+    font-size:24px;
+}
+
+.leftnameplate_avatar {
+    position: absolute; 
+    top:2px; 
+    right: 2px; 
+    width:196px; 
+    height: 196px;
+    overflow:hidden; 
+    border-radius: 50%;
+}
+
+.leftnameplate_close {
+    position: absolute; 
+    top:2px; 
+    right: 2px; 
+    width:196px; 
+    height: 196px;
+    overflow:hidden; 
+    border-radius: 50%;
+    opacity: 0; 
+}
+
+.leftnameplate_close:hover {
+    opacity: 1;
+}
+
+.leftnameplate_textbox {
+    position: absolute; 
+    left: 2px; 
+    top:62px; 
+    width: 376px; 
+    height:136px; 
+    padding-left:5px; 
+    padding-right: 5px;
+    overflow:hidden; 
+    border-radius:10px 0px 0px 0px; 
+    font-size: 14px;
+    line-height:155%;
+}
+
+.leftnameplate_number {
+    position: absolute; 
+    left: 2px; 
+    bottom:2px; 
+    width: 150px; 
+    height:30px; 
+    overflow:hidden; 
+    padding-left:5px; 
+    padding-right: 5px;
+    text-align: center; 
+    line-height: 30px; 
+    border-radius:0px 10px 0px 10px; 
+    font-size: 16px; 
+    background:#555;
+}
+
+.leftnameplate_copy {
+    position: absolute; 
+    left: 158px; 
+    bottom:2px; 
+    width: 30px; 
+    height:30px; 
+    overflow:hidden; 
+    padding-left:5px; 
+    padding-right: 5px;
+    text-align: center; 
+    line-height: 30px; 
+    border-radius:0px 10px 0px 10px; 
+    font-size: 16px; 
+    opacity: 0.7;
+    cursor: pointer;
+}
+
+.leftnameplate_copy:hover {
+    opacity: 1.0;
+}
+
+.announceplate {
+    position: relative;
+    width: 450px; 
+    height: 120px; 
+    border-radius: 10px; 
+    background-color: #707070;
+    opacity: 0.9;
+    margin: 10px 10px 10px 20px;
+}
+
+.announceplate:hover {
+    opacity:1.0;
+}
+
+.announceavatar {
+    position:absolute; 
+    top:10px; 
+    left:10px; 
+    width:100px; 
+    height: 100px; 
+    border-radius: 10px; 
+    background-size: cover;
+}
+
+.announcetextbox {
+    position:absolute; 
+    top:10px; 
+    left:120px; 
+    width:320px; 
+    height: 100px; 
+    border-radius: 10px; 
+    display: flex; 
+    align-items: center;
+}
+
+.announcetext {
+    margin: 10px; 
+    width:300px;
+}
+
+.announcetype {
+    position:absolute; 
+    top:0px;
+    right:0px;
+    width:80px;
+    height:30px;
+    text-align:center;
+    line-height:30px;
+    border-radius:0px 10px 0px 10px;
+}
+
+.notifybadge {
+    position: relative; 
+    width: 140px;
+    height: 40px;
+    display: inline;
+    float: left;
+    line-height: 40px;
+    background-color:#FF7F00;
+    text-align: center;
+    border-radius: 20px;
+    margin-right: 2px;
+    opacity: 0.7;
+    pointer-events: auto;
+}
+
+.notifybadge:hover {
+    opacity: 1.0;
+}
+
+.loginicon {
+    opacity: 0.4;
+}
+
+.loginicon:hover {
+    opacity: 1.0;
+}
+
+#avatarbutton {
+    position:fixed; 
+    left: 20px; 
+    bottom: 20px; 
+    width:80px; 
+    height:80px;
+    border-radius:50%;
+    cursor:pointer;
+    background: transparent;
+    overflow:hidden;
+    z-index:1;
+}
+
+.avatarbutton_username {
+    position:fixed; 
+    left:60px; 
+    bottom: 20px; 
+    width:auto; 
+    height:80px;
+    line-height: 80px; 
+    vertical-align: middle;
+    cursor:pointer;
+    background-color:#333; 
+    font-size:1.5em;z-index:0;
+    padding-left:70px;
+    padding-right:20px;
+    border-radius:0px 40px 40px 0px;
+}
+
+.avatarbutton_username:hover {
+    background-color:#555;
+}
+
+canvas {
+    width: 100% !important;
+    max-width: 1600px;
+    height: auto !important;
+}
+
+#container{
+  position:absolute;
+  left:0px;
+  top:0px;
+  right:0px;
+  bottom:0px;
+  font-family:Arial, sans-serif;
+  color:#fff;
+  background: none;
+}
+.page_content{
+  width:1600px;
+  height:1200px;
+  -ms-transform-origin: top left;
+  -webkit-transform-origin: top left;
+  transform-origin: top left;
+  -webkit-transition: all 500ms ease-in-out !important;
+  transition: all 300ms ease-in-out !important;
+  position: absolute;
+}
+
+a {color: white;text-decoration: none;}
+
+tr:hover {
+  background-color: #555;
+}
+
+td a{width:100%;display:block;}
+
+table { border-collapse:collapse }
+
+body {
+    font-family: Roboto, Arial, Helvetica;
+    background-color:#000; 
+    background-image: url("images/background.png"); 
+    color:#ffffff;
+}
+
+.mapflag {
+    position: absolute;
+	opacity: 0.7; 
+	overflow: hidden;
+	border-radius: 50%;
+	width: 100px;
+	height: 100px;
+    background-size: 100% 100%;
+    cursor: zoom-in;
+    /*transition: transform .2s;  Animation */
+}
+
+.mapflag_results {
+    position: absolute;
+	opacity: 1.0; 
+	overflow: hidden;
+	border-radius: 50%;
+	width: 40px;
+	height: 40px;
+	left: 30px;
+	bottom: 0px;
+	background-color: rgba(255, 127, 0, 1);	
+	font-size:1.5em;
+	line-height: 40px;
+    visibility: hidden;
+    text-align: center;
+}
+
+.mapflag:hover{
+    opacity: 1.0;
+    transform: scale(1.5); /* (150% zoom */
+    z-index: 100;
+}
+
+.mapflag_address {
+    position: absolute;
+	opacity: 0.9; 
+	overflow: hidden;
+	border-radius: 3px;
+	width:300px;
+	background:#333333;
+    text-align: left; padding: 5px;  
+    z-index:99; 
+    display:none;
+}
+
+.headeritem {
+    position: relative;
+    height: 65px;
+    width: 200px;
+    margin-top:2px; 
+    margin-left: 4px;
+    margin-right:4px;
+    float:left; 
+    display:inline;
+    border-radius:5px;
+}
+
+.headeritem_text {
+    line-height:65px;
+    float:left; 
+    display:inline;
+    margin-left:5px;
+    margin-right:5px;
+}
+
+.headeritem_floors {
+    width:45px; 
+    height:45px; 
+    margin-top:10px;
+    margin-left:5px; 
+    border-radius:5px;
+    background-color:#0979D8;
+    line-height:45px;
+    text-align:center;
+    color: #FFFFFF;
+    font-size:24px;
+    font-weight:bold;
+    float:left; 
+    display:inline;
+    opacity: 0.6;
+}
+
+.headeritem_floors:hover {
+    opacity: 1.0;
+}
+
+.headeritem_maps {
+    width:140px; 
+    height:45px; 
+    margin-top:5px;
+    margin-bottom:5px;
+    margin-left:10px; 
+    border-radius:5px;
+    background-color:#0979D8;
+    line-height:45px;
+    text-align:center;
+    color: #FFFFFF;
+    float:left; 
+    display:inline;
+    opacity: 0.6;
+}
+
+.headeritem_maps:hover {
+    opacity: 1.0;
+}
+
+.headeritem_picture {
+    width:45px; 
+    height:45px; 
+    margin-top:10px;
+    margin-left:5px;
+    line-height:65px;
+    float:left; 
+    display:inline;
+    opacity: 0.6;
+}
+
+.headeritem_picture:hover {
+    opacity: 1.0;
+}
+
+.settingsitem {
+    position: relative;
+    height: 65px;
+    width: 90%;
+    margin-top:2px; 
+    margin-left: 12px;
+    margin-right:12px;
+    float:left; 
+    display:inline;
+    border-radius:5px;
+}
+
+.settingsitem_linkbutton {
+    line-height:45px;
+    width:45%;
+    float:left; 
+    display:inline;
+    margin-left:5px;
+    margin-top: 10px;
+    margin-bottom: 10px;
+    border-radius: 10px; 
+    color: rgb(255, 255, 255); 
+    text-align: center;
+    background-color: #757975; 
+    opacity: 0.8;
+}
+
+.settingsitem_linkbutton:hover {
+    opacity: 1.0;
+}
+
+.settingsitem_text {
+    line-height:65px;
+    float:left; 
+    display:inline;
+    margin-left:5px;
+    margin-right:5px;
+}
+
+.settingsitem_option {
+    width:90px; 
+    height:45px; 
+    margin-left:5px;
+    margin-top: 10px;
+    line-height:65px;
+    float:right; 
+    display:inline;
+    opacity: 1.0;
+}
+
+.settingsitem_option:hover {
+    opacity: 1.0;
+}
+
+.cmn-toggle {
+  position: absolute;
+  margin-left: -9999px;
+  visibility: hidden;
+}
+.cmn-toggle + label {
+  display: block;
+  position: relative;
+  cursor: pointer;
+  outline: none;
+  user-select: none;
+}
+
+input.cmn-toggle-round-flat + label {
+  padding: 2px;
+  width: 80px;
+  height: 40px;
+  background-color: #dddddd;
+  border-radius: 40px;
+  transition: background 0.4s;
+}
+input.cmn-toggle-round-flat + label:before,
+input.cmn-toggle-round-flat + label:after {
+  display: block;
+  position: absolute;
+  content: "";
+}
+input.cmn-toggle-round-flat + label:before {
+  top: 2px;
+  left: 2px;
+  bottom: 2px;
+  right: 2px;
+  background-color: #555;
+  border-radius: 40px;
+  transition: background 0.4s;
+}
+input.cmn-toggle-round-flat + label:after {
+  top: 4px;
+  left: 4px;
+  bottom: 4px;
+  width: 35px;
+  background-color: #dddddd;
+  border-radius: 52px;
+  transition: margin 0.4s, background 0.4s;
+}
+input.cmn-toggle-round-flat:checked + label {
+  background-color: #0979D8;
+}
+input.cmn-toggle-round-flat:checked + label:after {
+  margin-left: 40px;
+  background-color: #0979D8;
+}
+
+
+.logo {
+	position: fixed;
+        z-index: 2;
+        width: 120px;
+        height: 120px;
+        padding: 8px;
+        opacity:0.8;
+}
+
+.logo:hover{
+	opacity: 1.0;
+}
+
+.zoom {
+	position: fixed;
+        z-index: 2;
+        width: 40px;
+        height: 40px;
+        padding: 8px;
+        opacity:0.6;
+}
+
+.zoom:hover{
+	opacity: 1.0;
+}
+
+.deskball {
+ display: inline;
+ border-radius: 50%;
+ opacity: 1.0;
+ position: absolute;
+ z-index: 99;
+}
+
+.occupied {
+ width: 20px;
+ height: 20px;
+ background-color:rgba(0, 0, 255, 0.7);
+}
+
+.occupiedldap {
+    width: 20px;
+    height: 20px;
+    background-color:rgba(0, 0, 255, 0.7);
+   }
+
+.shareddesk {
+    width: 20px;
+    height: 20px;
+    background-color:rgba(0, 0, 255, 0.7);
+}
+
+.free {
+ width: 20px;
+ height: 20px;
+ background-color: rgba(180, 180, 180, 0.7);
+}
+
+.booking_free {
+    width: 20px;
+    height: 20px;
+    background-color: rgba(61, 173, 30, 0.7);
+   }
+
+.booking_booked {
+ width: 20px;
+ height: 20px;
+ background-color: rgba(61, 173, 30, 0.7);
+ background-image: url("images/dot.png");
+ background-size: cover;
+}
+
+.hotseat {
+ width: 20px;
+ height: 20px;
+ background-color: rgba(208, 19, 23, 0.7);
+}
+
+.hotseat_free {
+    width: 20px;
+    height: 20px;
+    background-color: rgba(208, 19, 23, 0.7);
+   }
+
+.hotseat_booked {
+ width: 20px;
+ height: 20px;
+ background-color: rgba(208, 19, 23, 0.7);
+ background-image: url("images/dot.png");
+ background-size: cover;
+}
+
+.newdesk {
+    width: 20px;
+    height: 20px;
+    background-color: rgba(189, 39, 42, 0.7);
+   }
+
+.newmap {
+    width: 100px;
+    height: 100px;
+    background-color: rgba(189, 39, 42, 0.7);
+}
+
+.blocked {
+ width: 20px;
+ height: 20px;
+ background-color: rgba(180, 180, 180, 0.7);
+}
+
+.meeting {
+ width: 50px;
+ height: 50px;
+ background-color: rgba(137, 26, 183, 0.7);
+ background-image: url("images/meeting.png");
+ background-size: cover;
+}
+
+.meeting_indicator {
+    width: 50px;
+    height: 25px;
+    border-radius: 0px 0px 25px 25px;
+    background-color: transparent;
+}
+
+.printer {
+ width: 36px;
+ height: 36px;
+ background-color: rgba(50,50,50,0.7);
+ background-image: url("images/printer.png");
+ background-size: cover;
+}
+
+.firstaid {
+ width: 36px;
+ height: 36px;
+ background-color: rgba(220,50,50,0.7);
+ background-image: url("images/firstaid.png");
+ background-size: cover;
+}
+
+.restroom {
+ width: 50px;
+ height: 50px;
+ background-color: rgba(78, 81, 100, 0.7);
+ background-image: url("images/restroom.png");
+ background-size: cover;
+}
+
+.food {
+ width: 36px;
+ height: 36px;
+ background-color: rgba(215, 125, 40, 0.7);
+ background-image: url("images/food.png");
+ background-size: cover;
+}
+
+.service {
+ width: 36px;
+ height: 36px;
+ background-color: rgba(70, 190, 190, 0.7);
+ background-image: url("images/service.png");
+ background-size: cover;
+}
+
+.exit {
+ width: 50px;
+ height: 50px;
+ background-color: rgba(84, 185, 72, 0.7);
+ background-image: url("images/exit.png");
+ background-size: cover;
+}
+
+.keycardlock {
+ width: 36px;
+ height: 36px;
+ background-color: rgba(240, 220, 0, 0.7);
+ background-image: url("images/keycardlock.png");
+ background-size: cover;
+}
+
+.keylock {
+ width: 36px;
+ height: 36px;
+ background-color: rgba(240, 220, 0, 0.7);
+ background-image: url("images/keylock.png");
+ background-size: cover;
+}
+
+.floor {
+ width: 100px;
+ height: 100px;
+ background-color: #d017a8b3;
+}
+
+.caption {
+    top:100%; 
+    left:50%;
+    margin-left:-50px; 
+    position:absolute; 
+    z-index: 100; 
+    width:100px;
+    border-radius: 3px;
+    color:#FF7F00;
+    background:rgba(51, 51, 51, 0.7);
+    text-align:center;
+    visibility: hidden;
+    font-size: 8px;
+}
+
+.consistency {
+    display: inline;
+    position: relative;
+    margin: 0px;
+}
+
+/* Left tooltip (for most right items only) */
+.consistency .tooltiptext_left {
+    visibility: hidden;
+    width: 600px;
+    min-height: 220px;
+    background-color: black;
+    color: #fff;
+    text-align: left;
+    padding: 5px 10px;
+    margin: 10px;
+    border-radius: 6px;
+    bottom:70px;
+    right: -200px; 
+    /* Position the tooltip text - see examples below! */
+    position: absolute;
+}
+
+/* Show the tooltip text when you mouse over the tooltip container */
+.consistency:hover .tooltiptext_left {
+    visibility: visible;
+}
+
+.consistency .tooltiptext_left::after {
+    content: " ";
+    position: absolute;
+    bottom: 0%;
+    right: 100%; /* To the left of the tooltip */
+    margin-top: -5px;
+    border-width: 5px;
+    border-style: solid;
+    border-color: transparent black transparent transparent;
+    visibility: hidden;
+}
+
+input[type=text], input[type=password], select {
+    -webkit-appearance:none;
+    -webkit-border-radius: 0px;
+    width: 100%;
+    padding: 12px 20px;
+    margin: 8px 0;
+    display: inline-block;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    box-sizing: border-box;
+    font-family: Roboto, Arial, Helvetica;
+    font-size: 14px;
+    opacity: 0.8;
+}
+
+select:hover {
+    opacity: 1.0;
+}
+
+input[type=submit], input[type=button] {
+    -webkit-appearance:none;
+    -webkit-border-radius: 0px;
+    width: 100%;
+    background-color: #FF7F00;
+    color: white;
+    padding: 14px 20px;
+    margin: 8px 0;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-family: Roboto, Arial, Helvetica;
+    font-size: 14px;
+    opacity: 0.8;
+}
+
+input[type=submit]:hover, input[type=button]:hover {
+    background-color: #ffa200;
+    font-family: Roboto, Arial, Helvetica;
+    font-size: 14px;
+    opacity: 1.0;
+}
+
+.wrapper-dropdown-5 {
+    /* Size & position */
+    position: relative;
+    width: 200px;
+    margin: 0 auto;
+    padding: 12px 15px;
+
+    /* Styles */
+    background: #fff;
+    border-radius: 5px;
+    box-shadow: 0 1px 0 rgba(0,0,0,0.2);
+    cursor: pointer;
+    outline: none;
+    transition: all 0.3s ease-out;
+}
+
+.wrapper-dropdown-5:after { /* Little arrow */
+    content: "";
+    width: 0;
+    height: 0;
+    position: absolute;
+    top: 50%;
+    right: 15px;
+    margin-top: -3px;
+    border-width: 6px 6px 0 6px;
+    border-style: solid;
+    border-color: #4cbeff transparent;
+}
+
+.wrapper-dropdown-5 .dropdown {
+    /* Size & position */
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+
+    /* Styles */
+    background: #fff;
+    border-radius: 0 0 5px 5px;
+    border: 1px solid rgba(0,0,0,0.2);
+    border-top: none;
+    border-bottom: none;
+    list-style: none;
+    transition: all 0.3s ease-out;
+
+    /* Hiding */
+    max-height: 0;
+    overflow: hidden;
+}
+
+.wrapper-dropdown-5 .dropdown li {
+    padding: 0 10px ;
+}
+
+.wrapper-dropdown-5 .dropdown li a {
+    display: block;
+    text-decoration: none;
+    color: #333;
+    padding: 10px 0;
+    transition: all 0.3s ease-out;
+    border-bottom: 1px solid #e6e8ea;
+}
+
+.wrapper-dropdown-5 .dropdown li:last-of-type a {
+    border: none;
+}
+
+.wrapper-dropdown-5 .dropdown li i {
+    margin-right: 5px;
+    color: inherit;
+    vertical-align: middle;
+}
+
+/* Hover state */
+
+.wrapper-dropdown-5 .dropdown li:hover a {
+    color: #57a9d9;
+}
+
+/* Active state */
+
+.wrapper-dropdown-5.active {
+    border-radius: 5px 5px 0 0;
+    background: #4cbeff;
+    box-shadow: none;
+    border-bottom: none;
+    color: white;
+}
+
+.wrapper-dropdown-5.active:after {
+    border-color: #82d1ff transparent;
+}
+
+.wrapper-dropdown-5.active .dropdown {
+    border-bottom: 1px solid rgba(0,0,0,0.2);
+    max-height: 400px;
+}
+
+.deskstats {
+    width:490px;
+    margin:10px;
+    padding:10px;
+    float:left;
+    background-color:#333333;
+    border-radius:10px;
+    /*visibility:hidden;*/
+}
+
+.calendar {
+    width:180px;
+    border-radius:5px;
+    overflow:hidden;
+    float:left;
+}
+
+.calendar_label {
+    width:36px;
+    height:16px;
+    background-color:#333;
+    float:left;
+    text-align: center;
+    line-height:16px;
+    margin-bottom:2px;
+}
+
+.calendarday_neutral {
+    width:36px;
+    height:27px;
+    background-color:#333;
+    float:left;
+    text-align: center;
+    line-height:27px;
+    font-weight: bold;
+    color:#fff;
+    cursor:pointer;
+}
+
+.calendarday_neutral:hover {
+    color:rgba(255, 127, 0, 1);
+}
+
+.calendarday_userdate {
+    width:36px;
+    height:27px;
+    background-color:#333;
+    float:left;
+    text-align: center;
+    line-height:27px;
+    font-weight: bold;
+    color: rgb(216, 196, 22);
+    cursor:pointer;
+}
+
+.calendarday_userdate:hover {
+    color:rgba(255, 127, 0, 1);
+}
+
+.calendarday_free {
+    width:36px;
+    height:27px;
+    background-color:rgba(61, 173, 30,1.0);
+    float:left;
+    text-align: center;
+    line-height:27px;
+    font-weight: bold;
+    color:#fff;
+    cursor:pointer;
+}
+
+.calendarday_free:hover {
+    background-color:#fff;
+    color:#000;
+}
+
+.calendarday_booked {
+    width:36px;
+    height:27px;
+    background-color:rgb(163, 13, 13);
+    float:left;
+    text-align: center;
+    line-height:27px;
+    font-weight: bold;
+    color:white;
+    cursor:not-allowed;
+}
+
+.calendarday_userbooked {
+    width:36px;
+    height:27px;
+    background-color:rgb(216, 196, 22);
+    float:left;
+    text-align: center;
+    line-height:27px;
+    font-weight: bold;
+    color:white;
+    cursor:not-allowed;
+}
+
+.calendarday_past {
+    width:36px;
+    height:27px;
+    background-color:#606060;
+    float:left;
+    text-align: center;
+    line-height:27px;
+    font-weight: bold;
+    color:white;
+    cursor:not-allowed;
+}
+
+.editbutton {
+    float:right; 
+    margin:5px; 
+    width:80px; 
+    height:80px;
+    background-color: #333;
+    background-size: cover;
+    border-radius:50%;
+}
+
+.editbutton:hover {
+    background-color: #559F35;
+}

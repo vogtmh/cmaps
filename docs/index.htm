@@ -1,0 +1,468 @@
+<!DOCTYPE HTML>
+<!-- ===================================================================
+    
+    CompanyMaps v7.1
+    Release date 2022-11-03
+    Copyright (c) 2016-2022 by MavoDev
+    see https://www.mavodev.de for more details
+    
+==================================================================== -->
+
+<html lang="de">
+<head>
+  <meta name="generator" content="HTML Tidy for Windows (vers 22 March 2008), see www.w3.org">
+
+  <title>CompanyMaps Help</title>
+  <meta http-equiv="Content-Type" content="text/html; charset=us-ascii">
+  <link rel="stylesheet" type="text/css" href="help71.css">
+  
+  <link rel="apple-touch-icon" sizes="57x57" href="../favicons/apple-touch-icon-57x57.png">
+  <link rel="apple-touch-icon" sizes="60x60" href="../favicons/apple-touch-icon-60x60.png">
+  <link rel="apple-touch-icon" sizes="72x72" href="../favicons/apple-touch-icon-72x72.png">
+  <link rel="apple-touch-icon" sizes="76x76" href="../favicons/apple-touch-icon-76x76.png">
+  <link rel="apple-touch-icon" sizes="114x114" href="../favicons/apple-touch-icon-114x114.png">
+  <link rel="apple-touch-icon" sizes="120x120" href="../favicons/apple-touch-icon-120x120.png">
+  <link rel="apple-touch-icon" sizes="144x144" href="../favicons/apple-touch-icon-144x144.png">
+  <link rel="apple-touch-icon" sizes="152x152" href="../favicons/apple-touch-icon-152x152.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="../favicons/apple-touch-icon-180x180.png">
+  <link rel="icon" type="image/png" href="../favicons/favicon-32x32.png" sizes="32x32">
+  <link rel="icon" type="image/png" href="../favicons/android-chrome-192x192.png" sizes="192x192">
+  <link rel="icon" type="image/png" href="../favicons/favicon-96x96.png" sizes="96x96">
+  <link rel="icon" type="image/png" href="../favicons/favicon-16x16.png" sizes="16x16">
+  <link rel="manifest" href="../favicons/manifest.json">
+  <link rel="mask-icon" href="../favicons/safari-pinned-tab.svg" color="#5BBAD5">
+  <link rel="shortcut icon" href="../favicons/favicon.ico">
+  <meta name="msapplication-TileColor" content="#2d89ef">
+  <meta name="msapplication-TileImage" content="../favicons/mstile-144x144.png">
+  <meta name="msapplication-config" content="../favicons/browserconfig.xml">
+  <meta name="theme-color" content="#000000">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="viewport" content="width=device-width">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  
+  <link href='https://fonts.googleapis.com/css?family=Roboto' rel='stylesheet' type='text/css'>
+</head>
+
+<body>
+  <div class="header" id="header">
+    <img src="../images/companymaps.png" style="height: 130px" />
+    <div class="headertitle">Companymaps 7</div>
+  </div>
+  <div class="navigation" id="navigation">
+    <!--<a href="#content_newfeatures"><div class="navibutton" id="newfeatures">New Features</div></a>-->
+    <a href="#content_firststeps"><div class="navibutton" id="firststeps">First Steps</div></a>
+    <a href="#content_legend"><div class="navibutton" id="advanced">Legend</div></a>
+    <a href="#content_booking"><div class="navibutton" id="booking">Desk Booking</div></a>
+    <a href="#content_advanced"><div class="navibutton" id="advanced">Advanced Usage</div></a>
+    <a href="#content_api"><div class="navibutton" id="api">API</div></a>
+    <a href="#content_changelog"><div class="navibutton" id="changelog">Changelog</div></a>
+    <a href="javascript:window.close()"><div class="navibutton" id="closehelp">Close Help</div></a>
+    <!--<a href="../index.php"><div class="navibutton" id="closehelp">back to map</div></a>-->
+  </div>
+  <div class="content" id="content">
+
+    <div class="content_area">
+      <div class="content_row">
+        <div class="content_full title">First steps<div class="anchor"><a name="content_firststeps"> </a></div></div>
+        <div class="content_full">
+          <img src="images/screenshot.png" style="width: 1000px;" />
+        </div>
+      </div>
+    </div>
+
+    <div class="content_area">
+      <div class="content_row">
+        <div class="content_full title">Legend<div class="anchor"><a name="content_legend"> </a></div></div>
+        <div class="content_full">
+          <table style="border-spacing:10px;text-align:left;">
+            <tr> <th style="width:70px;">Color</th> <th>Type</th> <th>Description</th> </tr>
+            <tr> <td><div class="deskball free" style="border-radius:50%;background-color:rgb(180,180,180,0.7)"></div></td> <td>Empty</td> <td>Not in use yet, not bookable</td> </tr>
+            <tr> <td><div class="deskball occupied" style="border-radius:50%;"></div></td> <td>Assigned</td> <td>Fixed desk, assigned via AD user profile to 1-4 people</td> </tr>
+            <tr> <td><div class="deskball free" style="border-radius:50%;background-color:rgba(61, 173, 30, 0.7);"></div></td> <td>Bookable</td> <td>Bookable desk in department</td> </tr>
+            <tr> <td><div class="deskball free" style="border-radius:50%;background-color:rgba(61, 173, 30, 0.7);background-image: url('../images/dot.png');background-size: cover;"></div></td> <td>Booked</td> <td>Booked desk in department</td> </tr>
+            <tr> <td><div class="deskball hotseat" style="border-radius:50%;background-color:rgba(208, 19, 23, 0.7);"></div></td> <td>Available Hotseat</td> <td>Hotseat, bookable by anyone</td> </tr>
+            <tr> <td><div class="deskball hotseat" style="border-radius:50%;background-color:rgba(208, 19, 23, 0.7);background-image: url('../images/dot.png');background-size: cover;"></div></td> <td>Booked Hotseat</td> <td>Hotseat, which has been booked</td> </tr>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="content_area">
+      <div class="content_row">
+        <div class="content_full title">Desk Booking<div class="anchor"><a name="content_booking"> </a></div></div>
+        <div class="content_full">
+          <table style="width:100%;text-align:left;">
+            <tr> <td><img src="images/deskbooking.png" /></td> 
+                 <td style="width:50px"></td>
+                  <td>
+                    <ul>
+                      <li>Make sure you are logged in and click on a hotseat or bookable desk</li>
+                      <li>Select the desired date and confirm by clicking on "Book"</li>
+                      <li>Your booked seats will appear in yellow color for you, bookings of other people will be in red color</li>
+                      <li>Open up your personal menu in the lower left corner to see a list of all your bookings</li>
+                      <li>All booked desks for today will have a white dot in the middle</li>
+                      <li>To show the whole map for any other date, click on the clock at the bottom and choose a day<br><br></li>
+                      <li>GDPR notice #1: If you book a desk, your employee information will appear on the map and people will be able to search for it</li>
+                      <li>GDPR notice #2: All bookings and the recorded data automatically get removed if you cancel your booking or the booked date is in the past</li>
+                    </ul>
+                </td> </tr>
+          </table>
+        </div>
+      </div>
+    </div>
+    
+    <div class="content_area">
+      <div class="content_row">
+        <div class="content_full title">Advanced Usage<div class="anchor"><a name="content_advanced"> </a></div></div>
+          <div class="content_left">
+              <p style="font-weight: bold">Display meeting room names</p>
+              Want to highlight all meeting rooms with their names? Just enter "meet" in the searchbox :)
+          </div>
+          <div class="content_right">
+              <p style="font-weight: bold">Link to search results</p>
+              You would like to pass a link to someone with a search?<br />
+              Use the following syntax:<br />
+              https://[hostname]/index.php?map=MAPNAME&findme=SEARCHTEXT <br /><br />
+
+              Example: https://[hostname]/index.php?map=goeppingen&findme=vogt
+          </div>
+          <div class="content_left">
+              <p style="font-weight: bold">Multitarget search link</p>
+              You would like to pass a link with multiple search terms? <br />
+              Use the following syntax:<br />
+              https://[hostname]/index.php?map=MAPNAME&findme=SEARCH1|SEARCH2 <br /><br />
+
+              Example: https://[hostname]/index.php?map=goeppingen&findme=vogt|hoerz
+          </div>
+          <div class="content_right">
+              <p style="font-weight: bold">Teamlinks</p>
+              Share whole teams easily! <br />
+              Use the following syntax:<br />
+              https://[hostname]/index.php?findteam=TEAMNAME<br /><br />
+
+              Example: https://[hostname]/index.php?findteam=Chimera
+          </div>
+      </div>
+    </div>
+
+    
+    <div class="content_area">
+      <div class="content_row">
+        <div class="content_full title">Using the API<div class="anchor"><a name="content_api"> </a></div></div>
+          <div class="content_left">
+              <p style="font-weight: bold">Changes API</p>
+              Get all newcomers and title changes as a beautiful JSON<br /><br />
+
+              rest/changes<br /><br />
+
+              Optional parameters:<br />
+              maxresults: limits the output to the last n changes
+          </div>
+          <div class="content_right">
+              <p style="font-weight: bold">Desks API</p>
+              Get all desks with additional information assigned to them<br /><br />
+
+              rest/desks <br /><br />
+
+              Optional parameters:<br />
+              map: lists only desks of the specified map<br />
+              search: list only people and desksnumbers that match the search string
+
+          </div>
+          <div class="content_left">
+              <p style="font-weight: bold">Teams API</p>
+              Get all teams in Companymaps<br /><br />
+
+              rest/teams
+          </div>
+          <div class="content_right">
+              <p style="font-weight: bold">Users API</p>
+              Get a list of all syncronized LDAP users<br /><br />
+
+              rest/users <br /><br />
+
+              Optional parameters:<br />
+              search: list only people and desksnumbers that match the search string <br />
+              title: list only people which titles match the search string
+          </div>
+      </div>
+    </div>
+
+    
+    <div class="content_area">
+      <div class="content_row">
+        <div class="content_full title">Changelog<div class="anchor"><a name="content_changelog"> </a></div></div>
+          <div class="content_full" style="text-align:left;background-color: rgb(0,0,0,0.5);border-radius: 10px;padding:5px;">
+
+            <p style="font-size:1.2em;">Version 7:</p>
+            2022-11-03: Version 7.1
+            <ul>
+              <li>Date has been added to the existing clock at the bottom</li>
+              <li>Travel into the future by clicking on the clock and selecting a date. The map and all bookings will be updated accordingly.</li>
+              <li>Added a hover effect to both the personal menu and the clock to make them more intuitive to use</li>
+              <li>Fixed a serious bug for the calendar view on bookable desks. Now it should reflect reality again.</li>
+              <li>By hovering over a booked date in the calendar, the persons name should appear now instead of "someone else"</li>
+            </ul>
+
+            2022-10-31: Version 7.0
+            <ul>
+              <li>Desk bookings: easily book your desks and get a unified view and search across all offices. Support for both regular bookable desks and hot desks.</li>
+              <li>New status colors: the number of status colors has been reduced and some colors have changed (e.g. empty desks now appear in grey color). See the <a href="#content_legend" style="color:white">legend</a> for more information. </li>
+              <li>SAML login via Azure Apps so you don't have to waste your precious time on typing in your password again and again.</li>
+              <li>Much faster loading times (20x) as core functionalities such as the landing page and the desks API have been fully refactored</li>
+              <li>Sunset of printer API: this was broken for a while and should not be required anymore</li>
+              <li>Cleanup of obsolete code to reduce size and improve readability</li>
+              <li>Search results for teams animation have been significantly reduced in size to be less annoying</li>
+            </ul>
+            
+
+            <p style="font-size:1.2em;">Version 6:</p>
+            2022-09-05: Version 6.0<br /><br />
+            - User Logins! Finally, all users are now able to login. You won't have admin permissions, but you're able to replace your profile picture<br />
+            - Easier login: instead of using your AD username, you can use your full mail address as well<br />
+            - Image Upload: just login and click on your profile picture in the lower left corner to replace or delete it<br />
+            - Data Deletion: User pictures are only retained as long as the user exists in the Active Directory and will be automatically deleted afterwards<br /><br />
+
+            <p style="font-size:1.2em;">Version 5:</p>
+            2022-04-26: Version 5.3<br /><br />
+            - Notifications have updated to use MS Teams instead of Slack <br />
+            - Links to channels have been updated<br />
+            - The animation on team results has been fixed and is now correctly centered again<br /><br />
+
+            2021-04-23: Version 5.21<br /><br />
+            - fixed some PHP warnings <br />
+            - updated chart.js to latest version<br /><br />
+
+            2020-10-21: Version 5.2<br /><br />
+            - Fully revamped admin panel: cleaner look and better assistance for fixing problems <br />
+            - Properly declared variables to remove unnecessary PHP warnings<br />
+            - Removed obsolete code<br /> <br />
+
+            2020-10-19: Version 5.11<br /><br />
+            - User authentication now supports LDAPS, too<br /><br /> 
+
+            2020-10-15: Version 5.1<br /><br />
+            - LDAP connections now support encryption (=LDAPS)<br /><br />  
+
+            2020-10-12: Version 5.0.1<br /><br />
+            - Some desk numbers exceeded the space on the nameplates, so the space has been increased by 50% now.<br /><br />  
+
+            2020-08-12: Version 5.0<br /><br />
+            - New Statistics API: For all those (anonymous) funky usage charts. Now with less data collection and much more speed!<br />
+            - New LDAP API: sync has been rewritten from scratch, offering more functionality and a consistent user experience for our admins.<br />
+            - Some companies grow bigger than expected. To provide more scalability, the LDAP sync is now able to fetch data of up to 26.000 people.<br />
+            - Slack notifications now are bundled into a single message per sync, so you don't get spammed any more.<br />
+            - If you are curious how many people already used Cmaps today, you can enable a counter in the options.<br />
+            - Some visuals were refined to provide a nicer overall look.<br />
+            - Fixed some inconsistencies dating back from the changes between v3 and v4.<br />
+            - Made some adjustments to support PHP 7.4<br /><br />  
+
+            <p style="font-size:1.2em;">Version 4:</p>
+            2019-12-26: Version 4.1<br /><br />
+            - Introducing mobile mode (preview): a new UI for smaller devices like smartphones and tablets to assist you on the go.<br />
+            - Overlapping labels do not really help. That's why peoples names are now hidden when displaying teams.<br />
+            - As more and more locations were added, the map selection sometimes grew out of the screen. It will now split into two columns if it gets too long.<br />
+            - In some cases the URL with all its parameters blocked the workflow. In will now be reset to the base URL to keep everything running smoothly.<br />
+            - Added customization options for logo and apptitle via database (relevant for admins only)<br />
+            - Fixed a bug where names and numbers of shared desks were displayed out of place<br /><br />
+            2019-12-03: Version 4.0<br /><br />
+            - Part-time employees and students are important to us - so every desk now supports up to 4 people to make them visible!<br />
+            - The database has been redesigned and all items are now properly identified by an extra attribute instead of using some strange algorithm.<br />
+            - Search engine has been rewritten in pure JavaScript to fully rely on the APIs introduced in Version 3.x - hyper speed, less network load!<br />
+            - Because R&D loves funny team names: Searching for people now also highlights the teams they are part of.<br/> 
+            - Update triggers have been fine-tuned to run less often and save your battery for more important tasks.<br />
+            - Leading and trailing whitespaces will be automatically removed from your search now, because nobody should care of invisible typos.<br />
+            - The admin dashboard now uses JavaScript to refresh. Finally no more page reloading.<br/>
+            - Many useless bugs have been kicked out of the house to make your stay more enjoyable.<br /><br />
+          
+            <p style="font-size:1.2em;">Version 3:</p>
+            2019-10-05: Version 3.4<br /><br />
+            - Changes to database scheme to simplify desktypes for v4<br />
+            - Code cleanup for easier readability<br />
+            - All update timers (notications, desks, meetings...) reduced to optimize power usage<br />
+            - Fixed: Manager border colors don't mess with the color of the desk (blue) anymore<br />
+            - Fixed: Hover on mapflag is now always on top<br /><br />
+            2019-09-18: Version 3.3<br /><br />
+            - Copy-to-clipboard now uses a fadeout dialog box - saves you one click that can be used somewhere more meaningful ;-)<br />
+            - Copy-to-clipboard is now possible for whole maps from the overview, too<br />
+            - Dismiss location info now by clicking anywhere on the overview map<br />
+            - Fixed: Adding new maps with upper case letters could cause problems on database<br />
+            - Fixed: Zoom effect on overview map could cause blurry items on Safari<br />
+            - Fixed: On Safari, fonts for smaller items on the overview appeared too large<br /><br />
+            2019-09-14: Version 3.2<br /><br />
+            - Overview has been completely redesigned with new map, detail view on locations and scalable icons<br />
+            - New feature: Get direct links to people! Click on a desk to stick it and use the copy icon :-)<br />
+            - Timezone is now fetched from mapconfig in database<br />
+            - Some minor bugfixes<br /><br />
+            2019-07-22: <br /><br />
+            - Fixed: Broken links in notifications<br /><br />
+            2019-07-07: Version 3.1<br /><br />
+            Printer status has been added<br />
+            - See availability and cadridge status (if available)<br />
+            - Stick it to get a link to the configuration page<br /><br />
+            Drag and drop for edit mode (admins only)<br />
+            - Click on a desk to edit its properties as before<br />
+            - Move a desk to a new position directly<br /><br />
+            Added a map creator for the frontend (admins only)<br />
+            - Works like adding a desk on normal maps<br />
+            - Preview of map included<br />
+            - Deletion only available on the backend, no change here<br /><br />
+            Some minor improvements and bugfixes<br />
+            - Overview is now using JS as well<br />
+            - Fixed cutoff nameplates when too near to top border<br />
+            - Code has been cleaned up<br /><br />
+            2019-06-28: Release of Companymaps 3 with tons of new features, including:<br /><br />
+            - Most of the code has been completely rewritten in JavaScript using REST APIs<br />
+            - Redesign of most legacy stuff, like the nameplates<br />
+            - Meeting room integration: Status of all Robin-connected rooms is now visible on the map<br />
+            - Mobile phone numbers have been added to make it easier to contact people on HomeOffice<br />
+            - A clock with the local time of the map has been added at the bottom of the screen<br />
+            - Much easier editing of desks (#1 pain point for the admins)<br />
+
+            <p style="font-size:1.2em;">Version 2:</p>
+            20190616 - New Desks API in /rest/desks - use the map parameter to filter results. Documentation updated with API section.<br />
+
+            20190613 - New Users API in /rest/users - use the search and/or title parameters to filter results<br />
+            
+            20190305 - New Option: Show names. Displays all names directly on the map. <br />
+            
+            20190228 - New ChangeNotifier: see who is new on Maps and who got promoted or changed department.<br />
+            
+            20190215 - Added filter options to the auditlog (AdminPanel).<br />
+            
+            20190205 - Teams can now be linked with their teamnames.<br />
+            
+            20190205 - Teams have been included in search results.<br />
+            
+            20190205 - Addressbook has been removed.<br />
+            
+            20181223 - Role-based permission controls implemented in frontend and admin panel<br />
+            
+            20181215 - Teams sidebar frontend and admin panel implemented<br />
+            
+            20181116 - New map selection menu, looks much cleaner now<br />
+            
+            20181116 - Bugfix to desknumber display option to support names with multiple dashes<br />
+            
+            20181014 - Consistency check results are ordered now<br />
+            
+            20180704 - Bugfixes to global search and AJAX requests<br />
+            
+            20180624 - New infobox implemented - replaces Quickactions<br />
+            
+            20180612 - Global search suggestions added to regular maps (by popular demand)<br />
+            
+            20180609 - Fixed a display bug for the consistency check.<br />
+            
+            20180609 - Login and AddItem Dialog are now done via AJAX.<br />
+            
+            20180609 - Stats in Admin Panel are now shown as soon as they are fetched.<br />
+            
+            20180609 - Slack Icons removed - did not work as expected.<br />
+            
+            20180415 - Config and ShareLibs have been separated for easier updates.<br />
+            
+            20180404 - Maps can now also be disabled in addition to be deleted. Admin Panel has been updated to reflect those changes.<br />
+            
+            20180324 - HotSeats added<br />
+            
+            20180313 - Experimental Slack support added. Click on a desk to open chat window.<br />
+            
+            20180313 - Addressbook is now an optional setting to save bandwidth.<br />
+            
+            20180224 - VIP desks have been moved to a db-based configuration. Admin Panel updated to reflect those changes.<br />
+            
+            20180114 - Some tweaks to the print mode. No more printmap required, inverting the map is now done at runtime via CSS.<br />
+            
+            20180105 - Full featured admin dashboard has been implemented!<br />
+            
+            20180105 - LDAP connector updated to dynamically use configuration in database<br />
+            
+            20180105 - New mapflags in SVG format have been included<br />
+            
+            20180105 - Bugfixes to global search algorithm<br />
+            
+            20171223 - All configuration settings have been moved to database<br />
+            
+            20170813 - Minor fixes to scaling algorithm<br />
+            
+            20170716 - Manual Scaling reimplemented for more convenience<br />
+            
+            20170707 - Perfect AutoScaling implemented! No more manual zooming anymore. Try it out by resizing your browser window :)<br />
+            
+            20170626 - Lots of graphical changes to the admin panel to give it a fresher look.<br />
+            
+            20170407 - Small fixes to the group display.<br />
+            
+            20170406 - Printers now have status links<br />
+            
+            20170212 - QuickActions for all occupied desks - click on people to mail or call them<br />
+            
+            20170125 - Added a print mode in the options menu (beta!)<br />
+            
+            20170120 - Addressbook supports direct dialing via CTI client now<br />
+            
+            20170120 - Security improvements by switching to session based user authentication<br />
+            
+            20170113 - Improved overall search experience - should be faster and more reliable now.<br />
+            
+            20161230 - Addressbook added! See a list of all employees, search, mail or call them or do an easy multisearch.<br />
+            
+            20161221 - Optimized touch screen navigation. iPad should have a much better experience now!<br />
+            
+            20161217 - Your shiny new keycard does not work on a particular door? No problem! All keycard locks in GP are now on the map with their names - and IT will handle the rest for you :)<br />
+                       
+            20161122 - Added an overlay for the logo<br />
+                        
+            20160827 - Slight adjustment on info boxes: Mail and phone icons added<br />
+            
+            20160820 - First Aid: all kits and rooms of GP/VAI now visible in the map. Try a click on them ;)<br />
+            
+            20160818 - Some code cleanup. Everything should look the same as before :)<br />
+            
+            20160814 - New item: Service. Displays information of useful services in your building.<br />
+            
+            20160814 - New item: Exits. Shows where to get out if you need a break from your hard work ;)<br />
+            
+            20160814 - Modified color of Food item - that sort of yellow looked really strange.<br />
+            
+            20160813 - Added new option. The mailto links may now be disabled, so you will get the info box on touch devices, too.<br />
+            
+            20160806 - Addressbox on overview map locations added<br />
+            
+            20160806 - Multitarget search implemented: Demo<br />
+            
+            20160806 - Fixed some character encoding problems by switching to UTF-8<br />
+            
+            20160805 - New map: London added. All location maps available now.<br />
+            
+            20160804 - Javascript for settings Menu: opens instantly now<br />
+            
+            20160801 - TODA SSL support: Images are loaded via https now, so no mixed content anymore<br />
+            
+            20160727 - Instant search: 750% speed increase for all your searches using AJAX! 25% faster than ServiceCamp ;-)<br />
+            
+            20160727 - Redesign of search results: dark background and centering for better readability<br />
+            
+            20160727 - New map: Yerevan added<br />
+            
+            20160723 - New maps: Adelaide, Munich and Stuttgart-Vaihingen added<br />
+            
+            20160723 - Multiseating: One person may occupy more than one desk now<br />
+            
+            20160723 - Itemscaling: Items are able to have a map-specific scale now<br />
+            
+            20160723 - Blocked desks: Desks may have the status "blocked" now. These desks are neither free nor in use<br />
+            
+            20160721 - New setting: all team leaders may be highlighted now using the WoW quality colors
+          </div>
+      </div>
+    </div>
+
+    <div class="content_full" style="height: 50px;"></div>
+  
+  </div>
+  <div class="footer" id="footer">Copyright (c) 2016-2022 by MavoDev</div>
+</body>
+<html>
