@@ -20,9 +20,9 @@ include '../shared.php';
 
   <title><?php echo $apptitle ?></title>
   <meta http-equiv="Content-Type" content="text/html; charset=us-ascii">
-  <!--<link rel="stylesheet" type="text/css" href="../tools/stats.css">  -->
   <link rel="stylesheet" type="text/css" href="../cmaps80.css">
-  
+  <link rel="stylesheet" type="text/css" href="admin80.css">
+
   <link rel="apple-touch-icon" sizes="57x57" href="../../favicons/apple-touch-icon-57x57.png">
   <link rel="apple-touch-icon" sizes="60x60" href="../favicons/apple-touch-icon-60x60.png">
   <link rel="apple-touch-icon" sizes="72x72" href="../favicons/apple-touch-icon-72x72.png">
@@ -54,8 +54,7 @@ include '../shared.php';
   <script src="../tools/underscore.js"></script>
   <script src="backend80.js"></script>
   <script src="../user80.js"></script>
-  <!--<script src="../tools/gcharts.js"></script>-->
-  <link href='https://fonts.googleapis.com/css?family=Roboto' rel='stylesheet' type='text/css'>
+  <!--<link href='https://fonts.googleapis.com/css?family=Roboto' rel='stylesheet' type='text/css'>-->
 </head>
 
 <body>
