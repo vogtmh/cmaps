@@ -3,7 +3,10 @@
 # Loading shared functions and config file
 include '../shared.php';
 
+# local override for testing
 $dbName = 'test1';
+
+$freshDB = false;
 
 function checkDB() {
     global $dbServer,$dbUser,$dbPass,$dbName;
@@ -24,6 +27,7 @@ if (checkDB() == 'false') {
     }
     else {
         echo "database $dbName was missing and has been created<br/>";
+        $freshDB = true;
     }
 }
 else {
@@ -51,5 +55,64 @@ mysqli_query($dbLink, "CREATE TABLE IF NOT EXISTS `$dbName`.`ldap_changelog` ( `
 mysqli_query($dbLink, "CREATE TABLE IF NOT EXISTS `$dbName`.`meetingstatus` ( `ID` INT NOT NULL AUTO_INCREMENT , `map` TEXT NOT NULL , `room` TEXT NOT NULL , `availability` TEXT NOT NULL , `now_title` TEXT NOT NULL , `now_start` TEXT NOT NULL , `now_end` TEXT NOT NULL , `now_tz` TEXT NOT NULL , `next_title` TEXT NOT NULL , `next_start` TEXT NOT NULL , `next_end` TEXT NOT NULL , `next_tz` TEXT NOT NULL , `deskid` TEXT NOT NULL , PRIMARY KEY (`ID`)) ENGINE = InnoDB; ");
 mysqli_query($dbLink, "CREATE TABLE IF NOT EXISTS `$dbName`.`printerstatus` ( `ID` INT NOT NULL AUTO_INCREMENT , `map` TEXT NOT NULL , `printername` TEXT NOT NULL , `availability` TEXT NOT NULL , `color1` TEXT NOT NULL , `color2` TEXT NOT NULL , `color3` TEXT NOT NULL , `color4` TEXT NOT NULL , `colorname1` TEXT NOT NULL , `colorname2` TEXT NOT NULL , `colorname3` TEXT NOT NULL , `colorname4` TEXT NOT NULL , PRIMARY KEY (`ID`)) ENGINE = InnoDB; ");
 mysqli_query($dbLink, "CREATE TABLE IF NOT EXISTS `$dbName`.`stats` ( `ID` BIGINT NOT NULL AUTO_INCREMENT , `date` DATE NOT NULL , `year` INT NOT NULL , `month` INT NOT NULL , `day` INT NOT NULL , `count` BIGINT NOT NULL , PRIMARY KEY (`ID`)) ENGINE = InnoDB; ");
+
+if ($freshDB) {
+
+    #config_department_list
+    mysqli_query($dbLink, "INSERT INTO `config_department_list` (`ID`, `department-name`) VALUES
+    (1, '- none -'),
+    (2, 'BusinessDevelopment'),
+    (3, 'BusinessIntelligence'),
+    (4, 'Corporate'),
+    (5, 'Development'),
+    (6, 'Finance'),
+    (7, 'HumanResources'),
+    (8, 'IntDev'),
+    (9, 'IT-Administration'),
+    (10, 'Marketing'),
+    (11, 'OfficeManagement'),
+    (12, 'ProductManagement'),
+    (13, 'QualityAssurance'),
+    (14, 'Sales'),
+    (15, 'SalesOperations'),
+    (16, 'Support');");
+
+    #config_general
+    mysqli_query($dbLink, "INSERT INTO `config_general` (`ID`, `variable`, `value`) VALUES
+    (1, 'dbTable', 'desks'),
+    (2, 'ldapTable', 'ldap-mirror'),
+    (3, 'avatarDir', 'avatarcache/'),
+    (4, 'avatarType', 'jpg'),
+    (5, 'targetScreenWidth', '1600'),
+    (6, 'adauth', '0'),
+    (7, 'ldapserver', ''),
+    (8, 'domain', ''),
+    (9, 'map_default', 'overview'),
+    (11, 'logo_regular', 'images/cmaps-regular.png'),
+    (12, 'logo_hover', 'images/cmaps-hover.png'),
+    (13, 'apptitle', 'CompanyMaps'),
+    (14, 'ldaptype', 'LDAPS'),
+    (15, 'ldap_user', ''),
+    (16, 'ldap_pass', ''),
+    (17, 'ldap_ou', 'OU=Users,DC=example,DC=org'),
+    (18, 'teamsContact', ''),
+    (19, 'teamsChannel', ''),
+    (20, 'MSTEAMS_WEBHOOK', ''),
+    (21, 'robintoken', ''),
+    (22, 'robinOrganisation', '');");
+
+    #config_mapadmins
+    mysqli_query($dbLink, "INSERT INTO `config_mapadmins`(`ID`, `user`, `role`) VALUES (NULL,'$dbUser','$dbPass');");
+
+    #config_roles
+    mysqli_query($dbLink, "INSERT INTO `config_roles` (`ID`, `rolename`, `perm_desks`, `perm_dashboard`, `perm_config`, `perm_ldap`, `perm_maps`, `perm_users`, `perm_teams`, `perm_stats`, `perm_auditlog`, `perm_health`, `perm_adminpanel`) VALUES
+    (1, 'superadmin', 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2),
+    (2, 'admin', 2, 1, 0, 1, 0, 1, 2, 1, 0, 1, 2),
+    (3, 'groupmanager', 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0),
+    (4, 'deskmaintainer', 2, 1, 0, 0, 0, 0, 0, 0, 0, 1, 2),
+    (5, 'user', 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);");
+
+    
+}
 
 ?>
