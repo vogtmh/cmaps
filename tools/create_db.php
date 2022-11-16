@@ -88,6 +88,9 @@ if ($freshDB) {
     #config_mapadmins
     mysqli_query($dbLink, "INSERT INTO `config_mapadmins`(`ID`, `user`, `role`) VALUES (NULL,'$dbUser','1');");
 
+    #config_maplist
+    mysqli_query($dbLink, "INSERT INTO `config_maplist` (`ID`, `mapname`, `itemscale`, `published`, `country`, `flagsize`, `timezone`, `address`, `mapX`, `mapY`) VALUES ('1', 'overview', '1', 'yes', 'none', '0', 'Europe/Berlin', 'none', '0', '0');");
+
     #config_roles
     mysqli_query($dbLink, "INSERT INTO `config_roles` (`ID`, `rolename`, `perm_desks`, `perm_dashboard`, `perm_config`, `perm_ldap`, `perm_maps`, `perm_users`, `perm_teams`, `perm_stats`, `perm_auditlog`, `perm_health`, `perm_adminpanel`) VALUES
     (1, 'superadmin', 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2),
