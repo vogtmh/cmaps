@@ -1,7 +1,7 @@
 <?php
 
 # Loading shared functions and config file
-include '../shared.php';
+#include '../shared.php';
 
 # local override for testing
 $dbName = 'test1';
