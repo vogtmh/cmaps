@@ -11,6 +11,18 @@
     # include config file
     include __DIR__ ."/../config_cmaps.php"; 
 
+    # check database availability
+    function checkDB() {
+      global $dbServer,$dbUser,$dbPass,$dbName;
+      $checkLink = mysqli_connect($dbServer,$dbUser,$dbPass,$dbName);
+      if (!$checkLink) {
+          return 'false';
+      }
+      else {
+          return 'true';
+      }
+    }
+
     # shared function for the substitution of the old mysql function
     function mysqli_result($result, $row, $field = 0) {
       # Adjust the result pointer to that specific row
@@ -74,59 +86,63 @@
       echo "<script>console.log( 'Debug Objects: " . $output . "' );</script>";
   }
 
-    # get departments from DB
-    $dbLink = mysqli_connect($dbServer,$dbUser,$dbPass,$dbName);
-    $query = mysqli_query($dbLink, "SELECT * FROM `config_department_list` ORDER BY `department-name`");
-    $num   = mysqli_num_rows ($query);
-    $department_list = array();
-    for ($t = 0; $t < $num; $t++) {
-      $depname = mysqli_result($query,$t,1);
-      array_push($department_list, $depname);
-      }
-    mysqli_close($dbLink);
+  if (checkDB() == 'false') {
+    include __DIR__ ."/tools/create_db.php"; 
+  }
 
-    # get general variables from DB
-		$dbLink = mysqli_connect($dbServer,$dbUser,$dbPass,$dbName);
-    $query = mysqli_query($dbLink, "SELECT * FROM `config_general`");
-    $num   = mysqli_num_rows ($query);
-    for ($t = 0; $t < $num; $t++) {
-      $variable = mysqli_result($query,$t,1);
-      $value    = mysqli_result($query,$t,2);
-      $$variable = $value;
-      }
-    mysqli_close($dbLink);
-    if ($logo_regular == '') {$logo_regular='images/cmaps-regular.png';}
-    if ($logo_hover == '') {$logo_hover='images/cmaps-hover.png';}
-    if ($apptitle == '') {$apptitle='CompanyMaps';}
-
-    # get mapadmins from DB
-    $dbLink = mysqli_connect($dbServer,$dbUser,$dbPass,$dbName);
-    $query = mysqli_query($dbLink, "SELECT * FROM `config_mapadmins`");
-    $num   = mysqli_num_rows ($query);
-    $mapadmins = array();
-    for ($t = 0; $t < $num; $t++) {
-      $user = mysqli_result($query,$t,1);
-      $role = mysqli_result($query,$t,2);
-      array_push($mapadmins, $user);
-      }
-    mysqli_close($dbLink);
-
-    # get maplist and scales from DB
-    $dbLink = mysqli_connect($dbServer,$dbUser,$dbPass,$dbName);
-    $query = mysqli_query($dbLink, "SELECT * FROM `config_maplist` order by mapname");
-    $num   = mysqli_num_rows ($query);
-    $maplist = array();
-    for ($t = 0; $t < $num; $t++) {
-      $mapname   = mysqli_result($query,$t,1);
-      $mapactive = mysqli_result($query,$t,3);
-      ${'itemscale_'.$mapname} = mysqli_result($query,$t,2);
-      if ($mapactive == 'yes') {
-        array_push($maplist, $mapname);
-      }
+  # get departments from DB
+  $dbLink = mysqli_connect($dbServer,$dbUser,$dbPass,$dbName);
+  $query = mysqli_query($dbLink, "SELECT * FROM `config_department_list` ORDER BY `department-name`");
+  $num   = mysqli_num_rows ($query);
+  $department_list = array();
+  for ($t = 0; $t < $num; $t++) {
+    $depname = mysqli_result($query,$t,1);
+    array_push($department_list, $depname);
     }
+  mysqli_close($dbLink);
 
-    # create empty tables if missing
-    mysqli_query($dbLink, "CREATE TABLE IF NOT EXISTS `$dbName`.`config_robinspaces` ( `ID` INT NOT NULL AUTO_INCREMENT , `spacename` TEXT NOT NULL , `spaceid` INT NOT NULL , PRIMARY KEY (`ID`)) ENGINE = InnoDB; ");
+  # get general variables from DB
+  $dbLink = mysqli_connect($dbServer,$dbUser,$dbPass,$dbName);
+  $query = mysqli_query($dbLink, "SELECT * FROM `config_general`");
+  $num   = mysqli_num_rows ($query);
+  for ($t = 0; $t < $num; $t++) {
+    $variable = mysqli_result($query,$t,1);
+    $value    = mysqli_result($query,$t,2);
+    $$variable = $value;
+    }
+  mysqli_close($dbLink);
+  if ($logo_regular == '') {$logo_regular='images/cmaps-regular.png';}
+  if ($logo_hover == '') {$logo_hover='images/cmaps-hover.png';}
+  if ($apptitle == '') {$apptitle='CompanyMaps';}
 
-    mysqli_close($dbLink);
+  # get mapadmins from DB
+  $dbLink = mysqli_connect($dbServer,$dbUser,$dbPass,$dbName);
+  $query = mysqli_query($dbLink, "SELECT * FROM `config_mapadmins`");
+  $num   = mysqli_num_rows ($query);
+  $mapadmins = array();
+  for ($t = 0; $t < $num; $t++) {
+    $user = mysqli_result($query,$t,1);
+    $role = mysqli_result($query,$t,2);
+    array_push($mapadmins, $user);
+    }
+  mysqli_close($dbLink);
+
+  # get maplist and scales from DB
+  $dbLink = mysqli_connect($dbServer,$dbUser,$dbPass,$dbName);
+  $query = mysqli_query($dbLink, "SELECT * FROM `config_maplist` order by mapname");
+  $num   = mysqli_num_rows ($query);
+  $maplist = array();
+  for ($t = 0; $t < $num; $t++) {
+    $mapname   = mysqli_result($query,$t,1);
+    $mapactive = mysqli_result($query,$t,3);
+    ${'itemscale_'.$mapname} = mysqli_result($query,$t,2);
+    if ($mapactive == 'yes') {
+      array_push($maplist, $mapname);
+    }
+  }
+
+  # create empty tables if missing
+  mysqli_query($dbLink, "CREATE TABLE IF NOT EXISTS `$dbName`.`config_robinspaces` ( `ID` INT NOT NULL AUTO_INCREMENT , `spacename` TEXT NOT NULL , `spaceid` INT NOT NULL , PRIMARY KEY (`ID`)) ENGINE = InnoDB; ");
+
+  mysqli_close($dbLink);
 ?>

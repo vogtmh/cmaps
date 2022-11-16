@@ -8,17 +8,6 @@ $dbName = 'test1';
 
 $freshDB = false;
 
-function checkDB() {
-    global $dbServer,$dbUser,$dbPass,$dbName;
-    $checkLink = mysqli_connect($dbServer,$dbUser,$dbPass,$dbName);
-    if (!$checkLink) {
-        return 'false';
-    }
-    else {
-        return 'true';
-    }
-}
-
 if (checkDB() == 'false') {
     $createLink = mysqli_connect($dbServer,$dbUser,$dbPass);
     mysqli_query($createLink, "CREATE DATABASE `$dbName`;");
@@ -26,13 +15,8 @@ if (checkDB() == 'false') {
         echo "database $dbName is missing and could not be created<br/>";
     }
     else {
-        echo "database $dbName was missing and has been created<br/>";
         $freshDB = true;
     }
-}
-else {
-    $check = checkDB();
-    echo "database $dbName exists: $check <br/>";
 }
 
 $dbLink = mysqli_connect($dbServer,$dbUser,$dbPass,$dbName);
@@ -102,7 +86,7 @@ if ($freshDB) {
     (22, 'robinOrganisation', '');");
 
     #config_mapadmins
-    mysqli_query($dbLink, "INSERT INTO `config_mapadmins`(`ID`, `user`, `role`) VALUES (NULL,'$dbUser','$dbPass');");
+    mysqli_query($dbLink, "INSERT INTO `config_mapadmins`(`ID`, `user`, `role`) VALUES (NULL,'$dbUser','1');");
 
     #config_roles
     mysqli_query($dbLink, "INSERT INTO `config_roles` (`ID`, `rolename`, `perm_desks`, `perm_dashboard`, `perm_config`, `perm_ldap`, `perm_maps`, `perm_users`, `perm_teams`, `perm_stats`, `perm_auditlog`, `perm_health`, `perm_adminpanel`) VALUES
@@ -112,7 +96,6 @@ if ($freshDB) {
     (4, 'deskmaintainer', 2, 1, 0, 0, 0, 0, 0, 0, 0, 1, 2),
     (5, 'user', 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);");
 
-    
 }
 
 ?>
