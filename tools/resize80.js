@@ -111,7 +111,7 @@ $(function(){
   buttonsright.attr('style', 'position:fixed; right: 10px; bottom: ' + (25*basePage.scale) + 'px; height:auto;width:80px;background: transparent; transform:scale(' + basePage.scale +');transform-origin:100% 100%;');
   
   datepicker.attr('style', 'position:fixed;left:50%;bottom:0px;width:180px;height:175px;margin-left:-105px;padding:15px 15px 10px 15px;background-color:#333;border-radius:10px 10px 0px 0px;display:none;transform:scale(' + basePage.scale + ');transform-origin:50% 100%;z-index:0;');
-  clock.attr('style', 'position:fixed;bottom:0px;width: 170px;left: 50%;margin-left: -95px;text-align:center;background-color: #333;border-radius: 10px 10px 0px 0px;padding: 10px;cursor: pointer;transform:scale(' + basePage.scale + ');transform-origin:50% 100%;z-index:1;');
+  clock.attr('style', 'position:fixed;bottom:0px;width: 180px;left: 50%;margin-left: -100px;text-align:center;background-color: #333;border-radius: 10px 10px 0px 0px;padding: 10px;cursor: pointer;transform:scale(' + basePage.scale + ');transform-origin:50% 100%;z-index:1;');
   $('.clock').hover(function(){
     $(this).css({ "background-color": "#555" });
   }, function(){
