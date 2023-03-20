@@ -1,5 +1,5 @@
-// CompanyMaps 8.0 AutoResizeJS
-// Release date 2022-11-14
+// CompanyMaps 8.1 AutoResizeJS
+// Release date 2023-03-20
 // Copyright (c) 2016-2020 by MavoDev
 // see https://www.mavodev.de for more details
 
