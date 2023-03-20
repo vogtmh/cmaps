@@ -43,6 +43,10 @@
       $EventTime = date_format($date, 'Y-m-d H:i:s') . "\n";
       $EventUser = str_replace("\\", "\\\\", $EventUser);
 
+      # sanitize input
+      $EventUser = htmlspecialchars($EventUser, ENT_QUOTES);
+      $EventInfo = htmlspecialchars($EventInfo, ENT_QUOTES);
+
       mysqli_query($dbLink, "INSERT INTO `$dbName`.`$dbTable` (`ID`, `EventTime`, `EventType`, `EventUser`, `EventInfo`) VALUES (NULL, '$EventTime', '$EventType', '$EventUser', '$EventInfo');");
       mysqli_close($dbLink);
     }
