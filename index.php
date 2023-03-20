@@ -95,39 +95,39 @@
 
   # Initialize POST and GET Variables
   if ($_SERVER['REQUEST_METHOD'] == "POST") {
-    if (isset($_POST['findme'])) {$findme = $_POST['findme'];} else {$findme = '';}
+    if (isset($_POST['findme'])) {$findme = htmlspecialchars($_POST['findme'], ENT_QUOTES);} else {$findme = '';}
     if (isset($_POST['map'])) {
-      $map = $_POST['map'];
+      $map = htmlspecialchars($_POST['map'], ENT_QUOTES);
     }
     else {
       if (isset($_COOKIE['map'])) {$map = $_COOKIE['map'];} else {$map='';}
     }
-    if (isset($_POST['setting_nodescription'])) {$setting_nodescription=$_POST['setting_nodescription'];} else {$setting_nodescription = 0;}
-    if (isset($_POST['setting_desknumbers'])) {$setting_desknumbers=$_POST['setting_desknumbers'];} else {$setting_desknumbers = 0;}
-    if (isset($_POST['setting_shownames'])) {$setting_shownames=$_POST['setting_shownames'];} else {$setting_shownames = 0;}
-    if (isset($_POST['setting_highlightleaders'])) {$setting_highlightleaders=$_POST['setting_highlightleaders'];} else {$setting_highlightleaders = 0;}
-    if (isset($_POST['setting_printmode'])) {$setting_printmode=$_POST['setting_printmode'];} else {$setting_printmode = 0;}
-    if (isset($_POST['setting_noanimation'])) {$setting_noanimation=$_POST['setting_noanimation'];} else {$setting_noanimation = 0;}
-    if (isset($_POST['setting_dailyvisitors'])) {$setting_dailyvisitors=$_POST['setting_dailyvisitors'];} else {$setting_dailyvisitors = 0;}
-    if (isset($_POST['setting_saml'])) {$setting_saml=$_POST['setting_saml'];} else {$setting_saml = 0;}
-    if (isset($_POST['applysettings'])) {$applysettings=$_POST['applysettings'];} else {$applysettings = 0;}
+    if (isset($_POST['setting_nodescription'])) {$setting_nodescription = htmlspecialchars($_POST['setting_nodescription'], ENT_QUOTES);} else {$setting_nodescription = 0;}
+    if (isset($_POST['setting_desknumbers'])) {$setting_desknumbers = htmlspecialchars($_POST['setting_desknumbers'], ENT_QUOTES);} else {$setting_desknumbers = 0;}
+    if (isset($_POST['setting_shownames'])) {$setting_shownames = htmlspecialchars($_POST['setting_shownames'], ENT_QUOTES);} else {$setting_shownames = 0;}
+    if (isset($_POST['setting_highlightleaders'])) {$setting_highlightleaders = htmlspecialchars($_POST['setting_highlightleaders'], ENT_QUOTES);} else {$setting_highlightleaders = 0;}
+    if (isset($_POST['setting_printmode'])) {$setting_printmode = htmlspecialchars($_POST['setting_printmode'], ENT_QUOTES);} else {$setting_printmode = 0;}
+    if (isset($_POST['setting_noanimation'])) {$setting_noanimation = htmlspecialchars($_POST['setting_noanimation'], ENT_QUOTES);} else {$setting_noanimation = 0;}
+    if (isset($_POST['setting_dailyvisitors'])) {$setting_dailyvisitors = htmlspecialchars($_POST['setting_dailyvisitors'], ENT_QUOTES);} else {$setting_dailyvisitors = 0;}
+    if (isset($_POST['setting_saml'])) {$setting_saml = htmlspecialchars($_POST['setting_saml'], ENT_QUOTES);} else {$setting_saml = 0;}
+    if (isset($_POST['applysettings'])) {$applysettings = htmlspecialchars($_POST['applysettings'], ENT_QUOTES);} else {$applysettings = 0;}
   }    
 
   if ($_SERVER['REQUEST_METHOD'] == "GET") {
     if (isset($_GET['map'])) {
-      $map = $_GET['map'];
+      $map = htmlspecialchars($_GET['map'], ENT_QUOTES);
     } 
     else {
       if (isset($_COOKIE['map'])) {$map = $_COOKIE['map'];} else {$map='';}
     } 
-    if (isset($_GET['id'])) {$getid = $_GET['id'];} else {$getid = '';}
-    if (isset($_GET['glabel'])) {$glabel = $_GET['glabel'];} else {$glabel = '';}
-    if (isset($_GET['teamlabel'])) {$teamlabel = $_GET['teamlabel'];} else {$teamlabel = '';}
-    if (isset($_GET['showstats'])) {$showstats = $_GET['showstats'];} else {$showstats = '';}
-    if (isset($_GET['findme'])) {$findme = $_GET['findme'];} else {$findme = '';}
-    if (isset($_GET['findteam'])) {$findteam = $_GET['findteam'];} else {$findteam = '';}
+    if (isset($_GET['id'])) {$getid = htmlspecialchars($_GET['id'], ENT_QUOTES);} else {$getid = '';}
+    if (isset($_GET['glabel'])) {$glabel = htmlspecialchars($_GET['glabel'], ENT_QUOTES);} else {$glabel = '';}
+    if (isset($_GET['teamlabel'])) {$teamlabel = htmlspecialchars($_GET['teamlabel'], ENT_QUOTES);} else {$teamlabel = '';}
+    if (isset($_GET['showstats'])) {$showstats = htmlspecialchars($_GET['showstats'], ENT_QUOTES);} else {$showstats = '';}
+    if (isset($_GET['findme'])) {$findme = htmlspecialchars($_GET['findme'], ENT_QUOTES);} else {$findme = '';}
+    if (isset($_GET['findteam'])) {$findteam = htmlspecialchars($_GET['findteam'], ENT_QUOTES);} else {$findteam = '';}
     if (isset($_GET['zoom'])) {
-      $zoom = $_GET['zoom'];
+      $zoom = htmlspecialchars($_GET['zoom'], ENT_QUOTES);
       if (is_numeric($zoom)) {
         if ($zoom < 10) {$zoom = 10;} if ($zoom > 100) {$zoom = 100;}
         setcookie ("zoom", $zoom, mktime (0, 0, 0, 12, 31, 2030), "/");

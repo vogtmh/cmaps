@@ -23,9 +23,9 @@ $message = '';
 $data    = array();
 
 if ($_SERVER['REQUEST_METHOD'] == "GET") {
-    if (isset($_GET['mode'])) {$mode = $_GET['mode']; } else {$mode='';}
-    if (isset($_GET['user'])) {$user = $_GET['user']; } else {$user='';}
-    if (isset($_GET['password'])) {$password = $_GET['password']; } else {$password='';}
+    if (isset($_GET['mode'])) {$mode = htmlspecialchars($_GET['mode'], ENT_QUOTES); } else {$mode='';}
+    if (isset($_GET['user'])) {$user = htmlspecialchars($_GET['user'], ENT_QUOTES); } else {$user='';}
+    if (isset($_GET['password'])) {$password = htmlspecialchars($_GET['password'], ENT_QUOTES); } else {$password='';}
 }
 
 switch ($mode) {

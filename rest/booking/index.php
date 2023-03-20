@@ -56,10 +56,10 @@ mysqli_query($dbLink, "CREATE TABLE IF NOT EXISTS `$dbName`.`$dbTable`
 
 # assign provided parameters
 if ($_SERVER['REQUEST_METHOD'] == "GET") {
-    if (isset($_GET['mode'])) {$mode = htmlspecialchars($_GET['mode']; } 
-    if (isset($_GET['bookdate'])) {$bookdate = htmlspecialchars($_GET['bookdate']); } 
-    if (isset($_GET['bookmap'])) {$bookmap = htmlspecialchars($_GET['bookmap']); } 
-    if (isset($_GET['bookdesk'])) {$bookdesk = htmlspecialchars($_GET['bookdesk']); } 
+    if (isset($_GET['mode'])) {$mode = htmlspecialchars($_GET['mode'], ENT_QUOTES); } 
+    if (isset($_GET['bookdate'])) {$bookdate = htmlspecialchars($_GET['bookdate'], ENT_QUOTES); } 
+    if (isset($_GET['bookmap'])) {$bookmap = htmlspecialchars($_GET['bookmap'], ENT_QUOTES); } 
+    if (isset($_GET['bookdesk'])) {$bookdesk = htmlspecialchars($_GET['bookdesk'], ENT_QUOTES); } 
 }
 
 ## cleanup database

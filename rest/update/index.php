@@ -8,24 +8,24 @@ header("Content-Type: application/json; charset=UTF-8");
 include '../../shared.php';
 
 if ($_SERVER['REQUEST_METHOD'] == "POST") {
-    $token = $_POST["token"];
-    $mode = $_POST['mode'];
-    $map = $_POST['map'];  
-    $id = $_POST['id'];
-    $desktype = $_POST['desktype'];
-    $x = $_POST['x']; 
-    $y = $_POST['y']; 
-    $desknumber = $_POST['desknumber']; 
-    $employee = $_POST['employee']; 
-    $avatar = $_POST['avatar']; 
-    $department = $_POST['department']; 
-    $user = $_POST['user']; 
-    $itemscale = $_POST['itemscale']; 
-    $published = $_POST['published']; 
-    $mapflag = $_POST['mapflag']; 
-    $timezone = $_POST['timezone']; 
-    $address = $_POST['address']; 
-    $flagsize = $_POST['flagsize']; 
+    $token = htmlspecialchars($_POST["token"], ENT_QUOTES);
+    $mode = htmlspecialchars($_POST['mode'], ENT_QUOTES);
+    $map = htmlspecialchars($_POST['map'], ENT_QUOTES);  
+    $id = htmlspecialchars($_POST['id'], ENT_QUOTES);
+    $desktype = htmlspecialchars($_POST['desktype'], ENT_QUOTES);
+    $x = htmlspecialchars($_POST['x'], ENT_QUOTES); 
+    $y = htmlspecialchars($_POST['y'], ENT_QUOTES); 
+    $desknumber = htmlspecialchars($_POST['desknumber'], ENT_QUOTES); 
+    $employee = htmlspecialchars($_POST['employee'], ENT_QUOTES); 
+    $avatar = htmlspecialchars($_POST['avatar'], ENT_QUOTES); 
+    $department = htmlspecialchars($_POST['department'], ENT_QUOTES); 
+    $user = htmlspecialchars($_POST['user'], ENT_QUOTES); 
+    $itemscale = htmlspecialchars($_POST['itemscale'], ENT_QUOTES); 
+    $published = htmlspecialchars($_POST['published'], ENT_QUOTES); 
+    $mapflag = htmlspecialchars($_POST['mapflag'], ENT_QUOTES); 
+    $timezone = htmlspecialchars($_POST['timezone'], ENT_QUOTES); 
+    $address = htmlspecialchars($_POST['address'], ENT_QUOTES); 
+    $flagsize = htmlspecialchars($_POST['flagsize'], ENT_QUOTES); 
 
     if (isset($_POST["uploadMapfile"])) { 
         $map = strtolower($map);
@@ -56,24 +56,24 @@ if ($_SERVER['REQUEST_METHOD'] == "POST") {
 }
 
 else if ($_SERVER['REQUEST_METHOD'] == "GET") {
-    $token = $_GET['token'];
-    $mode = $_GET['mode'];
-    $map = $_GET['map'];  
-    $id = $_GET['id'];
-    $desktype = $_GET['desktype'];
-    $x = $_GET['x']; 
-    $y = $_GET['y']; 
-    $desknumber = $_GET['desknumber']; 
-    $employee = $_GET['employee']; 
-    $avatar = $_GET['avatar']; 
-    $department = $_GET['department']; 
-    $user = $_GET['user']; 
-    $itemscale = $_GET['itemscale']; 
-    $published = $_GET['published']; 
-    $mapflag = $_GET['mapflag']; 
-    $timezone = $_GET['timezone']; 
-    $address = $_GET['address']; 
-    $flagsize = $_GET['flagsize']; 
+    $token = htmlspecialchars($_GET['token'], ENT_QUOTES);
+    $mode = htmlspecialchars($_GET['mode'], ENT_QUOTES);
+    $map = htmlspecialchars($_GET['map'], ENT_QUOTES);  
+    $id = htmlspecialchars($_GET['id'], ENT_QUOTES);
+    $desktype = htmlspecialchars($_GET['desktype'], ENT_QUOTES);
+    $x = htmlspecialchars($_GET['x'], ENT_QUOTES); 
+    $y = htmlspecialchars($_GET['y'], ENT_QUOTES); 
+    $desknumber = htmlspecialchars($_GET['desknumber'], ENT_QUOTES); 
+    $employee = htmlspecialchars($_GET['employee'], ENT_QUOTES); 
+    $avatar = htmlspecialchars($_GET['avatar'], ENT_QUOTES); 
+    $department = htmlspecialchars($_GET['department'], ENT_QUOTES); 
+    $user = htmlspecialchars($_GET['user'], ENT_QUOTES); 
+    $itemscale = htmlspecialchars($_GET['itemscale'], ENT_QUOTES); 
+    $published = htmlspecialchars($_GET['published'], ENT_QUOTES); 
+    $mapflag = htmlspecialchars($_GET['mapflag'], ENT_QUOTES); 
+    $timezone = htmlspecialchars($_GET['timezone'], ENT_QUOTES); 
+    $address = htmlspecialchars($_GET['address'], ENT_QUOTES); 
+    $flagsize = htmlspecialchars($_GET['flagsize'], ENT_QUOTES); 
 }
 
 $checktoken = strrev(date("Ymd")) + date("Ymd");

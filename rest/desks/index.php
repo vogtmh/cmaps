@@ -21,9 +21,9 @@ $currentdate = date('Y-m-d');
 $userdate = ''; 
 
 if ($_SERVER['REQUEST_METHOD'] == "GET") {
-    if(isset($_GET['map'])) {$map = $_GET['map'];}
-    if(isset($_GET['search'])) {$search = $_GET['search'];}
-    if(isset($_GET['date'])) {$userdate = $_GET['date'];}
+    if(isset($_GET['map'])) {$map = htmlspecialchars($_GET['map'], ENT_QUOTES);}
+    if(isset($_GET['search'])) {$search = htmlspecialchars($_GET['search'], ENT_QUOTES);}
+    if(isset($_GET['date'])) {$userdate = htmlspecialchars($_GET['date'], ENT_QUOTES);}
     }
 
 $dbLink = mysqli_connect($dbServer,$dbUser,$dbPass,$dbName);

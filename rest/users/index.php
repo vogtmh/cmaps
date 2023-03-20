@@ -7,8 +7,8 @@ header("Content-Type: application/json; charset=UTF-8");
 include '../../shared.php';
 
 if ($_SERVER['REQUEST_METHOD'] == "GET") {
-    $search = $_GET['search'];  
-    $titlesearch = $_GET['title'];
+    $search = htmlspecialchars($_GET['search'], ENT_QUOTES);  
+    $titlesearch = htmlspecialchars($_GET['title'], ENT_QUOTES);
     }
 
 $dbTable = 'ldap-mirror';

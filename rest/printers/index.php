@@ -7,7 +7,7 @@ header("Content-Type: application/json; charset=UTF-8");
 include '../../shared.php';
 
 if ($_SERVER['REQUEST_METHOD'] == "GET") {
-  $getmap = $_GET['map'];  
+  $getmap = htmlspecialchars($_GET['map'], ENT_QUOTES);  
 }
 
 $dbLink = mysqli_connect($dbServer,$dbUser,$dbPass,$dbName);

@@ -7,7 +7,7 @@ header("Content-Type: application/json; charset=UTF-8");
 include '../../shared.php';
 
 if ($_SERVER['REQUEST_METHOD'] == "GET") {
-    $mode = $_GET['mode'];  
+    $mode = htmlspecialchars($_GET['mode'], ENT_QUOTES);  
     $dbLink = mysqli_connect($dbServer,$dbUser,$dbPass,$dbName);
     mysqli_set_charset($dbLink, "utf8");
     }

@@ -14,8 +14,8 @@ include '../../shared.php';
 
 # Check for parameters
 if ($_SERVER['REQUEST_METHOD'] == "GET") {
-  if (isset($_GET['interval'])) {$interval = $_GET['interval'];} else {$interval='';}# year / month / day
-  if (isset($_GET['limit'])) {$limit = $_GET['limit'];} else {$limit='';}# limit number of returned values
+  if (isset($_GET['interval'])) {$interval = htmlspecialchars($_GET['interval'], ENT_QUOTES);} else {$interval='';}# year / month / day
+  if (isset($_GET['limit'])) {$limit = htmlspecialchars($_GET['limit'], ENT_QUOTES);} else {$limit='';}# limit number of returned values
 }
 
 # Get current day

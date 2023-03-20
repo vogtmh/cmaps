@@ -81,47 +81,47 @@ if ($_SESSION['editmode'] <> '' && $_SESSION['editmode'] == base64_encode($_SESS
   $page = $_SERVER['PHP_SELF'];
   $rootdir = str_replace("/admin", "", __DIR__);
   if ($_SERVER['REQUEST_METHOD'] == "GET") {
-    if (isset($_GET['tab'])) {$activetab = $_GET['tab'];} else {$activetab = '';}  
+    if (isset($_GET['tab'])) {$activetab = htmlspecialchars($_GET['tab'], ENT_QUOTES);} else {$activetab = '';}  
   }
   if ($_SERVER['REQUEST_METHOD'] == "POST") {
-    $activetab            = $_POST['tab'];  
-    $ignoreHealthName     = $_POST['ignoreHealthName'];
-    $ignoreHealthType     = $_POST['ignoreHealthType'];
-    $newadminuser         = $_POST['newadminuser'];
-    $newadminrole         = $_POST['newadminrole'];
-    $deleteID             = $_POST['deleteID'];
-    $deleteUser           = $_POST['deleteUser'];
-    $deleteRole           = $_POST['deleteRole'];
-    $deleteTeam           = $_POST['deleteTeam'];
-    $deleteMembers        = $_POST['deleteMembers'];
-    $createTeam           = $_POST['newTeam'];
-    $createMembers        = $_POST['newMembers'];
-    $newLdapDescription   = $_POST['newLdapDescription'];
-    $newLdapServer        = $_POST['newLdapServer'];
-    $newLdapType         = $_POST['newLdapType'];
-    $newLdapOU            = $_POST['newLdapOU'];
-    $newLdapUser          = $_POST['newLdapUser'];
-    $newLdapPass          = $_POST['newLdapPass'];
-    $deleteLdapID         = $_POST['deleteLdapID'];
-    $deleteLdapDescription= $_POST['deleteLdapDescription'];
-    $deleteLdapServer     = $_POST['deleteLdapServer'];
-    $deleteLdapOU         = $_POST['deleteLdapOU'];
-    $newMapName           = strtolower($_POST['newMapName']);
-    $newMapItemscale      = $_POST['newMapItemscale'];
-    $newMapPublished      = $_POST['newMapPublished'];
-    $newMapCountry        = strtolower($_POST['newMapCountry']);
-    $newMapFlagsize       = $_POST['newMapFlagsize'];
-    $newMapTimezone       = $_POST['newMapTimezone'];
-    $newMapAddress        = $_POST['newMapAddress'];
-    $newMapX              = $_POST['newMapX'];
-    $newMapY              = $_POST['newMapY'];
-    $finishMap            = $_POST['finishMap'];
-    $deleteMapID          = $_POST['deleteMapID'];
-    $deleteMapname        = $_POST['deleteMapname'];
-    $toggleMapID          = $_POST['toggleMapID'];
-    $toggleMapname        = $_POST['toggleMapname'];
-    $toggleMapStatus      = $_POST['toggleMapStatus'];
-    $auditlogEventType    = $_POST['auditlogEventType'];
+    $activetab            = htmlspecialchars($_POST['tab'], ENT_QUOTES);  
+    $ignoreHealthName     = htmlspecialchars($_POST['ignoreHealthName'], ENT_QUOTES);
+    $ignoreHealthType     = htmlspecialchars($_POST['ignoreHealthType'], ENT_QUOTES);
+    $newadminuser         = htmlspecialchars($_POST['newadminuser'], ENT_QUOTES);
+    $newadminrole         = htmlspecialchars($_POST['newadminrole'], ENT_QUOTES);
+    $deleteID             = htmlspecialchars($_POST['deleteID'], ENT_QUOTES);
+    $deleteUser           = htmlspecialchars($_POST['deleteUser'], ENT_QUOTES);
+    $deleteRole           = htmlspecialchars($_POST['deleteRole'], ENT_QUOTES);
+    $deleteTeam           = htmlspecialchars($_POST['deleteTeam'], ENT_QUOTES);
+    $deleteMembers        = htmlspecialchars($_POST['deleteMembers'], ENT_QUOTES);
+    $createTeam           = htmlspecialchars($_POST['newTeam'], ENT_QUOTES);
+    $createMembers        = htmlspecialchars($_POST['newMembers'], ENT_QUOTES);
+    $newLdapDescription   = htmlspecialchars($_POST['newLdapDescription'], ENT_QUOTES);
+    $newLdapServer        = htmlspecialchars($_POST['newLdapServer'], ENT_QUOTES);
+    $newLdapType          = htmlspecialchars($_POST['newLdapType'], ENT_QUOTES);
+    $newLdapOU            = htmlspecialchars($_POST['newLdapOU'], ENT_QUOTES);
+    $newLdapUser          = htmlspecialchars($_POST['newLdapUser'], ENT_QUOTES);
+    $newLdapPass          = htmlspecialchars($_POST['newLdapPass'], ENT_QUOTES);
+    $deleteLdapID         = htmlspecialchars($_POST['deleteLdapID'], ENT_QUOTES);
+    $deleteLdapDescription= htmlspecialchars($_POST['deleteLdapDescription'], ENT_QUOTES);
+    $deleteLdapServer     = htmlspecialchars($_POST['deleteLdapServer'], ENT_QUOTES);
+    $deleteLdapOU         = htmlspecialchars($_POST['deleteLdapOU'], ENT_QUOTES);
+    $newMapName           = strtolower( htmlspecialchars($_POST['newMapName'], ENT_QUOTES) );
+    $newMapItemscale      = htmlspecialchars($_POST['newMapItemscale'], ENT_QUOTES);
+    $newMapPublished      = htmlspecialchars($_POST['newMapPublished'], ENT_QUOTES);
+    $newMapCountry        = strtolower( htmlspecialchars($_POST['newMapCountry'], ENT_QUOTES) );
+    $newMapFlagsize       = htmlspecialchars($_POST['newMapFlagsize'], ENT_QUOTES);
+    $newMapTimezone       = htmlspecialchars($_POST['newMapTimezone'], ENT_QUOTES);
+    $newMapAddress        = htmlspecialchars($_POST['newMapAddress'], ENT_QUOTES);
+    $newMapX              = htmlspecialchars($_POST['newMapX'], ENT_QUOTES);
+    $newMapY              = htmlspecialchars($_POST['newMapY'], ENT_QUOTES);
+    $finishMap            = htmlspecialchars($_POST['finishMap'], ENT_QUOTES);
+    $deleteMapID          = htmlspecialchars($_POST['deleteMapID'], ENT_QUOTES);
+    $deleteMapname        = htmlspecialchars($_POST['deleteMapname'], ENT_QUOTES);
+    $toggleMapID          = htmlspecialchars($_POST['toggleMapID'], ENT_QUOTES);
+    $toggleMapname        = htmlspecialchars($_POST['toggleMapname'], ENT_QUOTES);
+    $toggleMapStatus      = htmlspecialchars($_POST['toggleMapStatus'], ENT_QUOTES);
+    $auditlogEventType    = htmlspecialchars($_POST['auditlogEventType'], ENT_QUOTES);
 
     if (isset($_POST["uploadMapfile"])) { 
       //Get the file information

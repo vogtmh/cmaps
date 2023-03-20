@@ -7,7 +7,7 @@ header("Content-Type: application/json; charset=UTF-8");
 include '../../shared.php';
 
 if ($_SERVER['REQUEST_METHOD'] == "GET") {
-    $maxresults = $_GET['maxresults'];  
+    $maxresults = htmlspecialchars($_GET['maxresults'], ENT_QUOTES);  
     }
 
 $dbTable = 'ldap_changelog';

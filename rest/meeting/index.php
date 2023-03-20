@@ -34,8 +34,8 @@ else {
     $meeting_arr["rooms"]=array();
 }
 
-$map = $_GET['map'];  
-$usecache = $_GET['usecache'];
+$map = htmlspecialchars($_GET['map'], ENT_QUOTES);  
+$usecache = htmlspecialchars($_GET['usecache'], ENT_QUOTES);
 
 // Using the cached version for faster checks
 if ($usecache == true) {

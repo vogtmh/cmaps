@@ -5,7 +5,7 @@
     echo 'Mode not set.';
     exit;
   }
-  $mode=$_POST['mode'];
+  $mode = htmlspecialchars($_POST['mode'], ENT_QUOTES);
   if (!isset($_POST['mode'])) {
     echo 'Not logged in.';
     exit;
@@ -412,12 +412,12 @@ if(!is_dir("../../$temp_dir")){
       
       case 'crop':
         //Get the new coordinates to crop the image.
-        $x1 = $_POST["x1"];
-        $y1 = $_POST["y1"];
-        $x2 = $_POST["x2"];
-        $y2 = $_POST["y2"];
-        $w = $_POST["w"];
-        $h = $_POST["h"];
+        $x1 = htmlspecialchars($_POST["x1"], ENT_QUOTES);
+        $y1 = htmlspecialchars($_POST["y1"], ENT_QUOTES);
+        $x2 = htmlspecialchars($_POST["x2"], ENT_QUOTES);
+        $y2 = htmlspecialchars($_POST["y2"], ENT_QUOTES);
+        $w = htmlspecialchars($_POST["w"], ENT_QUOTES);
+        $h = htmlspecialchars($_POST["h"], ENT_QUOTES);
         //Scale the image to the thumb_width set above
         $scale = $thumb_width/$w;
         $cropped = resizeThumbnailImage($moveFilePath, $moveFilePathTMP,$w,$h,$x1,$y1,$scale);

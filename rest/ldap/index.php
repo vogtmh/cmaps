@@ -340,9 +340,9 @@ if (php_sapi_name() == "cli") {
 # Check for credentials and parameters on web access
 else {
   if ($_SERVER['REQUEST_METHOD'] == "GET") {
-    $token = $_GET['token'];
-    $ldapid = $_GET['ldapid']; 
-    $user = $_GET['user'];
+    $token = htmlspecialchars($_GET['token'], ENT_QUOTES);
+    $ldapid = htmlspecialchars($_GET['ldapid'], ENT_QUOTES); 
+    $user = htmlspecialchars($_GET['user'], ENT_QUOTES);
   }
   
   $checktoken = strrev(date("Ymd")) + date("Ymd");

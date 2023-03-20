@@ -16,7 +16,7 @@ $healthdetails=0;
 
 if ($_SERVER['REQUEST_METHOD'] == "GET") {
   if (isset($_GET['healthdetails'])) {
-    $healthdetails = $_GET['healthdetails'];
+    $healthdetails = htmlspecialchars($_GET['healthdetails'], ENT_QUOTES);
     $healtharray=array();
     $healtharray["ldap"]=array();
     $healtharray["desks"]=array();
