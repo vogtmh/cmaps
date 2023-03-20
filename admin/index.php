@@ -675,10 +675,15 @@ if ($_SESSION['editmode'] <> '' && $_SESSION['editmode'] == base64_encode($_SESS
       echo '  </td>';
 
       echo '  <td align="center">';
-          $checktable = 'desks_'.$mapname;
-          $checktable_query = mysqli_query($dbLink, "SELECT * FROM $checktable");
-          $checknum   = mysqli_num_rows ($checktable_query);
-          if ($mapname == 'overview') {$checknum = 1;}
+          if ($mapname == 'overview') {
+            $checknum = 1;
+          }
+          else {
+            $checktable = 'desks_'.$mapname;
+            $checktable_query = mysqli_query($dbLink, "SELECT * FROM $checktable");
+            $checknum   = mysqli_num_rows ($checktable_query);
+          }
+          
           if ($checknum != 0) {
             echo '<div style="opacity: 1.0;border-radius: 50%;width:16px; height:16px; background: rgba(0, 200, 0, 0.7);" title="desks_'.$mapname.'"></div>';  
           } 
