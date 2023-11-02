@@ -150,7 +150,8 @@ if (php_sapi_name() == "cli") {
           $mobile = $info[$i]["mobile"][0];
           $fullname = $givenname.' '.$surname;
 
-          if ($physicaldeliveryofficename != "" && $givenname != "" && $surname != "" && $mail != "") {
+
+          if ($physicaldeliveryofficename != "" && $physicaldeliveryofficename != "-" && $givenname != "" && $surname != "" && $mail != "") {
 
             # Scan current user for changes and report them to the changelog
             $ldapcachescan = mysqli_query($MySqlLink, "SELECT * FROM `$ldapTable` WHERE `ipphone` = '$ipphone'");
@@ -285,7 +286,6 @@ if (php_sapi_name() == "cli") {
   $ldap_ou          = mysqli_result($LdapconfigDetails,0,4);
   $ldap_user        = mysqli_result($LdapconfigDetails,0,5);
   $ldap_pass        = mysqli_result($LdapconfigDetails,0,6);
-
   # CONNECT TO AD
     switch ($ldap_type){
       case "LDAP":
@@ -448,7 +448,7 @@ else {
           $mobile = $info[$i]["mobile"][0];
           $fullname = $givenname.' '.$surname;
 
-          if ($physicaldeliveryofficename != "" && $givenname != "" && $surname != "" && $mail != "") {
+          if ($physicaldeliveryofficename != "" && $physicaldeliveryofficename != "-" && $givenname != "" && $surname != "" && $mail != "") {
 
             # Scan current user for changes and report them to the changelog
             $ldapcachescan = mysqli_query($MySqlLink, "SELECT * FROM `$ldapTable` WHERE `ipphone` = '$ipphone'");
