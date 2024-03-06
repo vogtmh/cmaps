@@ -37,11 +37,17 @@ for ($i = 0; $i < $num; $i++) {
     $newvalue = mysqli_result($ldapchangelog,$i,10);
     
     if ($hour < 12) {
-        $hour12 = $hour.' AM';
+        $hour_padded   = sprintf("%02d", $hour);
+        $hour12 = "${hour_padded} AM";
     }
     if ($hour >= 12) {
-        $hour12 = ($hour-12).' PM';
+        $hour = ($hour - 12);
+        $hour_padded   = sprintf("%02d", $hour);
+        $hour12 = "${hour_padded} PM";
     }
+    
+    $month_padded = sprintf("%02d", $month);
+    $day_padded   = sprintf("%02d", $day);
 
     if ($type == 'Title' || $type == "Employee") {
         $product_item=array(
@@ -50,7 +56,7 @@ for ($i = 0; $i < $num; $i++) {
             "type" => $type,
             "oldvalue" => $oldvalue,
             "newvalue" => $newvalue,
-            "timestamp" => "${year}.${month}.${day} $hour12",
+            "timestamp" => "${year}.${month_padded}.${day_padded} $hour12",
             "id" => $id
         );
         array_push($changes_arr["changes"], $product_item);
