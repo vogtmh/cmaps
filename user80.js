@@ -2040,7 +2040,7 @@ function updateChangeTracker() {
                           +counter.fullname + '<br />' + counter.newvalue + '<br />'
                           +'<span style="text-decoration: line-through; color:#c0c0c0;">'+ counter.oldvalue + '</span>'
                           +'</div></div>'
-                          +'<div class="announcedate" style="background-color:#0000CC;">0000.00.00 00 AM</div>'
+                          +'<div class="announcedate" style="background-color:#080a0d;">0000.00.00 00 AM</div>'
                           +'<div class="announcetype" style="background-color:#0000CC;">Title</div>'
                           +'</div>'
                           +'</a>';
@@ -2054,7 +2054,7 @@ function updateChangeTracker() {
                           +counter.timestamp + '<br />'
                           +counter.fullname + '<br />' + counter.newvalue + '<br />'
                           +'</div></div>'
-                          +'<div class="announcedate" style="background-color:#0000CC;">0000.00.00 00 AM</div>'
+                          +'<div class="announcedate" style="background-color:#080a0d;">0000.00.00 00 AM</div>'
                           +'<div class="announcetype" style="background-color:#00CC00;">New</div>'
                           +'</div>';
                           +'</a>';
