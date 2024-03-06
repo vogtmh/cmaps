@@ -841,9 +841,9 @@ echo '</div>'; # content
   
   <?php
 
-  echo '<div id="announcementbar" class="announcementbar" style="position: fixed;background:#333333;right:0px;top:0px;width:490px;height:100%;opacity:0.95;display:none;">';
+  echo '<div id="announcementbar" class="announcementbar" style="position: fixed;background:#333333;right:0px;top:0px;width:590px;height:100%;opacity:0.95;display:none;">';
   echo '<div class="announcementbar_margin" style="height:'.(69*$autozoom).'px;width:100%;margin-bottom:5px;background:none;"></div>';
-  echo '<div id="announcementbar_body" class="announcementbar_body" style="height:92%; overflow-y: scroll;width:510px;font-size:20px;">';
+  echo '<div id="announcementbar_body" class="announcementbar_body" style="height:92%; overflow-y: scroll;width:610px;font-size:20px;">';
   
   echo '</div></div>';
 

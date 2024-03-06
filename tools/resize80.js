@@ -121,8 +121,8 @@ $(function(){
   //statsmenu.attr('style', 'position: fixed; z-index: 2;top: 45%;margin-top: -250px;left: -' + (620*basePage.scale) + 'px;width: 680px;height: 500px;background-color: transparent;text-align: center;padding: 20px;border-radius:0px 20px 20px 0px;opacity:1.0;transform:scale('+ basePage.scale +');transform-origin:0% 50%;');
   adressbook_margin.attr('style', 'height:' + (69*basePage.scale) + 'px;width:100%;margin-bottom:5px;background:none;');
   announcementbar_margin.attr('style', 'height:' + (69*basePage.scale) + 'px;width:100%;margin-bottom:5px;background:none;');
-  announcementbar.attr('style', 'position: fixed;background:#333;right:0px;top:0px;width:490px;height:100%;opacity:0.95;display:none;transform-origin:100% 0%;transform:scaleX(' + (basePage.scale*0.7) + ');');
-  announcementbar_body.attr('style', 'overflow-y: scroll;height:'+ (92*1.43/basePage.scale) +'%;width:510px;font-size:20px;transform-origin:100% 0%;transform:scaleY(' + (basePage.scale*0.7) + ');');
+  announcementbar.attr('style', 'position: fixed;background:#333;right:0px;top:0px;width:590px;height:100%;opacity:0.95;display:none;transform-origin:100% 0%;transform:scaleX(' + (basePage.scale*0.7) + ');');
+  announcementbar_body.attr('style', 'overflow-y: scroll;height:'+ (92*1.43/basePage.scale) +'%;width:610px;font-size:20px;transform-origin:100% 0%;transform:scaleY(' + (basePage.scale*0.7) + ');');
   
   document.cookie = "autozoom=" + basePage.scale+'; expires=Fri, 31 Dec 9999 23:59:59 GMT; SameSite=Lax';
   document.cookie = "LeftPos=" + newLeftPos+'; expires=Fri, 31 Dec 9999 23:59:59 GMT; SameSite=Lax';

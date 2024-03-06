@@ -608,7 +608,7 @@
 
 .announceplate {
     position: relative;
-    width: 450px; 
+    width: 550px; 
     height: 120px; 
     border-radius: 10px; 
     background-color: #707070;
@@ -634,7 +634,7 @@
     position:absolute; 
     top:10px; 
     left:120px; 
-    width:320px; 
+    width:420px; 
     height: 100px; 
     border-radius: 10px; 
     display: flex; 
@@ -643,7 +643,7 @@
 
 .announcetext {
     margin: 10px; 
-    width:300px;
+    width:400px;
 }
 
 .announcetype {
