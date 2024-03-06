@@ -25,12 +25,24 @@ if ($maxresults == '') {$maxresults = 99999999;}
 for ($i = 0; $i < $num; $i++) {
     if ($resultsdone >= $maxresults) {break;}
     $id       = mysqli_result($ldapchangelog,$i,0);
+    $year     = mysqli_result($ldapchangelog,$i,1);
+    $month    = mysqli_result($ldapchangelog,$i,1);
+    $day      = mysqli_result($ldapchangelog,$i,1);
+    $hour     = mysqli_result($ldapchangelog,$i,1);
+    $minute   = mysqli_result($ldapchangelog,$i,1);
     $fullname = mysqli_result($ldapchangelog,$i,6);
     $avatar   = mysqli_result($ldapchangelog,$i,7);
     $type     = mysqli_result($ldapchangelog,$i,8);
     $oldvalue = mysqli_result($ldapchangelog,$i,9);
     $newvalue = mysqli_result($ldapchangelog,$i,10);
     
+    if ($hour < 12) {
+        $hour12 = $hour.' AM';
+    }
+    if ($hour >= 12) {
+        $hour12 = ($hour-12).' PM';
+    }
+
     if ($type == 'Title' || $type == "Employee") {
         $product_item=array(
             "fullname" => $fullname,
@@ -38,6 +50,7 @@ for ($i = 0; $i < $num; $i++) {
             "type" => $type,
             "oldvalue" => $oldvalue,
             "newvalue" => $newvalue,
+            "timestamp" => "${year}/${year}/${year} $hour12",
             "id" => $id
         );
         array_push($changes_arr["changes"], $product_item);
