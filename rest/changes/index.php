@@ -50,7 +50,7 @@ for ($i = 0; $i < $num; $i++) {
             "type" => $type,
             "oldvalue" => $oldvalue,
             "newvalue" => $newvalue,
-            "timestamp" => "${year}/${year}/${year} $hour12",
+            "timestamp" => "${year}.${month}.${day} $hour12",
             "id" => $id
         );
         array_push($changes_arr["changes"], $product_item);
