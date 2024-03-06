@@ -609,7 +609,7 @@
 .announceplate {
     position: relative;
     width: 550px; 
-    height: 120px; 
+    height: 140px; 
     border-radius: 10px; 
     background-color: #707070;
     opacity: 0.9;
@@ -622,22 +622,22 @@
 
 .announceavatar {
     position:absolute; 
-    top:10px; 
-    left:10px; 
-    width:100px; 
-    height: 100px; 
-    border-radius: 10px; 
+    top:30px;
+    left:10px;
+    width:100px;
+    height: 100px;
+    border-radius: 10px;
     background-size: cover;
 }
 
 .announcetextbox {
     position:absolute; 
-    top:10px; 
-    left:120px; 
-    width:420px; 
-    height: 100px; 
-    border-radius: 10px; 
-    display: flex; 
+    top:30px;
+    left:120px;
+    width:420px;
+    height: 100px;
+    border-radius: 10px;
+    display: flex;
     align-items: center;
 }
 
