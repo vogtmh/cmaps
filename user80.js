@@ -2026,8 +2026,8 @@ function updateChangeTracker() {
     dataType: 'JSON',
     success: function(result){
         var outputstring ='<a href="'+teamsChannel+'" target="_blank"><div class="announceplate" style="height:60px; background-color: #999900;">'
-                          +'<div class="announcetextbox" style="height:40px;width:430px;left:10px;">'
-                          +'<div class="announcetext" style="width:410px;text-align:center; top:10px;">Join our Teams channel for live notifications</div></div></div></a>';
+                          +'<div class="announcetextbox" style="height:40px;width:430px;left:10px;top:10px;">'
+                          +'<div class="announcetext" style="width:410px;text-align:center;">Join our Teams channel for live notifications</div></div></div></a>';
         for (var i = 0; i < result.changes.length; i++) {
           var counter = result.changes[i];
           if (counter.type=='Title') {
