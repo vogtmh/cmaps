@@ -646,6 +646,17 @@
     width:400px;
 }
 
+.announcedate {
+    position:absolute; 
+    top:0px;
+    right:80px;
+    width:160px;
+    height:30px;
+    text-align:center;
+    line-height:30px;
+    border-radius:0px 10px 0px 10px;
+}
+
 .announcetype {
     position:absolute; 
     top:0px;
