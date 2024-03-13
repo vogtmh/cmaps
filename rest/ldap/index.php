@@ -582,7 +582,7 @@ mysqli_query($MySqlLink,"SET NAMES 'utf8'");
 $NamesNEW     = mysqli_query($MySqlLink, "SELECT `givenname`,`surname`,`ipphone` FROM `$ldapTable`;");
 $NumNewNames  = mysqli_num_rows ($NamesNEW);
 
-$msteamscombined = 'test';
+$msteamscombined = 'test'."   \n";
 
 for ($o = 0; $o < $NumOldNames; $o++) {
   $oldgivenname                  = mysqli_result($NamesOLD,$o,0);
