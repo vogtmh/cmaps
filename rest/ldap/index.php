@@ -572,13 +572,21 @@ for ($o = 0; $o < $NumOldNames; $o++) {
   $oldgivenname                  = mysqli_result($NamesOLD,$o,0);
   $oldsurname                    = mysqli_result($NamesOLD,$o,1);
   $oldipphone                    = mysqli_result($NamesOLD,$o,2);
+  $missing = true;
   for ($n = 0; $n < $NumNewNames; $n++) {
     $newgivenname                  = mysqli_result($NamesNEW,$n,0);
     $newsurname                    = mysqli_result($NamesNEW,$n,1);
     $newipphone                    = mysqli_result($NamesNEW,$n,2);
     if ($oldipphone == $newipphone) {
-      echo "$newgivenname $newsurname still in Maps \n";
+      $missing = false;
+      break;
     }
+  }
+  if ($missing) {
+    echo "$newgivenname $newsurname left Maps \n";
+  }
+  else {
+    echo "$newgivenname $newsurname still in Maps \n";
   }
 }
 
