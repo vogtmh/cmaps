@@ -58,7 +58,7 @@ function notifyTeamsInternal($content) {
 
   $message = ["text" => "$content"];
 
-  $c = curl_init($MSTEAMS_WEBHOOK);
+  $c = curl_init($MSTEAMS_INTERNAL);
   curl_setopt($c, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
   curl_setopt($c, CURLOPT_RETURNTRANSFER, true);
   curl_setopt($c, CURLOPT_POSTFIELDS, json_encode($message));
