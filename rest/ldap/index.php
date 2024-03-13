@@ -599,10 +599,10 @@ for ($o = 0; $o < $NumOldNames; $o++) {
       break;
     }
   }
-  if (!$missing) {
+  if ($missing) {
     echo "${oldgivenname} ${oldsurname} - ${olddescription} left Maps \n";
     $msteamsmessage = "Left Maps: ${oldgivenname} ${oldsurname} - ${olddescription}";
-    #$msteamscombined .= $msteamsmessage."   \n";
+    $msteamscombined .= $msteamsmessage."   \n";
   }
 }
 
