@@ -24,7 +24,7 @@ $year = date("Y"); $month = date("m"); $day = date("d"); $hour = date("H"); $min
 # connect to DB
 $MySqlLink          = mysqli_connect($dbServer,$dbUser,$dbPass,$dbName);
 mysqli_query($MySqlLink,"SET NAMES 'utf8'");
-$NamesOLD     = mysqli_query($MySqlLink, "SELECT `givenname`,`surname`,`ipphone` FROM `$ldapTable`;");
+$NamesOLD     = mysqli_query($MySqlLink, "SELECT `givenname`,`surname`,`ipphone`,`description` FROM `$ldapTable`;");
 $NumOldNames  = mysqli_num_rows ($NamesOLD);
 
 # shared function to create log entries
@@ -42,6 +42,19 @@ $msteamscombined = '';
 
 function notifyTeams($content) {
   global $MSTEAMS_WEBHOOK;
+
+  $message = ["text" => "$content"];
+
+  $c = curl_init($MSTEAMS_WEBHOOK);
+  curl_setopt($c, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
+  curl_setopt($c, CURLOPT_RETURNTRANSFER, true);
+  curl_setopt($c, CURLOPT_POSTFIELDS, json_encode($message));
+  $curlreturn = curl_exec($c);
+  curl_close($c);
+}
+
+function notifyTeamsInternal($content) {
+  global $MSTEAMS_INTERNAL;
 
   $message = ["text" => "$content"];
 
@@ -568,10 +581,14 @@ $MySqlLink          = mysqli_connect($dbServer,$dbUser,$dbPass,$dbName);
 mysqli_query($MySqlLink,"SET NAMES 'utf8'");
 $NamesNEW     = mysqli_query($MySqlLink, "SELECT `givenname`,`surname`,`ipphone` FROM `$ldapTable`;");
 $NumNewNames  = mysqli_num_rows ($NamesNEW);
+
+$msteamscombined = '';
+
 for ($o = 0; $o < $NumOldNames; $o++) {
   $oldgivenname                  = mysqli_result($NamesOLD,$o,0);
   $oldsurname                    = mysqli_result($NamesOLD,$o,1);
   $oldipphone                    = mysqli_result($NamesOLD,$o,2);
+  $olddescription                = mysqli_result($NamesOLD,$o,3);
   $missing = true;
   for ($n = 0; $n < $NumNewNames; $n++) {
     $newgivenname                  = mysqli_result($NamesNEW,$n,0);
@@ -579,15 +596,18 @@ for ($o = 0; $o < $NumOldNames; $o++) {
     $newipphone                    = mysqli_result($NamesNEW,$n,2);
     if ($oldipphone == $newipphone) {
       $missing = false;
+      $msteamsmessage = "Left Maps: ${oldgivenname} ${oldsurname} - ${olddescription}";
       break;
     }
   }
   if ($missing) {
-    echo "$newgivenname $newsurname left Maps \n";
+    echo "${oldgivenname} ${oldsurname} - ${olddescription} left Maps \n";
+    $msteamscombined .= $msteamsmessage."   \n";
   }
-  else {
-    echo "$newgivenname $newsurname still in Maps \n";
-  }
+}
+
+if ($msteamscombined != '' && $enableMSTeams) {
+  notifyTeamsInternal($msteamscombined);
 }
 
 ?>
