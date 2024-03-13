@@ -21,6 +21,12 @@ error_reporting(E_ERROR | E_WARNING | E_PARSE);
 # Timestamp for current sync, used for changelog
 $year = date("Y"); $month = date("m"); $day = date("d"); $hour = date("H"); $minute = date("i");
 
+# connect to DB
+$MySqlLink          = mysqli_connect($dbServer,$dbUser,$dbPass,$dbName);
+mysqli_query($MySqlLink,"SET NAMES 'utf8'");
+$NamesOLD     = mysqli_query($MySqlLink, "SELECT `givenname`,`surname`,`ipphone` FROM `$ldapTable`;");
+$NumOldNames  = mysqli_num_rows ($NamesOLD);
+
 # shared function to create log entries
 function ldapChangelog($changedUser, $changedAvatar, $changedType, $changedOld, $changedNew) {
   global $dbServer, $dbName, $dbUser, $dbPass, $year, $month, $day, $hour, $minute;
@@ -54,8 +60,6 @@ if (php_sapi_name() == "cli") {
   # Get LDAP configuration from database
   $LdapconfigTable = 'config_ldap';
 
-  $MySqlLink          = mysqli_connect($dbServer,$dbUser,$dbPass,$dbName);
-  mysqli_query($MySqlLink,"SET NAMES 'utf8'");
   $LdapconfigDetails  = mysqli_query($MySqlLink, "SELECT * FROM $LdapconfigTable");
   $LdapconfigNum      = mysqli_num_rows ($LdapconfigDetails);   
 
@@ -556,6 +560,25 @@ else {
     # Send output to client
     ob_start('ob_gzhandler');
     echo json_encode($ldap_arr); 
+  }
+}
+
+# Comparison of old and new names
+$MySqlLink          = mysqli_connect($dbServer,$dbUser,$dbPass,$dbName);
+mysqli_query($MySqlLink,"SET NAMES 'utf8'");
+$NamesNEW     = mysqli_query($MySqlLink, "SELECT `givenname`,`surname`,`ipphone` FROM `$ldapTable`;");
+$NumNewNames  = mysqli_num_rows ($NamesNEW);
+for ($o = 0; $o < $NumOldNames; $o++) {
+  $oldgivenname                  = mysqli_result($NamesOLD,$o,1);
+  $oldsurname                    = mysqli_result($NamesOLD,$o,2);
+  $oldipphone                    = mysqli_result($NamesOLD,$o,3);
+  for ($n = 0; $n < $NumNewNames; $n++) {
+    $newgivenname                  = mysqli_result($NamesNEW,$n,1);
+    $newsurname                    = mysqli_result($NamesNEW,$n,2);
+    $newipphone                    = mysqli_result($NamesNEW,$n,3);
+    if ($oldipphone == $newipphone) {
+      echo "$newgivenname $newsurname still in Maps \n";
+    }
   }
 }
 
