@@ -582,7 +582,7 @@ mysqli_query($MySqlLink,"SET NAMES 'utf8'");
 $NamesNEW     = mysqli_query($MySqlLink, "SELECT `givenname`,`surname`,`ipphone` FROM `$ldapTable`;");
 $NumNewNames  = mysqli_num_rows ($NamesNEW);
 
-$msteamscombined = 'test'."   \n";
+$msteamscombined = '';
 
 for ($o = 0; $o < $NumOldNames; $o++) {
   $oldgivenname                  = mysqli_result($NamesOLD,$o,0);
@@ -596,13 +596,13 @@ for ($o = 0; $o < $NumOldNames; $o++) {
     $newipphone                    = mysqli_result($NamesNEW,$n,2);
     if ($oldipphone == $newipphone) {
       $missing = false;
-      $msteamsmessage = "Left Maps: ${oldgivenname} ${oldsurname} - ${olddescription}";
       break;
     }
   }
-  if ($missing) {
+  if (!$missing) {
     echo "${oldgivenname} ${oldsurname} - ${olddescription} left Maps \n";
-    $msteamscombined .= $msteamsmessage."   \n";
+    $msteamsmessage = "Left Maps: ${oldgivenname} ${oldsurname} - ${olddescription}";
+    #$msteamscombined .= $msteamsmessage."   \n";
   }
 }
 
