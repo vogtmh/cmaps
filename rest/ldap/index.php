@@ -569,13 +569,13 @@ mysqli_query($MySqlLink,"SET NAMES 'utf8'");
 $NamesNEW     = mysqli_query($MySqlLink, "SELECT `givenname`,`surname`,`ipphone` FROM `$ldapTable`;");
 $NumNewNames  = mysqli_num_rows ($NamesNEW);
 for ($o = 0; $o < $NumOldNames; $o++) {
-  $oldgivenname                  = mysqli_result($NamesOLD,$o,1);
-  $oldsurname                    = mysqli_result($NamesOLD,$o,2);
-  $oldipphone                    = mysqli_result($NamesOLD,$o,3);
+  $oldgivenname                  = mysqli_result($NamesOLD,$o,0);
+  $oldsurname                    = mysqli_result($NamesOLD,$o,1);
+  $oldipphone                    = mysqli_result($NamesOLD,$o,2);
   for ($n = 0; $n < $NumNewNames; $n++) {
-    $newgivenname                  = mysqli_result($NamesNEW,$n,1);
-    $newsurname                    = mysqli_result($NamesNEW,$n,2);
-    $newipphone                    = mysqli_result($NamesNEW,$n,3);
+    $newgivenname                  = mysqli_result($NamesNEW,$n,0);
+    $newsurname                    = mysqli_result($NamesNEW,$n,1);
+    $newipphone                    = mysqli_result($NamesNEW,$n,2);
     if ($oldipphone == $newipphone) {
       echo "$newgivenname $newsurname still in Maps \n";
     }
