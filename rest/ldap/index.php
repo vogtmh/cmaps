@@ -33,8 +33,10 @@ function ldapChangelog($changedUser, $changedAvatar, $changedType, $changedOld, 
   $dbTable = 'ldap_changelog';
   $LogentryLink = mysqli_connect($dbServer,$dbUser,$dbPass,$dbName);
 
+  $changedUserParsed = iconv('utf-8', 'ascii//TRANSLIT', $changedUser);
+  echo $changedUserParsed;
   mysqli_query($LogentryLink, "INSERT INTO `$dbName`.`$dbTable` (`ID`, `year`, `month`, `day`, `hour`, `minute`, `name`, `avatar`, `type`, `oldvalue`, `newvalue`) 
-  VALUES (NULL, '$year', '$month', '$day', '$hour', '$minute', '$changedUser', '$changedAvatar','$changedType', '$changedOld', '$changedNew');");
+  VALUES (NULL, '$year', '$month', '$day', '$hour', '$minute', '$changedUserParsed', '$changedAvatar','$changedType', '$changedOld', '$changedNew');");
   mysqli_close($LogentryLink);
 }
 
@@ -155,16 +157,31 @@ if (php_sapi_name() == "cli") {
 
           $givenname = $info[$i]["givenname"][0];
           $surname = str_replace("'","\'",$info[$i]["sn"][0]);
-          $telephonenumber = $info[$i]["telephonenumber"][0];
+          if (isset($info[$i]["telephonenumber"][0])) {
+            $telephonenumber = $info[$i]["telephonenumber"][0];
+          }
+          else {
+            $telephonenumber = '';
+          }
           $mail = $info[$i]["mail"][0];
           $mail = str_replace("'","\'",$mail);
           $physicaldeliveryofficename = $info[$i]["physicaldeliveryofficename"][0];
           $ipphone = $info[$i]["samaccountname"][0];  
           #$mailparts = explode('@', $mail); # avatarname is now the first part of the mail address
           #$ipphone = strtolower($mailparts[0]);
-          $description = str_replace("'","\'",$info[$i]["title"][0]);
+          if (isset($info[$i]["title"][0])) { 
+            $description = str_replace("'","\'",$info[$i]["title"][0]);
+          }
+          else {
+            $description = '-';
+          }
           $department = $info[$i]["department"][0];
-          $mobile = $info[$i]["mobile"][0];
+          if (isset($info[$i]["mobile"][0])) {
+	    $mobile = $info[$i]["mobile"][0];
+	  }
+          else {
+            $mobile = '';
+          }
           $fullname = $givenname.' '.$surname;
 
 
