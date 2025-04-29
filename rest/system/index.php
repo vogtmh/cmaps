@@ -144,6 +144,9 @@ $deskarray = array();
     
 for ($m = 0; $m < $num; $m++) {
   $mapname = mysqli_result($config_maplist,$m,1);
+  if ($mapname == "overview") {
+    continue;
+  }
   $deskcheck  = mysqli_query($dbLink,"SELECT * FROM `desks_$mapname`");
   if ($deskcheck != false) {
     $deskresult = mysqli_num_rows ($deskcheck);
