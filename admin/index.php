@@ -80,6 +80,16 @@ if ($_SESSION['editmode'] <> '' && $_SESSION['editmode'] == base64_encode($_SESS
   $tab = '&nbsp;&nbsp;&nbsp;'; 
   $page = $_SERVER['PHP_SELF'];
   $rootdir = str_replace("/admin", "", __DIR__);
+  $createTeam = '';
+  $deleteID = '';
+  $ignoreHealthName = '';
+  $newLdapDescription = '';
+  $deleteLdapID = '';
+  $newMapName = '';
+  $toggleMapID = '';
+  $deleteMapID = '';
+  $newadminuser = '';
+  $auditlogEventType = '';
   if ($_SERVER['REQUEST_METHOD'] == "GET") {
     if (isset($_GET['tab'])) {$activetab = htmlspecialchars($_GET['tab'], ENT_QUOTES);} else {$activetab = '';}  
   }
