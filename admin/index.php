@@ -680,7 +680,7 @@ if ($_SESSION['editmode'] <> '' && $_SESSION['editmode'] == base64_encode($_SESS
           }
           else {
             $checktable = 'desks_'.$mapname;
-            $checktable_query = mysqli_query($dbLink, "SELECT * FROM $checktable");
+            $checktable_query = mysqli_query($dbLink, "SELECT * FROM `$checktable`");
             $checknum   = mysqli_num_rows ($checktable_query);
           }
           
