@@ -30,8 +30,13 @@
       # Fetch result array
       $data = $result->fetch_array();
   
-      return $data[$field];
+      if (! $data) {
+        return "";
       }
+      else {
+	return $data[$field];
+      }
+    }
 
     # shared function to create log entries
     function auditlog($EventType, $EventUser, $EventInfo) {

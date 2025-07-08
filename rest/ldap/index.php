@@ -36,10 +36,11 @@ function ldapChangelog($changedUser, $changedAvatar, $changedType, $changedOld, 
   $changedUserParsed = iconv('utf-8', 'ascii//TRANSLIT', $changedUser);
   $changedOld = str_replace ("'","\'",$changedOld);
   $changedNew = str_replace ("'","\'",$changedNew);
+  $changedAvatarParsed = iconv('utf-8', 'ascii//TRANSLIT', $changedAvatar);
 
   echo "$changedUserParsed $changedAvatar $changedType $changedOld $changedNew \n"; 
   mysqli_query($LogentryLink, "INSERT INTO `$dbName`.`$dbTable` (`ID`, `year`, `month`, `day`, `hour`, `minute`, `name`, `avatar`, `type`, `oldvalue`, `newvalue`) 
-  VALUES (NULL, '$year', '$month', '$day', '$hour', '$minute', '$changedUserParsed', '$changedAvatar','$changedType', '$changedOld', '$changedNew');");
+  VALUES (NULL, '$year', '$month', '$day', '$hour', '$minute', '$changedUserParsed', '$changedAvatarParsed','$changedType', '$changedOld', '$changedNew');");
   mysqli_close($LogentryLink);
 }
 
