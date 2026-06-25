@@ -297,6 +297,119 @@ function renderLdapDebug(d) {
   return h;
 }
 
+// --- SAML settings tab ---
+
+function loadSamlSettings() {
+  // SP info (entity ID, ACS URL, metadata/login URLs).
+  $.ajax({
+    url: '../rest/saml/spinfo', type: 'get', dataType: 'JSON',
+    success: function(sp) {
+      $('#sp_entity_id').text(sp.entity_id || '-');
+      $('#sp_acs_url').text(sp.acs_url || '-');
+      $('#sp_metadata_url').text(sp.metadata_url || '-');
+      $('#sp_login_url').text(sp.login_url || '-');
+    }
+  });
+  // Current settings.
+  $.ajax({
+    url: '../rest/saml/settings', type: 'get', dataType: 'JSON',
+    success: function(c) {
+      document.getElementById('saml_enabled').checked = !!c.enabled;
+      document.getElementById('saml_allow_local').checked = !!c.allow_local_password_fallback;
+      $('#saml_nameid').val(c.name_id_format || '');
+      $('#saml_tenant').val(c.entra_tenant_id || '');
+      $('#saml_entity').val(c.entra_entity_id || '');
+      $('#saml_login').val(c.entra_login_url || '');
+      $('#saml_cert').val(c.entra_x509_certificate || '');
+      $('#saml_app_entity').val(c.app_entity_id || '');
+      $('#saml_app_reply').val(c.app_reply_url || '');
+      $('#saml_app_logout').val(c.app_logout_url || '');
+      $('#saml_attr_sam').val(c.attribute_samaccountname || '');
+      $('#saml_attr_given').val(c.attribute_givenname || '');
+      $('#saml_attr_sn').val(c.attribute_surname || '');
+      $('#saml_attr_full').val(c.attribute_fullname || '');
+      $('#saml_attr_mail').val(c.attribute_mail || '');
+    }
+  });
+  // Status badge.
+  $.ajax({
+    url: '../rest/saml/status', type: 'get', dataType: 'JSON',
+    success: function(st) {
+      var color = st.enabled ? (st.configured ? '#2ecc71' : '#e67e22') : '#888';
+      var text = st.enabled ? (st.configured ? 'SAML enabled and configured' : 'SAML enabled but incomplete (missing Login URL or certificate)') : 'SAML disabled';
+      $('#samlStatusBar').html('<span style="background:'+color+';color:#fff;padding:4px 10px;border-radius:4px;">'+esc(text)+'</span>');
+    }
+  });
+}
+
+function saveSamlSettings() {
+  var payload = {
+    enabled: document.getElementById('saml_enabled').checked,
+    allow_local_password_fallback: document.getElementById('saml_allow_local').checked,
+    name_id_format: $('#saml_nameid').val(),
+    entra_tenant_id: $('#saml_tenant').val(),
+    entra_entity_id: $('#saml_entity').val(),
+    entra_login_url: $('#saml_login').val(),
+    entra_x509_certificate: $('#saml_cert').val(),
+    app_entity_id: $('#saml_app_entity').val(),
+    app_reply_url: $('#saml_app_reply').val(),
+    app_logout_url: $('#saml_app_logout').val(),
+    attribute_samaccountname: $('#saml_attr_sam').val(),
+    attribute_givenname: $('#saml_attr_given').val(),
+    attribute_surname: $('#saml_attr_sn').val(),
+    attribute_fullname: $('#saml_attr_full').val(),
+    attribute_mail: $('#saml_attr_mail').val()
+  };
+  $('#saml_save_status').css('color', '#aaa').text('Saving...');
+  $.ajax({
+    url: '../rest/saml/settings', type: 'PUT',
+    contentType: 'application/json', data: JSON.stringify(payload), dataType: 'JSON',
+    success: function() {
+      $('#saml_save_status').css('color', '#2ecc71').text('Saved.');
+      loadSamlSettings();
+    },
+    error: function() {
+      $('#saml_save_status').css('color', '#e74c3c').text('Save failed.');
+    }
+  });
+}
+
+function importSamlMetadata() {
+  var url = $('#saml_metadata_import_url').val();
+  if (!url) { $('#saml_import_status').css('color', '#e74c3c').text('Enter a metadata URL first.'); return; }
+  $('#saml_import_status').css('color', '#aaa').text('Importing...');
+  $.ajax({
+    url: '../rest/saml/import-metadata', type: 'POST',
+    contentType: 'application/json', data: JSON.stringify({url: url}), dataType: 'JSON',
+    success: function(res) {
+      if (res.error) {
+        $('#saml_import_status').css('color', '#e74c3c').text('Error: ' + res.error);
+        return;
+      }
+      $('#saml_import_status').css('color', '#2ecc71').text('Imported. Review and click Save.');
+      loadSamlSettings();
+    },
+    error: function() {
+      $('#saml_import_status').css('color', '#e74c3c').text('Import request failed.');
+    }
+  });
+}
+
+function showSamlDebug() {
+  var body = document.getElementById('samlDebugBody');
+  body.textContent = 'Loading...';
+  document.getElementById('samlDebugOverlay').style.display = 'block';
+  $.ajax({
+    url: '../rest/saml/debug', type: 'get', dataType: 'JSON',
+    success: function(d) {
+      body.textContent = JSON.stringify(d, null, 2);
+    },
+    error: function() {
+      body.textContent = 'Failed to load debug data (forbidden or server error).';
+    }
+  });
+}
+
 function showCharts(interval, divname) {
 
   // Check if canvas already exists or create one

@@ -47,15 +47,16 @@ type adminData struct {
 	Token     string
 	Message   string
 
-	PermHealth   int
-	PermConfig   int
-	PermLdap     int
-	PermMaps     int
-	PermDesks    int
-	PermUsers    int
-	PermTeams    int
-	PermStats    int
-	PermAuditlog int
+	PermHealth     int
+	PermConfig     int
+	PermLdap       int
+	PermMaps       int
+	PermDesks      int
+	PermUsers      int
+	PermTeams      int
+	PermStats      int
+	PermAuditlog   int
+	PermAdminpanel int
 
 	GeneralVars  []kv
 	Vips         []VIP
@@ -112,8 +113,13 @@ func (app *App) handleAdmin(w http.ResponseWriter, r *http.Request) {
 	if tab == "" {
 		tab = "dashboard"
 	}
-	// Fall back to dashboard if the user lacks permission for the tab.
-	if tab != "dashboard" && app.permLevel(sess, tab) == 0 {
+	// Fall back to dashboard if the user lacks permission for the tab. The SAML
+	// tab is gated by the same "adminpanel" permission its REST endpoints use.
+	permKey := tab
+	if tab == "saml" {
+		permKey = "adminpanel"
+	}
+	if tab != "dashboard" && app.permLevel(sess, permKey) == 0 {
 		tab = "dashboard"
 	}
 
@@ -316,6 +322,7 @@ func (app *App) buildAdminData(r *http.Request, sess Session, tab, msg string) a
 		PermTeams:         app.permLevel(sess, "teams"),
 		PermStats:         app.permLevel(sess, "stats"),
 		PermAuditlog:      app.permLevel(sess, "auditlog"),
+		PermAdminpanel:    app.permLevel(sess, "adminpanel"),
 	}
 	if d.IsEditor {
 		d.Token = "1"

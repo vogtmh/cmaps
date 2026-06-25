@@ -271,7 +271,7 @@ h2{color:#e74c3c;margin:0 0 16px}p{color:#666;margin:0 0 24px}a{color:#0a66c2}</
 <style>body{font-family:sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#222}
 .box{background:#fff;border:1px solid #2ecc71;border-radius:8px;padding:40px;max-width:520px;color:#333;text-align:center}
 h2{color:#2ecc71;margin:0 0 16px}p{color:#666;margin:0 0 24px}a{color:#0a66c2}</style></head>
-<body><div class="box"><h2>SAML live test completed</h2><p>%s</p><a href="/admin?tab=settings">Return to settings</a></div></body></html>`, msg)
+<body><div class="box"><h2>SAML live test completed</h2><p>%s</p><a href="/admin?tab=saml">Return to settings</a></div></body></html>`, msg)
 	}
 
 	r.ParseForm()

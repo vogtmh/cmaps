@@ -89,6 +89,12 @@
       <span class="headeritem_text">AuditLog</span>
     </div>
     {{end}}
+    {{if gt .PermAdminpanel 0}}
+    <div class="headeritem" id="tab_saml" style="width:120px;">
+      <span class="headeritem_picture"><a href="?tab=saml"><img src="../images/saml_off.png" width="45" alt="" onmouseover='this.src="../images/saml_on.png"' onmouseout='this.src="../images/saml_off.png"' /></a></span>
+      <span class="headeritem_text">SAML</span>
+    </div>
+    {{end}}
     <div class="headeritem" style="width:150px;float:right;">
       <span class="headeritem_picture" style="float:right; cursor:pointer;"><img src="../images/logout2.png" width="45" alt="" onClick='logoutUser("admin")' /></span>
       <span class="headeritem_picture" style="float:right;"><a href="../" title="go back to the map"><img src="../images/globe.png" width="45" alt="" /></a></span>
@@ -366,6 +372,93 @@
     <tr><td>{{.Timestamp}}</td><td>{{.Type}}</td><td>{{.User}}</td><td>{{.Info}}</td></tr>
     {{end}}
   </table><br /><br />
+
+{{else if eq .ActiveTab "saml"}}
+  <h2 style="margin-left:20px;">SAML / Entra ID single sign-on</h2>
+  <div id="samlStatusBar" style="margin:10px 0 20px 20px;"></div>
+
+  <div style="margin-left:20px; max-width:1100px;">
+    <fieldset style="border:1px solid #555; border-radius:6px; padding:15px; margin-bottom:20px;">
+      <legend style="padding:0 8px;">Service Provider (this application)</legend>
+      <p style="margin:0 0 10px;">Use these values when configuring the application registration in Entra ID / your IdP:</p>
+      <table>
+        <tr><td style="padding-right:14px;">Entity ID</td><td><code id="sp_entity_id">-</code></td></tr>
+        <tr><td>Reply URL (ACS)</td><td><code id="sp_acs_url">-</code></td></tr>
+        <tr><td>Metadata URL</td><td><code id="sp_metadata_url">-</code></td></tr>
+        <tr><td>Login URL</td><td><code id="sp_login_url">-</code></td></tr>
+      </table>
+    </fieldset>
+
+    <fieldset style="border:1px solid #555; border-radius:6px; padding:15px; margin-bottom:20px;">
+      <legend style="padding:0 8px;">Import from IdP federation metadata</legend>
+      <p style="margin:0 0 10px;">Paste the Entra ID "App Federation Metadata Url" to auto-fill the Login URL, certificate, entity ID and tenant.</p>
+      <input type="text" id="saml_metadata_import_url" placeholder="https://login.microsoftonline.com/<tenant>/federationmetadata/2007-06/federationmetadata.xml?appid=..." style="width:760px;">
+      <input type="button" value="Import" onClick="importSamlMetadata()">
+      <span id="saml_import_status" style="margin-left:10px;"></span>
+    </fieldset>
+
+    <form id="samlSettingsForm" onsubmit="return false;">
+      <fieldset style="border:1px solid #555; border-radius:6px; padding:15px; margin-bottom:20px;">
+        <legend style="padding:0 8px;">General</legend>
+        <label style="display:block; margin-bottom:8px;"><input type="checkbox" id="saml_enabled"> Enable SAML single sign-on</label>
+        <label style="display:block; margin-bottom:8px;"><input type="checkbox" id="saml_allow_local"> Allow local username/password fallback</label>
+        <table>
+          <tr><td style="padding-right:14px;">NameID format</td><td><input type="text" id="saml_nameid" style="width:520px;" placeholder="urn:oasis:names:tc:SAML:2.0:nameid-format:persistent"></td></tr>
+        </table>
+      </fieldset>
+
+      <fieldset style="border:1px solid #555; border-radius:6px; padding:15px; margin-bottom:20px;">
+        <legend style="padding:0 8px;">Identity Provider (Entra ID)</legend>
+        <table>
+          <tr><td style="padding-right:14px;">Tenant ID</td><td><input type="text" id="saml_tenant" style="width:520px;"></td></tr>
+          <tr><td>IdP Entity ID</td><td><input type="text" id="saml_entity" style="width:520px;" placeholder="https://sts.windows.net/<tenant>/"></td></tr>
+          <tr><td>Login URL (SSO)</td><td><input type="text" id="saml_login" style="width:520px;" placeholder="https://login.microsoftonline.com/<tenant>/saml2"></td></tr>
+          <tr><td style="vertical-align:top;">X.509 certificate</td><td><textarea id="saml_cert" style="width:520px; height:120px; font-family:monospace; font-size:12px;" placeholder="Base64 certificate (no PEM headers)"></textarea></td></tr>
+        </table>
+      </fieldset>
+
+      <fieldset style="border:1px solid #555; border-radius:6px; padding:15px; margin-bottom:20px;">
+        <legend style="padding:0 8px;">Service Provider overrides (optional)</legend>
+        <p style="margin:0 0 10px;">Leave blank to use the legacy SimpleSAMLphp paths shown above.</p>
+        <table>
+          <tr><td style="padding-right:14px;">App Entity ID</td><td><input type="text" id="saml_app_entity" style="width:520px;"></td></tr>
+          <tr><td>App Reply URL</td><td><input type="text" id="saml_app_reply" style="width:520px;"></td></tr>
+          <tr><td>App Logout URL</td><td><input type="text" id="saml_app_logout" style="width:520px;"></td></tr>
+        </table>
+      </fieldset>
+
+      <fieldset style="border:1px solid #555; border-radius:6px; padding:15px; margin-bottom:20px;">
+        <legend style="padding:0 8px;">Attribute / claim overrides (optional)</legend>
+        <p style="margin:0 0 10px;">Leave blank to use the Azure AD defaults from the original CompanyMaps app.</p>
+        <table>
+          <tr><td style="padding-right:14px;">SamAccountName</td><td><input type="text" id="saml_attr_sam" style="width:600px;"></td></tr>
+          <tr><td>Given name</td><td><input type="text" id="saml_attr_given" style="width:600px;"></td></tr>
+          <tr><td>Surname</td><td><input type="text" id="saml_attr_sn" style="width:600px;"></td></tr>
+          <tr><td>Full name</td><td><input type="text" id="saml_attr_full" style="width:600px;"></td></tr>
+          <tr><td>Mail</td><td><input type="text" id="saml_attr_mail" style="width:600px;"></td></tr>
+        </table>
+      </fieldset>
+
+      <div style="margin-bottom:30px;">
+        <input type="button" value="Save settings" style="background:rgba(0,120,0,0.8); padding:6px 18px;" onClick="saveSamlSettings()">
+        <input type="button" value="Live test" style="padding:6px 18px;" onClick="window.open('../auth/saml/login?debug=1','_blank')">
+        <input type="button" value="Show last test result" style="padding:6px 18px;" onClick="showSamlDebug()">
+        <span id="saml_save_status" style="margin-left:12px;"></span>
+      </div>
+    </form>
+  </div>
+
+  <div id="samlDebugOverlay" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:1000;">
+    <div style="background:#fff;color:#333;max-width:760px;margin:60px auto;padding:20px;border-radius:6px;max-height:80%;overflow:auto;">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <h2 style="margin:0;">Last SAML live test</h2>
+        <input type="button" value="Close" onClick="document.getElementById('samlDebugOverlay').style.display='none'">
+      </div>
+      <pre id="samlDebugBody" style="margin-top:15px;font-family:monospace;font-size:12px;white-space:pre-wrap;word-break:break-word;"></pre>
+    </div>
+  </div>
+
+  <script>loadSamlSettings();</script>
 {{end}}
 
 </div>
