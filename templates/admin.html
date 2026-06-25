@@ -1,0 +1,361 @@
+<!DOCTYPE HTML>
+<!-- ===================================================================
+  CompanyMaps 9 AdminPanel
+  Ported from the legacy admin/index.php
+==================================================================== -->
+<html lang="en">
+<head>
+  <title>{{.AppTitle}}</title>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+  <link rel="stylesheet" type="text/css" href="../cmaps80.css">
+  <link rel="stylesheet" type="text/css" href="admin80.css">
+  <link rel="icon" type="image/png" href="../favicons/favicon-32x32.png" sizes="32x32">
+  <link rel="shortcut icon" href="../favicons/favicon.ico">
+  <meta name="theme-color" content="#000000">
+  <meta name="viewport" content="width=device-width">
+
+  <script src="../tools/Chart.min.js"></script>
+  <script src="../tools/jquery3.js"></script>
+  <script src="../tools/resize80.js"></script>
+  <script src="../tools/underscore.js"></script>
+  <script src="backend80.js"></script>
+  <script src="../user80.js"></script>
+</head>
+
+<body>
+
+<div id="container"> </div>
+
+<!-- Page header chrome -->
+<div class="control_background" style="width:100%; height: 69px; position: fixed; top: 0px; left: 0px;background: #333333; transform:scaleY({{.Autozoom}})"> </div>
+<div id="controlpanel" class="control_container" style="position:fixed; left: 0px; top: 0px; height:69px;width:100%;background-color:#333333;opacity:1.0;z-index:1;transform:scale({{.Autozoom}});transform-origin:50% 0%;">
+  <div class="control_content" style="position: absolute; left:50%; margin-left:-{{.HalfWidth}}px; top:0px;width:{{.TargetScreenWidth}}px;height:69px; z-index:2;transform-origin:50% 0%;background-color:#333333">
+
+    <div class="headeritem" id="tab_dashboard" style="width:200px; background: transparent; margin-left:0px;">
+      <span class="headeritem_picture" style="opacity:1.0;"><a href="?tab=dashboard"><img src="../images/logo.png" width="45" alt="" onmouseover='this.src="../images/dashboard.png"' onmouseout='this.src="../images/logo.png"' /></a></span>
+      <span class="headeritem_text">Dashboard</span>
+    </div>
+    {{if gt .PermHealth 0}}
+    <div class="headeritem" id="tab_health" style="width:120px;">
+      <span class="headeritem_picture"><a href="?tab=health"><img src="../images/health.png" width="45" alt="" /></a></span>
+      <span class="headeritem_text">Health</span>
+    </div>
+    {{end}}
+    {{if gt .PermConfig 0}}
+    <div class="headeritem" id="tab_config" style="width:120px;">
+      <span class="headeritem_picture"><a href="?tab=config"><img src="../images/settings.png" width="45" alt="" /></a></span>
+      <span class="headeritem_text">Config</span>
+    </div>
+    {{end}}
+    {{if gt .PermLdap 0}}
+    <div class="headeritem" id="tab_ldap" style="width:120px;">
+      <span class="headeritem_picture"><a href="?tab=ldap"><img src="../images/sync.png" width="45" alt="" /></a></span>
+      <span class="headeritem_text">LDAP</span>
+    </div>
+    {{end}}
+    {{if gt .PermMaps 0}}
+    <div class="headeritem" id="tab_maps" style="width:120px;">
+      <span class="headeritem_picture"><a href="?tab=maps"><img src="../images/map.png" width="45" alt="" /></a></span>
+      <span class="headeritem_text">Maps</span>
+    </div>
+    {{end}}
+    {{if gt .PermDesks 0}}
+    <div class="headeritem" id="tab_desks" style="width:120px;">
+      <span class="headeritem_picture"><a href="?tab=desks"><img src="../images/desks.png" width="45" alt="" /></a></span>
+      <span class="headeritem_text">Desks</span>
+    </div>
+    {{end}}
+    {{if gt .PermUsers 0}}
+    <div class="headeritem" id="tab_users" style="width:120px;">
+      <span class="headeritem_picture"><a href="?tab=users"><img src="../images/adminusers.png" width="45" alt="" /></a></span>
+      <span class="headeritem_text">Users</span>
+    </div>
+    {{end}}
+    {{if gt .PermTeams 0}}
+    <div class="headeritem" id="tab_teams" style="width:120px;">
+      <span class="headeritem_picture"><a href="?tab=teams"><img src="../images/teams.png" width="45" alt="" /></a></span>
+      <span class="headeritem_text">Teams</span>
+    </div>
+    {{end}}
+    {{if gt .PermStats 0}}
+    <div class="headeritem" id="tab_stats" style="width:120px;">
+      <span class="headeritem_picture"><a href="?tab=stats"><img src="../images/advancedstats.png" width="45" alt="" /></a></span>
+      <span class="headeritem_text">Stats</span>
+    </div>
+    {{end}}
+    {{if gt .PermAuditlog 0}}
+    <div class="headeritem" id="tab_auditlog" style="width:130px;">
+      <span class="headeritem_picture"><a href="?tab=auditlog"><img src="../images/auditlog.png" width="45" alt="" /></a></span>
+      <span class="headeritem_text">AuditLog</span>
+    </div>
+    {{end}}
+    <div class="headeritem" style="width:150px;float:right;">
+      <span class="headeritem_picture" style="float:right; cursor:pointer;"><img src="../images/logout2.png" width="45" alt="" onClick='logoutUser("admin")' /></span>
+      <span class="headeritem_picture" style="float:right;"><a href="../" title="go back to the map"><img src="../images/globe.png" width="45" alt="" /></a></span>
+    </div>
+  </div>
+</div>
+
+<script>
+  $("#tab_{{.ActiveTab}}").css("background-color", "#505050");
+  $("#tab_{{.ActiveTab}}").css("border-radius", "50px");
+</script>
+
+<!-- Content -->
+<div id="content" class="page_content" style="position:absolute; top:{{.TopHeader}}px; left:{{.LeftPos}}px; width:{{.TargetScreenWidth}}px; transform:scale({{.ContentScale}});"> <br />
+
+{{if .Message}}<div style="margin-left:20px; padding:8px; background:rgba(0,120,0,0.6); border-radius:5px; width:600px;">{{.Message}}</div><br />{{end}}
+
+{{if eq .ActiveTab "dashboard"}}
+  <script>
+    updateSystemStats();
+    setInterval(updateSystemStats, 15000);
+  </script>
+
+{{else if eq .ActiveTab "health"}}
+  <form id="updateWhitelist" name="updateWhitelist" action="?tab=health" method="post">
+    <input type="hidden" name="tab" value="health">
+    <input type="hidden" id="ignoreHealthName" name="ignoreHealthName" value="a">
+    <input type="hidden" id="ignoreHealthType" name="ignoreHealthType" value="a">
+    <input type="submit" value="No" style="display:none;">
+  </form>
+  <script>
+    updateHealthDetails();
+    setInterval(updateHealthDetails, 60000);
+  </script>
+
+{{else if eq .ActiveTab "config"}}
+  <h2 style="margin-left:20px">Configured base variables</h2><br />
+  <table style="margin-left: 20px">
+    <tr style="font-weight:bold"><td width="270">Variable</td><td width="300">Value</td></tr>
+    <tr><td>&nbsp;</td><td>&nbsp;</td></tr>
+    {{range .GeneralVars}}<tr><td>{{.Variable}}</td><td>{{.Value}}</td></tr>{{end}}
+  </table>
+  <br/>
+  <h2 style="margin-left:20px">Configured VIP desks</h2><br />
+  <table style="margin-left: 20px">
+    <tr style="font-weight:bold"><td width="270">Parsed Text from Job Title</td><td width="150">Type</td><td width="300">Description</td></tr>
+    <tr><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td></tr>
+    {{range .Vips}}<tr><td>{{.Title}}</td><td>{{.Type}}</td><td>{{.Description}}</td></tr>{{end}}
+  </table>
+
+{{else if eq .ActiveTab "ldap"}}
+  {{if .IsEditor}}<script>token = "{{.Token}}"; username = "{{.Username}}"; console.log("Token: " + token);</script>{{end}}
+  <table style="margin-left:20px;">
+    <tr style="font-weight:bold;">
+      <td width="200">Description</td><td width="180">Server</td><td width="110">Type</td>
+      <td width="400">OU</td><td width="230">LdapUser</td><td width="150">LdapPass</td>
+      <td width="150">Last Sync</td><td width="150"></td><td width="100">&nbsp;</td>
+    </tr>
+    <tr><td>&nbsp;</td></tr>
+    {{range .LdapSources}}
+    <tr>
+      <td>{{.Description}}</td><td>{{.Server}}</td><td>{{.Type}}</td><td>{{.OU}}</td>
+      <td>{{.LdapUser}}</td><td>*****</td><td>{{.LastSync}}</td>
+      <td><input type="button" id="syncbutton{{.ID}}" value="Sync now" onClick="syncLDAP({{.ID}}, username)"></td>
+      <td>
+        {{if gt $.PermLdap 1}}
+        <form name="DeleteLdap" action="?tab=ldap" method="post">
+          <input type="hidden" name="tab" value="ldap">
+          <input type="hidden" name="deleteLdapID" value="{{.ID}}">
+          <input type="submit" value="Delete">
+        </form>
+        {{end}}
+      </td>
+    </tr>
+    {{end}}
+    {{if gt .PermLdap 1}}
+    <tr><td>&nbsp;</td></tr>
+    <form name="AddLdap" action="?tab=ldap" method="post">
+      <tr>
+        <input type="hidden" name="tab" value="ldap">
+        <td><input type="text" name="newLdapDescription" style="width:190px;" placeholder="Description"></td>
+        <td><input type="text" name="newLdapServer" style="width:170px;" placeholder="Server"></td>
+        <td><select name="newLdapType" style="width:100px"><option value="LDAPS">LDAPS</option><option value="LDAP">LDAP</option></select></td>
+        <td><input type="text" name="newLdapOU" style="width:390px;" placeholder="OU"></td>
+        <td><input type="text" name="newLdapUser" style="width:220px;" placeholder="Bind user"></td>
+        <td><input type="password" name="newLdapPass" style="width:140px;" placeholder="Password"></td>
+        <td>&nbsp;</td>
+        <td><input type="submit" value="Create"></td>
+        <td>&nbsp;</td>
+      </tr>
+    </form>
+    {{end}}
+  </table>
+
+{{else if eq .ActiveTab "maps"}}
+  <table style="margin-left:20px;">
+    <tr style="font-weight:bold;">
+      <td width="160">Mapname</td><td width="90">Itemscale</td><td width="90">Published</td>
+      <td width="100">Country</td><td width="90">Flagsize</td><td width="160">Timezone</td>
+      <td width="200">Address</td><td width="60">X</td><td width="60">Y</td>
+      <td width="120">Status</td><td width="100">&nbsp;</td>
+    </tr>
+    <tr><td>&nbsp;</td></tr>
+    {{range .Maps}}
+    <tr>
+      <td>{{.Mapname}}</td><td>{{.Itemscale}}</td>
+      <td>
+        {{if gt $.PermMaps 1}}
+        <form action="?tab=maps" method="post" style="display:inline">
+          <input type="hidden" name="tab" value="maps">
+          <input type="hidden" name="toggleMapID" value="{{.Mapname}}">
+          <input type="hidden" name="toggleMapname" value="{{.Mapname}}">
+          {{if eq .Published "yes"}}
+          <input type="hidden" name="toggleMapStatus" value="no">
+          <input type="submit" value="Yes" style="background:rgba(0,150,0,0.7);width:70px;">
+          {{else}}
+          <input type="hidden" name="toggleMapStatus" value="yes">
+          <input type="submit" value="No" style="background:rgba(150,0,0,0.7);width:70px;">
+          {{end}}
+        </form>
+        {{else}}{{.Published}}{{end}}
+      </td>
+      <td>{{.Country}}</td><td>{{.Flagsize}}</td><td>{{.Timezone}}</td>
+      <td>{{.Address}}</td><td>{{.MapX}}</td><td>{{.MapY}}</td>
+      <td>
+        <span title="map image" style="color:{{if .HasFile}}#2ecc40{{else}}#ff4136{{end}}">&#9679;</span>
+        <span title="database" style="color:{{if .HasDB}}#2ecc40{{else}}#ff4136{{end}}">&#9679;</span>
+        <span title="country flag" style="color:{{if .HasFlag}}#2ecc40{{else}}#ff4136{{end}}">&#9679;</span>
+      </td>
+      <td>
+        {{if gt $.PermMaps 1}}
+        <form action="?tab=maps" method="post">
+          <input type="hidden" name="tab" value="maps">
+          <input type="hidden" name="deleteMapID" value="{{.Mapname}}">
+          <input type="hidden" name="deleteMapname" value="{{.Mapname}}">
+          <input type="submit" value="Delete">
+        </form>
+        {{end}}
+      </td>
+    </tr>
+    {{end}}
+    {{if gt .PermMaps 1}}
+    <tr><td>&nbsp;</td></tr>
+    <form name="AddMap" action="?tab=maps" method="post" enctype="multipart/form-data">
+      <tr>
+        <input type="hidden" name="tab" value="maps">
+        <td><input type="text" name="newMapName" style="width:150px;" placeholder="name"></td>
+        <td><input type="text" name="newMapItemscale" value="1" style="width:80px;"></td>
+        <td><select name="newMapPublished" style="width:80px"><option value="yes" selected>Yes</option><option value="no">No</option></select></td>
+        <td><select name="newMapCountry" style="width:90px">{{range .Countryflags}}<option value="{{.}}">{{.}}</option>{{end}}</select></td>
+        <td><input type="text" name="newMapFlagsize" value="0" style="width:80px;"></td>
+        <td><select name="newMapTimezone" style="width:150px">{{range .Timezones}}<option value="{{.}}">{{.}}</option>{{end}}</select></td>
+        <td><input type="text" name="newMapAddress" style="width:190px;"></td>
+        <td><input type="text" name="newMapX" value="0" style="width:50px;"></td>
+        <td><input type="text" name="newMapY" value="0" style="width:50px;"></td>
+        <td><input type="file" name="image" accept="image/*"></td>
+        <td><input type="submit" value="Create"></td>
+      </tr>
+    </form>
+    {{end}}
+  </table>
+
+{{else if eq .ActiveTab "desks"}}
+  {{range .DeskMaps}}
+  <div id="{{.}}" class="deskstats"><img src="../images/spinner.png" style="margin-left:117px" /></div>
+  <script>deskSummary('{{.}}')</script>
+  {{end}}
+
+{{else if eq .ActiveTab "users"}}
+  <table style="margin-left: 20px">
+    <tr style="font-weight:bold"><td width="350">Username</td><td width="200">Role</td><td width="210">&nbsp;</td></tr>
+    <tr><td>&nbsp;</td></tr>
+    {{range .Mapadmins}}
+    <tr>
+      <td>{{.Username}}</td><td>{{.RoleName}}</td>
+      <td>
+        {{if gt $.PermUsers 1}}
+        <form name="DeleteAdmin" action="?tab=users" method="post">
+          <input type="hidden" name="tab" value="users">
+          <input type="hidden" name="deleteUser" value="{{.Username}}">
+          <input type="hidden" name="deleteRole" value="{{.Role}}">
+          <input type="submit" value="Delete">
+        </form>
+        {{end}}
+      </td>
+    </tr>
+    {{end}}
+    {{if gt .PermUsers 1}}
+    <tr><td>&nbsp;</td></tr>
+    <form name="AddAdmin" action="?tab=users" method="post">
+      <tr>
+        <input type="hidden" name="tab" value="users">
+        <td><input type="text" name="newadminuser" style="width:320px;"></td>
+        <td><select name="newadminrole" style="width:180px">{{range .Roles}}<option value="{{.ID}}">{{.Rolename}}</option>{{end}}</select></td>
+        <td><input type="submit" value="Create"></td>
+      </tr>
+    </form>
+    {{end}}
+  </table>
+
+{{else if eq .ActiveTab "teams"}}
+  <table style="margin-left:20px;">
+    <tr style="font-weight:bold"><td width="350">Name</td><td width="850">Members</td><td width="150">&nbsp;</td></tr>
+    <tr><td>&nbsp;</td></tr>
+    {{range .Teams}}
+    <tr>
+      <td>{{.Teamname}}</td><td>{{.Members}}</td>
+      <td>
+        {{if gt $.PermTeams 1}}
+        <form name="DeleteTeam" action="?tab=teams" method="post">
+          <input type="hidden" name="tab" value="teams">
+          <input type="hidden" name="deleteTeam" value="{{.Teamname}}">
+          <input type="hidden" name="deleteMembers" value="{{.Members}}">
+          <input type="submit" value="Delete">
+        </form>
+        {{end}}
+      </td>
+    </tr>
+    {{end}}
+    <tr><td>&nbsp;</td></tr>
+    <form name="NewTeam" action="?tab=teams" method="post">
+      <tr>
+        <input type="hidden" name="tab" value="teams">
+        <td><input type="text" name="newTeam" style="width:320px;"></td>
+        <td><input type="text" name="newMembers" style="width:820px;"></td>
+        <td><input type="submit" value="Create"></td>
+      </tr>
+    </form>
+  </table>
+
+{{else if eq .ActiveTab "stats"}}
+  <h2 style="margin-left:10px">Daily chart</h2>
+  <script>showCharts('day', 'daycanvas')</script>
+  <h2 style="margin-left:10px">Monthly chart</h2>
+  <script>showCharts('month', 'monthcanvas')</script>
+  <h2 style="margin-left:10px">Yearly chart</h2>
+  <script>showCharts('year', 'yearcanvas')</script>
+
+{{else if eq .ActiveTab "auditlog"}}
+  <h2>AuditLog of the last changes</h2><br />
+  {{$filter := .AuditFilter}}
+  {{range $name := .AuditTypes}}
+  <div style="float: left; margin-right:10px;">
+    <form action="?tab=auditlog" method="post">
+      <input type="hidden" name="tab" value="auditlog">
+      <input type="hidden" name="auditlogEventType" value="{{if eq $name "All"}}{{else}}{{$name}}{{end}}">
+      {{if or (eq $filter $name) (and (eq $name "All") (eq $filter ""))}}
+      <input type="submit" value="{{$name}}" style="width:80px; background: rgba(0, 200, 0, 0.7);">
+      {{else}}
+      <input type="submit" value="{{$name}}" style="width:80px; background: rgba(0, 0, 200, 0.7);">
+      {{end}}
+    </form>
+  </div>
+  {{end}}
+  <br style="clear:both" />
+  <table>
+    <tr style="font-weight:bold;">
+      <td width="200">EventTime</td><td width="200">EventType</td>
+      <td width="250">EventUser</td><td width="880">EventInfo</td>
+    </tr>
+    <tr><td>&nbsp;</td></tr>
+    {{range .AuditEntries}}
+    <tr><td>{{.Timestamp}}</td><td>{{.Type}}</td><td>{{.User}}</td><td>{{.Info}}</td></tr>
+    {{end}}
+  </table><br /><br />
+{{end}}
+
+</div>
+</body>
+</html>

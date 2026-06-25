@@ -1,0 +1,40 @@
+<!DOCTYPE HTML>
+<!-- ===================================================================
+  CompanyMaps 9 Client - change overview
+  Ported from the legacy changes.php
+==================================================================== -->
+<html lang="en">
+<head>
+  <title>{{.AppTitle}}</title>
+  <meta charset="utf-8">
+  <link rel="stylesheet" type="text/css" href="cmaps80.css">
+  <link rel="stylesheet" type="text/css" href="client80.css">
+  <link rel="icon" type="image/png" href="favicons/favicon-32x32.png" sizes="32x32">
+  <link rel="shortcut icon" href="favicons/favicon.ico">
+  <meta name="theme-color" content="#000000">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=4.0, user-scalable=yes">
+  <script src="tools/jquery3.js"></script>
+  <script src="tools/jquery-migrate-1.4.1.min.js"></script>
+  <script src="changes.js"></script>
+</head>
+<body>
+
+<div id="header" style="position:fixed; top:0px; left:0px; width:100%; height: 60px; padding:10px; line-height:60px; z-index:5000; background-color:black;">
+  <label for="limit">Limit results:</label>
+  <select name="limit" id="limit" style="width: 100px;" onchange="updateChangesOverview();">
+    <option value="50">50</option>
+    <option value="100">100</option>
+    <option value="200">200</option>
+    <option value="500">500</option>
+    <option value="2000">2000</option>
+    <option value="5000">5000</option>
+    <option value="10000">10000</option>
+  </select>
+  <img src="images/activity_on.gif" id="activity" style="height:30px; float:right; margin-top: 15px; margin-right:20px; display: none;">
+</div>
+
+<div id="announcementbar_body" style="width:100%; height: auto; margin-top: 80px;"></div>
+
+<script> updateChangesOverview() </script>
+</body>
+</html>

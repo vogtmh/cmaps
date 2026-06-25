@@ -1,0 +1,17 @@
+[Unit]
+Description=APPLABEL Service
+After=network.target
+
+[Service]
+User=root
+Group=root
+WorkingDirectory=/opt/APPNAME
+ExecStart=/opt/APPNAME/APPNAME_linux
+Restart=always
+RestartSec=10
+StandardOutput=file:/var/log/APPNAME/output.log
+StandardError=file:/var/log/APPNAME/error.log
+SyslogIdentifier=APPLABEL
+
+[Install]
+WantedBy=multi-user.target

@@ -1,3 +1,11 @@
+# CompanyMaps 9 (Go) build artifacts & runtime data
+/cmaps
+/config.json
+/data/
+.DS_Store
+
+# Legacy PHP runtime data (kept for safety)
 /avatarcache
 /maps
 !/maps/overview.png
+/misc/

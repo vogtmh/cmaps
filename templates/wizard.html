@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{{.AppTitle}} — Setup</title>
+  <style>
+    body { font-family: system-ui, sans-serif; background: #f4f5f7; margin: 0; color: #222; }
+    .wrap { max-width: 760px; margin: 40px auto; }
+    .card { background: #fff; border-radius: 10px; box-shadow: 0 2px 16px rgba(0,0,0,.08);
+      padding: 28px 32px; margin-bottom: 24px; }
+    h1 { font-size: 1.6em; margin: 0 0 4px; }
+    h2 { font-size: 1.2em; margin: 0 0 12px; }
+    .sub { color: #666; margin: 0 0 24px; }
+    label { display: block; font-size: .85em; color: #444; margin: 10px 0 3px; }
+    input[type=text], input[type=password] { width: 100%; padding: 9px; box-sizing: border-box;
+      border: 1px solid #ccc; border-radius: 6px; font-size: .95em; }
+    .btn { padding: 11px 18px; border: 0; border-radius: 6px; background: #0a66c2; color: #fff;
+      font-size: 1em; cursor: pointer; margin-top: 14px; }
+    .btn.green { background: #2e7d32; }
+    .btn.grey { background: #777; }
+    .row { display: flex; gap: 14px; }
+    .row > div { flex: 1; }
+    .msg { padding: 12px 16px; border-radius: 6px; margin-bottom: 20px; }
+    .msg.ok { background: #e8f5e9; color: #1b5e20; }
+    .msg.err { background: #fdecea; color: #b71c1c; }
+    .step { color: #0a66c2; font-weight: 600; font-size: .8em; text-transform: uppercase; }
+    a.skip { color: #777; font-size: .85em; margin-left: 12px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h1>{{.AppTitle}} 9 — Setup Wizard</h1>
+      <p class="sub">Choose how to initialize this server. {{if .Configured}}<strong>Setup is already complete</strong> — re-running steps will overwrite data.{{end}}</p>
+      {{if .Status}}<div class="msg ok">{{.Status}}</div>{{end}}
+      {{if .Error}}<div class="msg err">{{.Error}}</div>{{end}}
+    </div>
+
+    <div class="card">
+      <span class="step">Path A</span>
+      <h2>Set up a new server (demo data)</h2>
+      <p class="sub">Creates two demo locations (Germany &amp; USA) with sample desks and ten employees with avatars. Great for evaluation.</p>
+      <form method="POST" action="/setup/demo" onsubmit="return confirm('Seed demo data? This writes maps, desks and sample users.');">
+        <button class="btn green" type="submit">Create demo environment</button>
+      </form>
+    </div>
+
+    <div class="card">
+      <span class="step">Path B — migrate CompanyMaps 8</span>
+      <h2>Step 1 · Import the MySQL database</h2>
+      <form method="POST" action="/setup/import">
+        <div class="row">
+          <div><label>Host</label><input type="text" name="host" value="localhost"></div>
+          <div><label>Port</label><input type="text" name="port" value="3306"></div>
+        </div>
+        <label>Database</label><input type="text" name="database" value="cmaps">
+        <div class="row">
+          <div><label>User</label><input type="text" name="user"></div>
+          <div><label>Password</label><input type="password" name="password"></div>
+        </div>
+        <button class="btn" type="submit">Import database</button>
+      </form>
+    </div>
+
+    <div class="card">
+      <h2>Step 2 · Copy maps &amp; avatars from disk</h2>
+      <p class="sub">Copies <code>maps/</code> and <code>avatarcache/</code> from the old installation directory into the data folder.</p>
+      <form method="POST" action="/setup/datacopy">
+        <label>Legacy install path</label><input type="text" name="datapath" value="{{.DataPath}}">
+        <button class="btn" type="submit">Copy files</button>
+      </form>
+    </div>
+
+    <div class="card">
+      <h2>Step 3 · Active Directory sync</h2>
+      <p class="sub">Bind credentials are used only for syncing the address book (never for end-user login). Leave blank and skip if you imported AD sources already.</p>
+      <form method="POST" action="/setup/ldap">
+        <label>Description</label><input type="text" name="description" value="Primary AD">
+        <div class="row">
+          <div><label>Server</label><input type="text" name="server" placeholder="dc01.corp.example"></div>
+          <div><label>Type</label><input type="text" name="type" value="LDAPS"></div>
+        </div>
+        <label>Base OU</label><input type="text" name="ou" placeholder="OU=Staff,DC=corp,DC=example">
+        <div class="row">
+          <div><label>Bind user</label><input type="text" name="ldapuser" placeholder="corp\\svc_maps"></div>
+          <div><label>Bind password</label><input type="password" name="ldappass"></div>
+        </div>
+        <button class="btn" type="submit">Save &amp; run initial sync</button>
+        <button class="btn grey" type="submit" name="skip" value="1">Skip</button>
+      </form>
+    </div>
+
+    <div class="card">
+      <h2>Step 4 · Robin meeting rooms (optional)</h2>
+      <form method="POST" action="/setup/robin">
+        <label>Robin API token</label><input type="password" name="robintoken">
+        <label>Robin organization</label><input type="text" name="robinorg">
+        <button class="btn" type="submit">Save</button>
+        <button class="btn grey" type="submit" name="skip" value="1">Skip</button>
+      </form>
+    </div>
+
+    <div class="card">
+      <h2>Step 5 · SAML single sign-on (optional)</h2>
+      <p class="sub">Configure Entra ID / SAML later from the admin panel (Settings → SAML), which provides a guided 3-step setup and live test.</p>
+      <form method="POST" action="/setup/finish">
+        <button class="btn green" type="submit">Finish setup</button>
+        <a class="skip" href="/">Go to the app</a>
+      </form>
+    </div>
+  </div>
+</body>
+</html>

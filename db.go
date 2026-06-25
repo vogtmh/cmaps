@@ -1,0 +1,733 @@
+package main
+
+import (
+	"encoding/binary"
+	"encoding/json"
+	"fmt"
+	"sort"
+	"strings"
+	"time"
+
+	bolt "go.etcd.io/bbolt"
+)
+
+// boltDB buckets, replacing the MySQL tables of the PHP app. Per-map desk tables
+// (desks_<map>) are collapsed into a single "desks" bucket keyed by "<map>:<id>".
+var (
+	bucketSettings   = []byte("settings")        // config_general (variable -> value)
+	bucketMaps       = []byte("maplist")         // config_maplist (key = mapname)
+	bucketDesks      = []byte("desks")           // desks_<map> (key = "<map>:<id>")
+	bucketLdap       = []byte("ldapmirror")      // ldap-mirror (key = userid/ipphone)
+	bucketBookings   = []byte("bookings")        // bookings (key = seq)
+	bucketTeams      = []byte("teams")           // config_teams (key = teamname)
+	bucketRoles      = []byte("roles")           // config_roles (key = id)
+	bucketUsers      = []byte("users")           // config_mapadmins + local users (key = username)
+	bucketChangelog  = []byte("changelog")       // ldap_changelog (key = seq)
+	bucketStats      = []byte("stats")           // stats (key = YYYY-MM-DD)
+	bucketTracking   = []byte("tracking")        // unique daily visitor tracking (key = date:user)
+	bucketVips       = []byte("vips")            // config_vips (key = seq)
+	bucketDepts      = []byte("departments")     // config_department_list (key = seq)
+	bucketRobin      = []byte("robinspaces")     // config_robinspaces (key = spacename)
+	bucketMeeting    = []byte("meetingstatus")   // meetingstatus (key = "<map>:<room>")
+	bucketWhitelist  = []byte("healthwhitelist") // health_whitelist (key = seq)
+	bucketLdapSrc    = []byte("ldapsources")     // config_ldap (key = id)
+	bucketAudit      = []byte("auditlog")        // auditlog (key = seq)
+	bucketMeta       = []byte("meta")            // app meta (wizard state, etc.)
+)
+
+var allBuckets = [][]byte{
+	bucketSettings, bucketMaps, bucketDesks, bucketLdap, bucketBookings, bucketTeams,
+	bucketRoles, bucketUsers, bucketChangelog, bucketStats, bucketTracking, bucketVips,
+	bucketDepts, bucketRobin, bucketMeeting, bucketWhitelist, bucketLdapSrc, bucketAudit,
+	bucketMeta,
+}
+
+type DB struct {
+	bolt *bolt.DB
+	loc  *time.Location
+}
+
+// --- Models ---
+
+// MapInfo mirrors a row of config_maplist.
+type MapInfo struct {
+	Mapname   string `json:"mapname"`
+	Itemscale string `json:"itemscale"`
+	Published string `json:"published"`
+	Country   string `json:"country"`
+	Flagsize  string `json:"flagsize"`
+	Timezone  string `json:"timezone"`
+	Address   string `json:"address"`
+	MapX      int    `json:"mapX"`
+	MapY      int    `json:"mapY"`
+}
+
+// Desk mirrors a row of a desks_<map> table, with the map name attached. Desktype
+// is the original column-1 value: addesk, localdesk, blocked, hotseat, booking,
+// meeting, restroom, food, exit, keycardlock, keylock, printer, service,
+// firstaid, floor. (shareddesk is derived at query time, never stored.)
+type Desk struct {
+	ID         int    `json:"id"`
+	Map        string `json:"map"`
+	Desktype   string `json:"desktype"`
+	X          int    `json:"x"`
+	Y          int    `json:"y"`
+	Desknumber string `json:"desknumber"`
+	Employee   string `json:"employee"`
+	Avatar     string `json:"avatar"`
+	Department string `json:"department"`
+}
+
+func deskKey(mapName string, id int) []byte {
+	return []byte(fmt.Sprintf("%s:%d", mapName, id))
+}
+
+// LdapUser mirrors a row of the ldap-mirror table. Userid is the AD account id
+// (the old ipphone column) used for avatar filenames.
+type LdapUser struct {
+	Userid          string `json:"userid"`
+	Givenname       string `json:"givenname"`
+	Surname         string `json:"surname"`
+	Telephonenumber string `json:"telephonenumber"`
+	Mail            string `json:"mail"`
+	Office          string `json:"physicaldeliveryofficename"`
+	Description     string `json:"description"`
+	Department      string `json:"department"`
+	Mobile          string `json:"mobile"`
+}
+
+// Booking mirrors a row of the bookings table.
+type Booking struct {
+	ID       uint64 `json:"id"`
+	Date     string `json:"date"`
+	Map      string `json:"map"`
+	Desk     string `json:"desk"`
+	User     string `json:"user"`
+	Fullname string `json:"fullname"`
+	Phone    string `json:"phone"`
+	Mail     string `json:"mail"`
+}
+
+// Team mirrors a row of config_teams.
+type Team struct {
+	Teamname string `json:"teamname"`
+	Members  string `json:"teammembers"`
+}
+
+// Role mirrors a row of config_roles. Perms maps a feature name to a level
+// (0=none, 1=read, 2=write).
+type Role struct {
+	ID       int            `json:"id"`
+	Rolename string         `json:"rolename"`
+	Perms    map[string]int `json:"perms"`
+}
+
+// User merges config_mapadmins (role assignment) with local-login users. For SAML
+// or AD-derived admins, IsLocal is false and PassHash/Salt are empty.
+type User struct {
+	Username  string `json:"username"`
+	Role      int    `json:"role"`
+	IsLocal   bool   `json:"is_local"`
+	PassHash  string `json:"pass_hash,omitempty"`
+	Salt      string `json:"salt,omitempty"`
+	Fullname  string `json:"fullname,omitempty"`
+	Mail      string `json:"mail,omitempty"`
+	LastLogin string `json:"last_login,omitempty"`
+}
+
+// ChangelogEntry mirrors a row of ldap_changelog.
+type ChangelogEntry struct {
+	Year     int    `json:"year"`
+	Month    int    `json:"month"`
+	Day      int    `json:"day"`
+	Hour     int    `json:"hour"`
+	Minute   int    `json:"minute"`
+	Name     string `json:"name"`
+	Avatar   string `json:"avatar"`
+	Type     string `json:"type"`
+	Oldvalue string `json:"oldvalue"`
+	Newvalue string `json:"newvalue"`
+}
+
+// StatEntry mirrors a row of the stats table.
+type StatEntry struct {
+	Date  string `json:"date"`
+	Year  int    `json:"year"`
+	Month int    `json:"month"`
+	Day   int    `json:"day"`
+	Count int64  `json:"count"`
+}
+
+// VIP mirrors a row of config_vips.
+type VIP struct {
+	Title       string `json:"title"`
+	Type        string `json:"type"`
+	Description string `json:"description"`
+}
+
+// RobinSpace mirrors a row of config_robinspaces.
+type RobinSpace struct {
+	Spacename string `json:"spacename"`
+	Spaceid   int    `json:"spaceid"`
+}
+
+// MeetingStatus mirrors a row of the meetingstatus cache table.
+type MeetingStatus struct {
+	Map          string `json:"map"`
+	Room         string `json:"room"`
+	Availability string `json:"availability"`
+	NowTitle     string `json:"now_title"`
+	NowStart     string `json:"now_start"`
+	NowEnd       string `json:"now_end"`
+	NowTz        string `json:"now_tz"`
+	NextTitle    string `json:"next_title"`
+	NextStart    string `json:"next_start"`
+	NextEnd      string `json:"next_end"`
+	NextTz       string `json:"next_tz"`
+	Deskid       string `json:"deskid"`
+}
+
+// WhitelistEntry mirrors a row of health_whitelist.
+type WhitelistEntry struct {
+	Type string `json:"type"`
+	Text string `json:"text"`
+}
+
+// LdapSource mirrors a row of config_ldap (an AD sync source). LdapPass is the
+// bind password, used for syncing only (never for end-user authentication).
+type LdapSource struct {
+	ID          int    `json:"id"`
+	Description string `json:"description"`
+	Server      string `json:"server"`
+	Type        string `json:"type"` // LDAP | LDAPS
+	OU          string `json:"OU"`
+	LdapUser    string `json:"LdapUser"`
+	LdapPass    string `json:"LdapPass"`
+	LastSync    string `json:"LastSync"`
+}
+
+// AuditEntry mirrors a row of the auditlog table.
+type AuditEntry struct {
+	Timestamp string `json:"timestamp"`
+	Type      string `json:"type"`
+	User      string `json:"user"`
+	Info      string `json:"info"`
+}
+
+func openDB(path string) (*DB, error) {
+	bdb, err := bolt.Open(path, 0600, &bolt.Options{Timeout: 5 * time.Second})
+	if err != nil {
+		return nil, fmt.Errorf("opening db: %w", err)
+	}
+	err = bdb.Update(func(tx *bolt.Tx) error {
+		for _, b := range allBuckets {
+			if _, err := tx.CreateBucketIfNotExists(b); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		bdb.Close()
+		return nil, fmt.Errorf("creating buckets: %w", err)
+	}
+
+	loc, err := time.LoadLocation("Europe/Berlin")
+	if err != nil {
+		loc = time.Local
+	}
+	return &DB{bolt: bdb, loc: loc}, nil
+}
+
+func (db *DB) Close() error { return db.bolt.Close() }
+
+// --- Generic helpers ---
+
+func getJSON[T any](db *DB, bucket, key []byte) (T, bool, error) {
+	var out T
+	found := false
+	err := db.bolt.View(func(tx *bolt.Tx) error {
+		v := tx.Bucket(bucket).Get(key)
+		if v == nil {
+			return nil
+		}
+		found = true
+		return json.Unmarshal(v, &out)
+	})
+	return out, found, err
+}
+
+func putJSON[T any](db *DB, bucket, key []byte, val T) error {
+	return db.bolt.Update(func(tx *bolt.Tx) error {
+		data, err := json.Marshal(val)
+		if err != nil {
+			return err
+		}
+		return tx.Bucket(bucket).Put(key, data)
+	})
+}
+
+func deleteKey(db *DB, bucket, key []byte) error {
+	return db.bolt.Update(func(tx *bolt.Tx) error {
+		return tx.Bucket(bucket).Delete(key)
+	})
+}
+
+// listJSON returns all values in a bucket, optionally filtered by a key prefix.
+func listJSON[T any](db *DB, bucket []byte, prefix string) ([]T, error) {
+	var out []T
+	err := db.bolt.View(func(tx *bolt.Tx) error {
+		c := tx.Bucket(bucket).Cursor()
+		var k, v []byte
+		if prefix != "" {
+			p := []byte(prefix)
+			for k, v = c.Seek(p); k != nil && strings.HasPrefix(string(k), prefix); k, v = c.Next() {
+				var item T
+				if err := json.Unmarshal(v, &item); err == nil {
+					out = append(out, item)
+				}
+				_ = p
+			}
+		} else {
+			for k, v = c.First(); k != nil; k, v = c.Next() {
+				var item T
+				if err := json.Unmarshal(v, &item); err == nil {
+					out = append(out, item)
+				}
+			}
+		}
+		return nil
+	})
+	return out, err
+}
+
+func seqKey(seq uint64) []byte {
+	k := make([]byte, 8)
+	binary.BigEndian.PutUint64(k, seq)
+	return k
+}
+
+// --- Settings (config_general) ---
+
+func (db *DB) GetSetting(name string) string {
+	v, _, _ := getJSON[string](db, bucketSettings, []byte(name))
+	return v
+}
+
+func (db *DB) SetSetting(name, value string) error {
+	return putJSON(db, bucketSettings, []byte(name), value)
+}
+
+func (db *DB) AllSettings() (map[string]string, error) {
+	out := map[string]string{}
+	err := db.bolt.View(func(tx *bolt.Tx) error {
+		return tx.Bucket(bucketSettings).ForEach(func(k, v []byte) error {
+			var s string
+			if json.Unmarshal(v, &s) == nil {
+				out[string(k)] = s
+			}
+			return nil
+		})
+	})
+	return out, err
+}
+
+// --- Maps (config_maplist) ---
+
+func (db *DB) ListMaps() ([]MapInfo, error) {
+	maps, err := listJSON[MapInfo](db, bucketMaps, "")
+	sort.Slice(maps, func(i, j int) bool { return maps[i].Mapname < maps[j].Mapname })
+	return maps, err
+}
+
+func (db *DB) GetMap(name string) (MapInfo, bool, error) {
+	return getJSON[MapInfo](db, bucketMaps, []byte(name))
+}
+
+// MapLocation returns the time.Location for a map, falling back to the database
+// default location (Europe/Berlin) when the map has no/invalid timezone.
+func (db *DB) MapLocation(name string) *time.Location {
+	m, ok, err := db.GetMap(name)
+	if err == nil && ok && m.Timezone != "" {
+		if loc, lerr := time.LoadLocation(m.Timezone); lerr == nil {
+			return loc
+		}
+	}
+	return db.loc
+}
+
+// MapToday returns today's date (YYYY-MM-DD) in the map's timezone.
+func (db *DB) MapToday(name string) string {
+	return time.Now().In(db.MapLocation(name)).Format("2006-01-02")
+}
+
+func (db *DB) PutMap(m MapInfo) error { return putJSON(db, bucketMaps, []byte(m.Mapname), m) }
+
+func (db *DB) DeleteMap(name string) error { return deleteKey(db, bucketMaps, []byte(name)) }
+
+// --- Desks ---
+
+func (db *DB) ListDesks(mapName string) ([]Desk, error) {
+	desks, err := listJSON[Desk](db, bucketDesks, mapName+":")
+	return desks, err
+}
+
+func (db *DB) GetDesk(mapName string, id int) (Desk, bool, error) {
+	return getJSON[Desk](db, bucketDesks, deskKey(mapName, id))
+}
+
+func (db *DB) PutDesk(d Desk) error { return putJSON(db, bucketDesks, deskKey(d.Map, d.ID), d) }
+
+func (db *DB) DeleteDesk(mapName string, id int) error {
+	return deleteKey(db, bucketDesks, deskKey(mapName, id))
+}
+
+// NextDeskID returns the next free desk id for a map.
+func (db *DB) NextDeskID(mapName string) (int, error) {
+	desks, err := db.ListDesks(mapName)
+	if err != nil {
+		return 0, err
+	}
+	max := 0
+	for _, d := range desks {
+		if d.ID > max {
+			max = d.ID
+		}
+	}
+	return max + 1, nil
+}
+
+// --- LDAP mirror ---
+
+func (db *DB) ListLdap() ([]LdapUser, error) { return listJSON[LdapUser](db, bucketLdap, "") }
+
+func (db *DB) PutLdap(u LdapUser) error {
+	key := u.Userid
+	if key == "" {
+		key = u.Mail
+	}
+	return putJSON(db, bucketLdap, []byte(key), u)
+}
+
+// ReplaceLdap clears the mirror and stores the given users (used by full sync).
+func (db *DB) ReplaceLdap(users []LdapUser) error {
+	return db.bolt.Update(func(tx *bolt.Tx) error {
+		if err := tx.DeleteBucket(bucketLdap); err != nil && err != bolt.ErrBucketNotFound {
+			return err
+		}
+		b, err := tx.CreateBucket(bucketLdap)
+		if err != nil {
+			return err
+		}
+		for _, u := range users {
+			key := u.Userid
+			if key == "" {
+				key = u.Mail
+			}
+			data, err := json.Marshal(u)
+			if err != nil {
+				return err
+			}
+			if err := b.Put([]byte(key), data); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
+// --- Bookings ---
+
+func (db *DB) ListBookings() ([]Booking, error) { return listJSON[Booking](db, bucketBookings, "") }
+
+func (db *DB) AddBooking(b Booking) error {
+	return db.bolt.Update(func(tx *bolt.Tx) error {
+		bkt := tx.Bucket(bucketBookings)
+		seq, _ := bkt.NextSequence()
+		b.ID = seq
+		data, err := json.Marshal(b)
+		if err != nil {
+			return err
+		}
+		return bkt.Put(seqKey(seq), data)
+	})
+}
+
+func (db *DB) DeleteBooking(id uint64) error { return deleteKey(db, bucketBookings, seqKey(id)) }
+
+// --- Teams ---
+
+func (db *DB) ListTeams() ([]Team, error) {
+	teams, err := listJSON[Team](db, bucketTeams, "")
+	sort.Slice(teams, func(i, j int) bool { return teams[i].Teamname < teams[j].Teamname })
+	return teams, err
+}
+
+func (db *DB) PutTeam(t Team) error { return putJSON(db, bucketTeams, []byte(t.Teamname), t) }
+
+func (db *DB) DeleteTeam(name string) error { return deleteKey(db, bucketTeams, []byte(name)) }
+
+// --- Roles ---
+
+func (db *DB) ListRoles() ([]Role, error) {
+	roles, err := listJSON[Role](db, bucketRoles, "")
+	sort.Slice(roles, func(i, j int) bool { return roles[i].ID < roles[j].ID })
+	return roles, err
+}
+
+func (db *DB) GetRole(id int) (Role, bool, error) {
+	return getJSON[Role](db, bucketRoles, []byte(fmt.Sprintf("%d", id)))
+}
+
+func (db *DB) PutRole(r Role) error {
+	return putJSON(db, bucketRoles, []byte(fmt.Sprintf("%d", r.ID)), r)
+}
+
+func (db *DB) DeleteRole(id int) error {
+	return deleteKey(db, bucketRoles, []byte(fmt.Sprintf("%d", id)))
+}
+
+// --- Users (mapadmins + local) ---
+
+func (db *DB) ListUsers() ([]User, error) { return listJSON[User](db, bucketUsers, "") }
+
+func (db *DB) GetUser(username string) (User, bool, error) {
+	return getJSON[User](db, bucketUsers, []byte(username))
+}
+
+func (db *DB) PutUser(u User) error { return putJSON(db, bucketUsers, []byte(u.Username), u) }
+
+func (db *DB) DeleteUser(username string) error { return deleteKey(db, bucketUsers, []byte(username)) }
+
+// --- Changelog ---
+
+func (db *DB) AddChangelog(e ChangelogEntry) error {
+	return db.bolt.Update(func(tx *bolt.Tx) error {
+		bkt := tx.Bucket(bucketChangelog)
+		seq, _ := bkt.NextSequence()
+		data, err := json.Marshal(e)
+		if err != nil {
+			return err
+		}
+		return bkt.Put(seqKey(seq), data)
+	})
+}
+
+// ListChangelog returns entries newest-first.
+func (db *DB) ListChangelog(limit int) ([]ChangelogEntry, error) {
+	var out []ChangelogEntry
+	err := db.bolt.View(func(tx *bolt.Tx) error {
+		c := tx.Bucket(bucketChangelog).Cursor()
+		for k, v := c.Last(); k != nil; k, v = c.Prev() {
+			var e ChangelogEntry
+			if json.Unmarshal(v, &e) == nil {
+				out = append(out, e)
+			}
+			if limit > 0 && len(out) >= limit {
+				break
+			}
+		}
+		return nil
+	})
+	return out, err
+}
+
+// --- Stats & tracking ---
+
+func (db *DB) ListStats() ([]StatEntry, error) {
+	stats, err := listJSON[StatEntry](db, bucketStats, "")
+	sort.Slice(stats, func(i, j int) bool { return stats[i].Date < stats[j].Date })
+	return stats, err
+}
+
+func (db *DB) PutStat(s StatEntry) error { return putJSON(db, bucketStats, []byte(s.Date), s) }
+
+// TrackVisit increments today's visitor count once per unique user per day.
+func (db *DB) TrackVisit(user string) error {
+	now := time.Now().In(db.loc)
+	date := now.Format("2006-01-02")
+	trackKey := []byte(date + ":" + user)
+	return db.bolt.Update(func(tx *bolt.Tx) error {
+		tb := tx.Bucket(bucketTracking)
+		if tb.Get(trackKey) != nil {
+			return nil // already counted today
+		}
+		if err := tb.Put(trackKey, []byte("1")); err != nil {
+			return err
+		}
+		sb := tx.Bucket(bucketStats)
+		var s StatEntry
+		if v := sb.Get([]byte(date)); v != nil {
+			_ = json.Unmarshal(v, &s)
+		} else {
+			s = StatEntry{Date: date, Year: now.Year(), Month: int(now.Month()), Day: now.Day()}
+		}
+		s.Count++
+		data, err := json.Marshal(s)
+		if err != nil {
+			return err
+		}
+		return sb.Put([]byte(date), data)
+	})
+}
+
+// --- VIPs ---
+
+func (db *DB) ListVips() ([]VIP, error) { return listJSON[VIP](db, bucketVips, "") }
+
+func (db *DB) AddVip(v VIP) error {
+	return db.bolt.Update(func(tx *bolt.Tx) error {
+		bkt := tx.Bucket(bucketVips)
+		seq, _ := bkt.NextSequence()
+		data, err := json.Marshal(v)
+		if err != nil {
+			return err
+		}
+		return bkt.Put(seqKey(seq), data)
+	})
+}
+
+// --- Departments ---
+
+func (db *DB) ListDepartments() ([]string, error) {
+	var out []string
+	err := db.bolt.View(func(tx *bolt.Tx) error {
+		return tx.Bucket(bucketDepts).ForEach(func(k, v []byte) error {
+			var s string
+			if json.Unmarshal(v, &s) == nil {
+				out = append(out, s)
+			}
+			return nil
+		})
+	})
+	sort.Strings(out)
+	return out, err
+}
+
+func (db *DB) AddDepartment(name string) error {
+	return db.bolt.Update(func(tx *bolt.Tx) error {
+		bkt := tx.Bucket(bucketDepts)
+		seq, _ := bkt.NextSequence()
+		data, _ := json.Marshal(name)
+		return bkt.Put(seqKey(seq), data)
+	})
+}
+
+// --- Robin spaces ---
+
+func (db *DB) ListRobinSpaces() ([]RobinSpace, error) {
+	return listJSON[RobinSpace](db, bucketRobin, "")
+}
+
+func (db *DB) PutRobinSpace(s RobinSpace) error {
+	return putJSON(db, bucketRobin, []byte(s.Spacename), s)
+}
+
+// --- Meeting status ---
+
+func meetingKey(mapName, room string) []byte {
+	return []byte(mapName + ":" + room)
+}
+
+func (db *DB) ListMeetingStatus(mapName string) ([]MeetingStatus, error) {
+	if mapName == "" {
+		return listJSON[MeetingStatus](db, bucketMeeting, "")
+	}
+	return listJSON[MeetingStatus](db, bucketMeeting, mapName+":")
+}
+
+func (db *DB) PutMeetingStatus(m MeetingStatus) error {
+	return putJSON(db, bucketMeeting, meetingKey(m.Map, m.Room), m)
+}
+
+// --- Health whitelist ---
+
+func (db *DB) ListWhitelist() ([]WhitelistEntry, error) {
+	return listJSON[WhitelistEntry](db, bucketWhitelist, "")
+}
+
+func (db *DB) AddWhitelist(e WhitelistEntry) error {
+	return db.bolt.Update(func(tx *bolt.Tx) error {
+		bkt := tx.Bucket(bucketWhitelist)
+		seq, _ := bkt.NextSequence()
+		data, err := json.Marshal(e)
+		if err != nil {
+			return err
+		}
+		return bkt.Put(seqKey(seq), data)
+	})
+}
+
+// --- LDAP sources (config_ldap) ---
+
+func (db *DB) ListLdapSources() ([]LdapSource, error) {
+	srcs, err := listJSON[LdapSource](db, bucketLdapSrc, "")
+	sort.Slice(srcs, func(i, j int) bool { return srcs[i].ID < srcs[j].ID })
+	return srcs, err
+}
+
+func (db *DB) PutLdapSource(s LdapSource) error {
+	return putJSON(db, bucketLdapSrc, []byte(fmt.Sprintf("%d", s.ID)), s)
+}
+
+func (db *DB) DeleteLdapSource(id int) error {
+	return deleteKey(db, bucketLdapSrc, []byte(fmt.Sprintf("%d", id)))
+}
+
+// --- Audit log ---
+
+func (db *DB) AuditLog(logType, user, message string) error {
+	entry := AuditEntry{
+		Timestamp: time.Now().In(db.loc).Format("2006-01-02 15:04:05"),
+		Type:      logType,
+		User:      user,
+		Info:      message,
+	}
+	return db.PutAuditRaw(entry)
+}
+
+func (db *DB) PutAuditRaw(entry AuditEntry) error {
+	return db.bolt.Update(func(tx *bolt.Tx) error {
+		bkt := tx.Bucket(bucketAudit)
+		seq, _ := bkt.NextSequence()
+		data, err := json.Marshal(entry)
+		if err != nil {
+			return err
+		}
+		return bkt.Put(seqKey(seq), data)
+	})
+}
+
+func (db *DB) ListAudit(limit int) ([]AuditEntry, error) {
+	var out []AuditEntry
+	err := db.bolt.View(func(tx *bolt.Tx) error {
+		c := tx.Bucket(bucketAudit).Cursor()
+		for k, v := c.Last(); k != nil; k, v = c.Prev() {
+			var e AuditEntry
+			if json.Unmarshal(v, &e) == nil {
+				out = append(out, e)
+			}
+			if limit > 0 && len(out) >= limit {
+				break
+			}
+		}
+		return nil
+	})
+	return out, err
+}
+
+// --- Meta (wizard state, etc.) ---
+
+func (db *DB) GetMeta(key string) string {
+	v, _, _ := getJSON[string](db, bucketMeta, []byte(key))
+	return v
+}
+
+func (db *DB) SetMeta(key, value string) error {
+	return putJSON(db, bucketMeta, []byte(key), value)
+}
+
+// IsConfigured reports whether the initial setup has been completed.
+func (db *DB) IsConfigured() bool {
+	return db.GetMeta("setup_done") == "1"
+}

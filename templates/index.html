@@ -1,0 +1,308 @@
+<!DOCTYPE HTML>
+<!-- CompanyMaps 9 client (ported from index.php) -->
+<html lang="en">
+<head>
+  <title>{{.AppTitle}}</title>
+  <meta charset="utf-8">
+  <link rel="stylesheet" type="text/css" href="cmaps80.css">
+  <link rel="stylesheet" type="text/css" href="client80.css">
+  <link rel="apple-touch-icon" sizes="57x57" href="favicons/apple-touch-icon-57x57.png">
+  <link rel="apple-touch-icon" sizes="60x60" href="favicons/apple-touch-icon-60x60.png">
+  <link rel="apple-touch-icon" sizes="72x72" href="favicons/apple-touch-icon-72x72.png">
+  <link rel="apple-touch-icon" sizes="76x76" href="favicons/apple-touch-icon-76x76.png">
+  <link rel="apple-touch-icon" sizes="114x114" href="favicons/apple-touch-icon-114x114.png">
+  <link rel="apple-touch-icon" sizes="120x120" href="favicons/apple-touch-icon-120x120.png">
+  <link rel="apple-touch-icon" sizes="144x144" href="favicons/apple-touch-icon-144x144.png">
+  <link rel="apple-touch-icon" sizes="152x152" href="favicons/apple-touch-icon-152x152.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="favicons/apple-touch-icon-180x180.png">
+  <link rel="icon" type="image/png" href="favicons/favicon-32x32.png" sizes="32x32">
+  <link rel="icon" type="image/png" href="favicons/favicon-96x96.png" sizes="96x96">
+  <link rel="icon" type="image/png" href="favicons/favicon-16x16.png" sizes="16x16">
+  <link rel="manifest" href="favicons/manifest.json">
+  <link rel="shortcut icon" href="favicons/favicon.ico">
+  <meta name="theme-color" content="#000000">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=4.0, user-scalable=yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <script src="tools/jquery3.js"></script>
+  <script src="tools/jquery-migrate-1.4.1.min.js"></script>
+  <script src="user80.js"></script>
+  <script src="tools/resize80.js"></script>
+  <script src="tools/underscore.js"></script>
+</head>
+
+<body style="min-height:1920px; width:100%; margin:0px; overflow-x:hidden;{{if .Printmode}} background:none;transform-origin:50% 0%;{{end}}">
+
+<div id="container"> </div>
+
+<!-- HEADER -->
+<div class="control_background" style="width:100%; height: 69px; position: fixed; top: 0px; left: 0px;background: #333333; z-index:1; transform:scaleY({{.Autozoom}})"> </div>
+<div id="controlpanel" class="control_container" style="position:fixed; left: 0px; top: 0px; height:69px;width:100%;background-color:#333333;opacity:1.0;z-index:1;transform:scale({{.Autozoom}});transform-origin:50% 0%;">
+<div class="control_content" id="control_content" style="position: absolute; left:50%; margin-left:-{{.HalfWidth}}px; top:0px;width:{{.TargetScreenWidth}}px;height:69px; z-index:2;transform-origin:50% 0%;background-color:#333333">
+
+  <!-- Logo -->
+  <div class="headeritem" id="logocontrol" style="width:200px; background: transparent;">
+    <a href="/?map={{.MapDefault}}"><img src="{{.LogoRegular}}" height="65" alt="" onmouseover='this.src="{{.LogoHover}}"' onmouseout='this.src="{{.LogoRegular}}"' style="cursor:pointer;"/></a>
+  </div>
+
+  <!-- Search -->
+  <div class="headeritem" id="searchcontrol" style="width:370px;">
+    {{if not .NoDescription}}<span class="headeritem_text">Search</span>{{end}}
+    <span style="width:100px;line-height:65px;float:left; display:inline;">
+      <div style="width:320px;">
+        <input type="text" name="findme" id="searchtext" value="{{.Findme}}" size="10" autofocus style="width:150px; margin-right:5px;">
+        <input type="hidden" name="map" value="{{.Map}}">
+        <input type="button" id="search_button" value="Find" style="width:120px;{{if not .Findme}}background-color: #0979D8;{{end}}">
+      </div>
+    </span>
+  </div>
+  <script>
+    $('#search_button').click(function() { searchDesks() });
+  </script>
+
+  <!-- Zoom -->
+  <div class="headeritem" id="zoomcontrol" style="width:160px;">
+    {{if not .NoDescription}}<span class="headeritem_text">Zoom</span>{{end}}
+    <span class="headeritem_picture"><a href="/?map={{.Map}}&zoom={{.ZoomIn}}"><img src="images/zoom_in_blue.png" width="45" alt="" /></a></span>
+    <span class="headeritem_picture"><a href="/?map={{.Map}}&zoom={{.ZoomOut}}"><img src="images/zoom_out_blue.png" width="45" alt="" /></a></span>
+  </div>
+
+  <!-- Location -->
+  <div class="headeritem" id="locationcontrol" style="width:240px;">
+    {{if not .NoDescription}}<span class="headeritem_text">Location</span>{{end}}
+    <a style="cursor:pointer" id="toggle_maps">
+      <div class="headeritem_maps" style="margin-top:10px; margin-bottom:0px;">{{.MapTitle}}</div>
+    </a>
+  </div>
+
+  <!-- Floor -->
+  <div class="headeritem" id="floorcontrol" style="width:260px;">
+    {{if and (not .NoDescription) .Floors}}<span class="headeritem_text">Floor</span>{{end}}
+    <span style="width:200px;line-height:65px;float:left; display:inline;">
+      {{range .Floors}}
+      <a href="#{{.ID}}" style="text-decoration: none;"><div class="headeritem_floors">{{.Employee}}</div></a>
+      {{end}}
+    </span>
+  </div>
+
+  <!-- Extras -->
+  <div class="headeritem" id="settingscontrol" style="width:210px; float:right;">
+    {{if not .NoDescription}}<span class="headeritem_text">Extras</span>{{end}}
+    <span class="headeritem_picture" style="float:right;"><a style="cursor:pointer" id="toggle_addressbook"><img id="addressbook_img" src="images/addressbook.png" width="45" alt="" /></a></span>
+    <span class="headeritem_picture" style="float:right;"><a style="cursor:pointer" id="toggle_announcementbar"><img id="announce_img" src="images/announce.png" width="45" alt="" /></a></span>
+    <span class="headeritem_picture" style="float:right;"><a style="cursor:pointer" id="toggle_settings"><img src="images/settings.png" width="45" alt="" /></a></span>
+  </div>
+
+  <!-- Settings panel -->
+  <div class="headeritem" id="settingspanel" style="width:500px;height:auto;float:right;background-color:#333333; display:none; border-radius: 0px 0px 10px 10px;">
+    <form name="Settings" action="/?map={{.Map}}" method="post">
+      <div class="settingsitem">
+        <a href="docs/index.htm" target="_blank"><span class="settingsitem_linkbutton">Help</span></a>
+        <a href="docs/index.htm#content_changelog" target="_blank"><span class="settingsitem_linkbutton" style="float:right">Changelog</span></a>
+      </div>
+      <div class="settingsitem"><span class="settingsitem_text">Disable button description - Cleaner look</span><div class="settingsitem_option"><div class="switch">
+        <input id="cmn-toggle-1" class="cmn-toggle cmn-toggle-round-flat" type="checkbox" name="setting_nodescription" value="1" {{if .NoDescription}}checked{{end}}><label for="cmn-toggle-1"></label>
+      </div></div></div>
+      <div class="settingsitem"><span class="settingsitem_text">Enable Print mode - black on white</span><div class="settingsitem_option"><div class="switch">
+        <input id="cmn-toggle-2" class="cmn-toggle cmn-toggle-round-flat" type="checkbox" name="setting_printmode" value="1" {{if .Printmode}}checked{{end}}><label for="cmn-toggle-2"></label>
+      </div></div></div>
+      <div class="settingsitem"><span class="settingsitem_text">Show all desk numbers</span><div class="settingsitem_option"><div class="switch">
+        <input id="cmn-toggle-3" class="cmn-toggle cmn-toggle-round-flat" type="checkbox" name="setting_desknumbers" value="1" {{if .Desknumbers}}checked{{end}}><label for="cmn-toggle-3"></label>
+      </div></div></div>
+      <div class="settingsitem"><span class="settingsitem_text">Show all names</span><div class="settingsitem_option"><div class="switch">
+        <input id="cmn-toggle-4" class="cmn-toggle cmn-toggle-round-flat" type="checkbox" name="setting_shownames" value="1" {{if .Shownames}}checked{{end}}><label for="cmn-toggle-4"></label>
+      </div></div></div>
+      <div class="settingsitem"><span class="settingsitem_text">Highlight managers</span><div class="settingsitem_option"><div class="switch">
+        <input id="cmn-toggle-5" class="cmn-toggle cmn-toggle-round-flat" type="checkbox" name="setting_highlightleaders" value="1" {{if .HighlightLeaders}}checked{{end}}><label for="cmn-toggle-5"></label>
+      </div></div></div>
+      <div class="settingsitem"><span class="settingsitem_text">Disable animations</span><div class="settingsitem_option"><div class="switch">
+        <input id="cmn-toggle-9" class="cmn-toggle cmn-toggle-round-flat" type="checkbox" name="setting_noanimation" value="1" {{if .NoAnimation}}checked{{end}}><label for="cmn-toggle-9"></label>
+      </div></div></div>
+      <div class="settingsitem"><span class="settingsitem_text">Show daily visitors</span><div class="settingsitem_option"><div class="switch">
+        <input id="cmn-toggle-10" class="cmn-toggle cmn-toggle-round-flat" type="checkbox" name="setting_dailyvisitors" value="1" {{if .DailyVisitors}}checked{{end}}><label for="cmn-toggle-10"></label>
+      </div></div></div>
+      <div class="settingsitem"><span class="settingsitem_text">Disable SAML Auth</span><div class="settingsitem_option"><div class="switch">
+        <input id="cmn-toggle-11" class="cmn-toggle cmn-toggle-round-flat" type="checkbox" name="setting_saml" value="1" {{if .DisableSAML}}checked{{end}}><label for="cmn-toggle-11"></label>
+      </div></div></div>
+      <input type="hidden" name="applysettings" value="1">
+      <input type="submit" value="Apply settings" style="font-size:1.2em; margin-top:20px;margin-left:25%;width:50%">
+    </form>
+  </div>
+
+  <!-- Maps panel -->
+  <div class="headeritem" id="mapspanel" style="width:160px;height:auto;float:left;background-color:#333333;margin-top:0px;left:{{if .NoDescription}}755{{else}}827{{end}}px;padding-bottom: 5px; border-radius: 0px 0px 10px 10px; display:none;">
+    {{range .OtherMaps}}
+    <a href="/?map={{.}}" style="text-decoration: none;"><div class="headeritem_maps">{{. | ucfirst}}</div></a>
+    {{end}}
+  </div>
+
+</div>
+</div>
+
+<!-- Notification area -->
+<div id="notifypanel" class="notify_container" style="position:fixed; left: 0px; top: {{.Top72}}px; height:0px;width:100%;background-color:transparent;z-index:1;transform:scale({{.Autozoom}});transform-origin:50% 0%;pointer-events: none;">
+  <div id="notifycontent" class="notify_content" style="position: absolute; left:50%; margin-left:-{{.HalfWidth}}px; top:0px;width:{{.TargetScreenWidth}}px;height:0px; z-index:2;transform-origin:50% 0%;background-color:transparent;pointer-events: none;">
+    <span style="position:relative; width:454px;height:0px;display:inline;float:left;line-height: 40px;">&nbsp;</span>
+  </div>
+</div>
+
+<!-- Content -->
+<div id="content" class="page_content" style="transform:scale({{.ContentScale}});left:{{.LeftPos}}px;top:{{.TopHeader}}px;">
+  {{if .IsOverview}}
+  <div id="overviewmap" style="text-align:center;position:absolute;width:{{.TargetScreenWidth}}px;">
+    <img src="maps/{{.Map}}.png" style="opacity:0.7;position:absolute; top:20px; left:0px; width: {{.TargetScreenWidth}}px;{{if .Printmode}} -webkit-filter: invert(1);filter: invert(1);{{end}}" alt="" onclick="hideMapplate();" />
+  </div>
+  {{else}}
+  <img src="maps/{{.Map}}.png" style="opacity:0.7;position:absolute; left:0px; width: {{.TargetScreenWidth}}px;{{if .Printmode}} -webkit-filter: invert(1);filter: invert(1);{{end}}" alt="" />
+  <div id="deskitems"></div>
+  <div id="meetingitems"></div>
+  {{end}}
+
+  <div id="group_label" style="position: absolute; color: #FF7F00; text-align:center; width: 200px; height: 70px; left:0px;top:0px;visibility:hidden; font-size:50px; font-weight: bold; z-index:100;background-color: rgba(0, 0, 0, 0.3);"></div>
+  <div id="group_border" style="position: absolute; border-radius: 25px;border: 8px solid #FF7F00; background-color: rgba(255, 127, 0, 0.2); padding: 20px; width: 200px; height: 150px; left:0px;top:0px;visibility:hidden;"></div>
+
+  {{if .IsEditor}}<script src="admin80.js"></script>{{else}}<script src="tools/empty.js"></script>{{end}}
+
+  <script>
+    var targetScreenWidth = {{.TargetScreenWidth}};
+    var map = "{{.Map}}";
+    var autozoom = "{{.Autozoom}}";
+    var zoom = "{{.ZoomScaled}}";
+    var itemscale = {{.Itemscale}};
+    var departments = {{.DepartmentsJSON}};
+    var root = "/";
+    var logo_regular = "{{.LogoRegular}}";
+    var logo_hover = "{{.LogoHover}}";
+    var setting_usermode = "{{.UserMode}}";
+    var teamsContact = "{{.TeamsContact}}";
+    var teamsChannel = "{{.TeamsChannel}}";
+    var domain = "{{.Domain}}";
+    {{if .LoggedIn}}username = "{{.Username}}";{{end}}
+    {{if .IsEditor}}token = {{.Token}}; username = "{{.Username}}"; console.log("Token: " + token);{{end}}
+    var setting_highlightleaders = {{if .HighlightLeaders}}1{{else}}0{{end}};
+    var setting_shownames = {{if .Shownames}}1{{else}}0{{end}};
+    var setting_desknumbers = {{if .Desknumbers}}1{{else}}0{{end}};
+    var setting_printmode = {{if .Printmode}}1{{else}}0{{end}};
+    var setting_noanimation = {{if .NoAnimation}}1{{else}}0{{end}};
+    var region = "{{.Region}}";
+    var tzOffset = "{{.TzOffset}}";
+
+    console.log("Timezone set to: " + region);
+    var clockID;
+    var d = new Date();
+    var tzDifference = tzOffset * 60 + d.getTimezoneOffset();
+    var offset = tzDifference * 60 * 1000;
+
+    if (map == "overview") {
+      updateOverview();
+    } else {
+      StartClock();
+      updateDesks();
+      updateBookings();
+      setInterval(getMeetingStatus, 60000);
+      setInterval(updateDesks, 300000);
+      setInterval(updateBookings, 60000);
+    }
+
+    checkMobile();
+    updateChangeTracker();
+    setInterval(updateChangeTracker, 300000);
+    setInterval(updateTeams, 300000);
+    addStat();
+  </script>
+</div>
+
+<!-- User menu -->
+{{if .LoggedIn}}
+<div class="buttons_left" style="position:fixed; left: 10px; bottom: {{.Bottom25}}px; height:80px;background: transparent; transform:scale({{.Autozoom}});transform-origin:0% 100%;z-index:5;">
+  <div id="personal_menu" style="position:fixed; left: 0px; bottom: 0px; width:350px; height:270px;background-color:#333333; border-radius:40px; visibility:hidden;">
+    <div style="position:fixed; left: 20px; bottom: 210px; width:80px; height:10px;background: transparent;font-size:12px;text-align:center;">Logout</div>
+    <div style="position:fixed; left: 20px; bottom: 120px; width:80px; height:80px;background: transparent;">
+      <img src="images/logout3.png" style="width:100%;height:100%;cursor:pointer;" alt="" onmouseover='this.src="images/logout3_on.png"' onmouseout='this.src="images/logout3.png"' onClick="logoutUser()"/>
+    </div>
+    <div style="position:fixed; left: 130px; bottom: 210px; width:80px; height:10px;background: transparent;font-size:12px;text-align:center;">Upload image</div>
+    <div style="position:fixed; left: 130px; bottom: 120px; width:80px; height:80px;background: transparent;cursor:pointer;">
+      <img src="images/avatar-upload.png" style="width:100%;height:100%;" alt="" onclick="document.getElementById('avatarInput').click();" onmouseover='this.src="images/avatar-upload_on.png"' onmouseout='this.src="images/avatar-upload.png"' />
+    </div>
+    <div style="position:fixed; left: 240px; bottom: 210px; width:80px; height:10px;background: transparent;font-size:12px;text-align:center;">Remove image</div>
+    <div style="position:fixed; left: 240px; bottom: 120px; width:80px; height:80px;background: transparent;cursor:pointer;">
+      <img src="images/avatar-delete.png" style="width:100%;height:100%;" alt="" onclick="document.getElementById('avatarDelete').click();" onmouseover='this.src="images/avatar-delete_on.png"' onmouseout='this.src="images/avatar-delete.png"' />
+    </div>
+    <div id="bookingstable" style="position:fixed; left: 20px; bottom: 260px; width:300px; height:auto;background: transparent;font-size:12px;text-align:center;">no bookings found</div>
+    <form id="uploadForm" enctype="multipart/form-data" style="width:300px;height:40px;visibility:hidden">
+      <input type="file" name="images[]" id="avatarInput" style="display: none;">
+      <input type="button" value="Change avatar" id="browseButton" style="background-color:#0979D8; color:white;width: 200px;height: 32px;border-radius: 10px;border: none;cursor: pointer;"/>
+      <input type="hidden" name="mode" value="upload">
+      <input type="submit" name="submit" id="uploadButton" value="UPLOAD">
+    </form>
+    <form id="deleteForm" style="width:300px;height:40px;visibility:hidden">
+      <input type="hidden" name="mode" value="delete">
+      <input type="submit" name="submit" id="avatarDelete" value="Delete avatar" style="background-color:#0979D8; color:white;width: 200px;height: 32px;border-radius: 10px;border: none;cursor: pointer;">
+    </form>
+  </div>
+  <div id="avatarbutton" onclick="togglePersonalMenu()">
+    <img src="{{.AvatarURL}}" style="width:80px; height:80px;">
+  </div>
+  <div class="avatarbutton_username" onclick="togglePersonalMenu()">{{.Username}}</div>
+</div>
+{{end}}
+
+<!-- Admin menu -->
+<div id="buttons_right" class="buttons_right" style="position:fixed; right: 10px; bottom: {{.Bottom25}}px; height:auto;width:80px;background: transparent; transform:scale({{.Autozoom}});transform-origin:100% 100%;">
+  {{if .LoggedIn}}
+    {{if and (not .IsOverview) .IsEditor}}
+    <div class="inputgrid" id="inputgrid" style="float:right; margin:5px; width:80px; height:80px; background: transparent;">
+      <input class="inputgridbutton" type="image" src="images/add.png" style="width:80px; height:80px;" onClick="return doNewItem('showInputgrid')" onmouseover='this.src="images/add_on.png"' onmouseout='this.src="images/add.png"'>
+    </div>
+    {{end}}
+    {{if and .IsOverview (gt .PermMaps 1)}}
+    <div class="inputgrid" id="inputgrid" style="float:right; margin:5px; width:80px; height:80px; background: transparent;">
+      <input class="inputgridbutton" type="image" src="images/add.png" style="width:80px; height:80px;" onClick="return doNewItem('showInputgrid')" onmouseover='this.src="images/add_on.png"' onmouseout='this.src="images/add.png"'>
+    </div>
+    {{end}}
+    {{if gt .PermAdmin 0}}
+    <a href="./admin/"><div id="adminpanel_button" class="editbutton" style="background-image: url(images/adminpanel.png);"></div></a>
+    {{end}}
+    {{if gt .PermDesks 0}}
+    <div id="usermode_switch" class="editbutton" style="height:40px;border-radius:10px;width:77px;text-align:center;line-height:40px;cursor:pointer;background-color: {{.UserModeColor}}" onclick="toggleUsermode()">{{.UserMode}}</div>
+    <div id="healthstatus" class="consistency" style="float:right; margin:5px; width:80px; height:80px;background: transparent;display:none;">
+      <img src="images/dbcheck_ok2.png" style="width:100%;height:100%;" alt="" />
+    </div>
+    <script>checkHealthStatus(); setInterval(checkHealthStatus, 300000);</script>
+    {{end}}
+  {{end}}
+</div>
+
+<!-- Login icon -->
+{{if not .LoggedIn}}
+<div class="loginicon" id="loginicon" style="position:fixed; bottom:10px;left:10px; width:50px; z-index:3; transform:scale({{.Autozoom}});transform-origin:0% 100%;">
+  {{if .DisableSAML}}
+  <input type="image" src="images/login-user.png" alt="e" onclick="location.href='rest/account'" onmouseover='this.src="images/login-user_on.png"' onmouseout='this.src="images/login-user.png"' style="width:50px;">
+  {{else}}
+  <input type="image" src="images/login-user.png" alt="e" onClick="loginForm(true)" onmouseover='this.src="images/login-user_on.png"' onmouseout='this.src="images/login-user.png"'>
+  {{end}}
+</div>
+{{end}}
+
+{{if .DailyVisitors}}<script>updateCounter(); setInterval(updateCounter, 300000)</script>{{end}}
+
+<!-- Teams sidebar -->
+<script>updateTeams()</script>
+<div id="addressbook" style="position: fixed;background:#333;right:0px;bottom:0px;width: 100%; max-width:400px;height:100%;opacity:0.95;display:none;">
+  <div class="adressbook_margin" style="height:{{.TopHeader}}px;width:100%;margin-bottom:5px;background:none;"></div>
+</div>
+
+<!-- Announcement sidebar -->
+<script>announceValue = {{.AnnounceCookie}}</script>
+<div class="datepicker" id="theDate"></div>
+<div class="clock" id="theTime" onclick="toggleDatepicker()"></div>
+<div id="announcementbar" class="announcementbar" style="position: fixed;background:#333333;right:0px;top:0px;width:590px;height:100%;opacity:0.95;display:none;">
+  <div class="announcementbar_margin" style="height:{{.TopHeader}}px;width:100%;margin-bottom:5px;background:none;"></div>
+  <div id="announcementbar_body" class="announcementbar_body" style="height:92%; overflow-y: scroll;width:610px;font-size:20px;"></div>
+</div>
+
+{{if .Findme}}<script> teamlabel = "{{.Teamlabel}}"; searchtext = "{{.Findme}}"</script>{{end}}
+
+</body>
+</html>
