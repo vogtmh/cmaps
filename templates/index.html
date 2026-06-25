@@ -247,7 +247,7 @@
   <div id="avatarbutton" onclick="togglePersonalMenu()">
     <img src="{{.AvatarURL}}" style="width:80px; height:80px;">
   </div>
-  <div class="avatarbutton_username" onclick="togglePersonalMenu()">{{.Username}}</div>
+  <div class="avatarbutton_username" onclick="togglePersonalMenu()">{{if .Fullname}}{{.Fullname}}{{else}}{{.Username}}{{end}}</div>
 </div>
 {{end}}
 
