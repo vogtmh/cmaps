@@ -6,6 +6,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 )
@@ -190,7 +191,9 @@ func (app *App) StartRobinScheduler(interval time.Duration) {
 			if app.db.GetSetting("robintoken") == "" {
 				continue
 			}
-			app.refreshRobin("")
+			// A scheduled run also records the last-sync time and per-room match
+			// results so the admin Sync tab can show what happened.
+			app.RunRobinSyncStructured()
 		}
 	}()
 }
@@ -293,4 +296,136 @@ func (app *App) pollRobinRoomVerbose(roomID int, roomName, mapName string) []str
 		add("    ERROR caching status: %v", err)
 	}
 	return logs
+}
+
+// --- Structured sync result (powers the admin Sync tab "last sync" view) ---
+
+// RobinSyncRoom is a single room's outcome during a sync.
+type RobinSyncRoom struct {
+	Name         string `json:"name"`
+	ID           int    `json:"id"`
+	Availability string `json:"availability"`
+	Matched      bool   `json:"matched"`
+	Deskid       string `json:"deskid"`
+	NowTitle     string `json:"now_title"`
+	NextTitle    string `json:"next_title"`
+	Err          string `json:"err"`
+}
+
+// RobinSyncLocation groups the rooms returned for one configured Robin location.
+type RobinSyncLocation struct {
+	Spacename string          `json:"spacename"`
+	Mapname   string          `json:"mapname"`
+	Spaceid   int             `json:"spaceid"`
+	Err       string          `json:"err"`
+	Rooms     []RobinSyncRoom `json:"rooms"`
+}
+
+// RobinSyncResult is the persisted summary of the most recent Robin sync.
+type RobinSyncResult struct {
+	Time         string              `json:"time"`
+	Org          string              `json:"org"`
+	TotalRooms   int                 `json:"total_rooms"`
+	MatchedRooms int                 `json:"matched_rooms"`
+	Note         string              `json:"note"`
+	Locations    []RobinSyncLocation `json:"locations"`
+}
+
+// RunRobinSyncStructured performs a full Robin meeting sync, updates the meeting
+// cache, and records a structured per-room result (with match status and the
+// time of the run) so the admin Sync tab can show exactly what was synced.
+func (app *App) RunRobinSyncStructured() RobinSyncResult {
+	res := RobinSyncResult{
+		Time: time.Now().Format("2006-01-02 15:04:05"),
+		Org:  app.db.GetSetting("robinOrganisation"),
+	}
+	if app.db.GetSetting("robintoken") == "" {
+		res.Note = "Robin access token is not configured."
+		app.saveRobinSyncResult(res)
+		return res
+	}
+	spaces, _ := app.db.ListRobinSpaces()
+	sort.Slice(spaces, func(i, j int) bool { return spaces[i].Spacename < spaces[j].Spacename })
+	if len(spaces) == 0 {
+		res.Note = "No Robin locations configured yet."
+		app.saveRobinSyncResult(res)
+		return res
+	}
+	for _, s := range spaces {
+		loc := RobinSyncLocation{Spacename: s.Spacename, Mapname: s.MapName(), Spaceid: s.Spaceid}
+		var list robinSpaceList
+		if err := app.robinGet(fmt.Sprintf("/locations/%d/spaces?page=1&per_page=200", s.Spaceid), &list); err != nil {
+			loc.Err = err.Error()
+			res.Locations = append(res.Locations, loc)
+			continue
+		}
+		for _, room := range list.Data {
+			r := app.pollRobinRoomStructured(room.ID, room.Name, s.MapName())
+			loc.Rooms = append(loc.Rooms, r)
+			res.TotalRooms++
+			if r.Matched {
+				res.MatchedRooms++
+			}
+		}
+		res.Locations = append(res.Locations, loc)
+	}
+	app.saveRobinSyncResult(res)
+	return res
+}
+
+// pollRobinRoomStructured caches a single room's status and returns a structured
+// summary of the outcome (mirrors pollRobinRoom).
+func (app *App) pollRobinRoomStructured(roomID int, roomName, mapName string) RobinSyncRoom {
+	r := RobinSyncRoom{Name: roomName, ID: roomID}
+
+	var state robinState
+	if err := app.robinGet(fmt.Sprintf("/spaces/%d/state", roomID), &state); err != nil {
+		r.Err = err.Error()
+		return r
+	}
+	r.Availability = state.Data.Availability
+
+	after := time.Now().UTC().Add(-24 * time.Hour).Format("2006-01-02T15:04:05Z")
+	before := time.Now().UTC().Add(144 * time.Hour).Format("2006-01-02T15:04:05Z")
+	var events robinEvents
+	if err := app.robinGet(fmt.Sprintf("/spaces/%d/events?after=%s&before=%s&page=1&per_page=200", roomID, after, before), &events); err != nil {
+		r.Err = err.Error()
+		return r
+	}
+
+	ev := roomEventWindows(events)
+	r.NowTitle = ev.nowTitle
+	r.NextTitle = ev.nextTitle
+
+	deskid := app.findMeetingDeskID(mapName, roomName)
+	r.Deskid = deskid
+	r.Matched = deskid != ""
+
+	_ = app.db.PutMeetingStatus(MeetingStatus{
+		Map: mapName, Room: roomName, Availability: state.Data.Availability,
+		NowTitle: ev.nowTitle, NowStart: ev.nowStart, NowEnd: ev.nowEnd, NowTz: ev.nowTz,
+		NextTitle: ev.nextTitle, NextStart: ev.nextStart, NextEnd: ev.nextEnd, NextTz: ev.nextTz,
+		Deskid: deskid,
+	})
+	return r
+}
+
+// saveRobinSyncResult persists the most recent structured sync result as JSON.
+func (app *App) saveRobinSyncResult(res RobinSyncResult) {
+	if b, err := json.Marshal(res); err == nil {
+		_ = app.db.SetSetting("robinLastSync", string(b))
+	}
+}
+
+// LastRobinSyncResult returns the most recently persisted sync result, if any.
+func (app *App) LastRobinSyncResult() (RobinSyncResult, bool) {
+	js := app.db.GetSetting("robinLastSync")
+	if js == "" {
+		return RobinSyncResult{}, false
+	}
+	var res RobinSyncResult
+	if err := json.Unmarshal([]byte(js), &res); err != nil {
+		return RobinSyncResult{}, false
+	}
+	return res, true
 }

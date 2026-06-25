@@ -11,3 +11,311 @@
          url('../fonts/roboto-v30-latin-regular.ttf') format('truetype'), /* Safari, Android, iOS */
          url('../fonts/roboto-v30-latin-regular.svg#Roboto') format('svg'); /* Legacy iOS */
 }
+
+/* ============================================================
+   Sync tab (LDAP / SAML / Robin) — modern dark UI
+   Scoped under .sync-wrap so the rest of the admin panel is
+   unaffected.
+   ============================================================ */
+.sync-wrap {
+  --sy-surface:   #2b2d30;
+  --sy-surface2:  #34373b;
+  --sy-border:    #4a4d52;
+  --sy-fg:        #e6e6e6;
+  --sy-muted:     #9aa0a6;
+  --sy-accent:    #0979D8;
+  --sy-accent-d:  #0a6abf;
+  --sy-ok:        #2ecc71;
+  --sy-ok-bg:     rgba(46,204,113,0.16);
+  --sy-warn:      #e67e22;
+  --sy-warn-bg:   rgba(230,126,34,0.16);
+  --sy-off:       #95a5a6;
+  --sy-off-bg:    rgba(149,165,166,0.16);
+  --sy-danger:    #e74c3c;
+  font-size: 14px;
+  color: var(--sy-fg);
+  box-sizing: border-box;
+}
+.sync-wrap *, .sync-wrap *::before, .sync-wrap *::after { box-sizing: border-box; }
+
+.sync-layout { display: flex; gap: 22px; align-items: flex-start; width: 100%; }
+
+/* ── Sidebar ─────────────────────────────────────────────── */
+.sync-sidebar {
+  flex: 0 0 200px;
+  width: 200px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px;
+  background: var(--sy-surface);
+  border: 1px solid var(--sy-border);
+  border-radius: 12px;
+  position: sticky;
+  top: 0;
+}
+.sync-navitem {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--sy-fg);
+  background: transparent;
+  border: none;
+  text-align: left;
+  transition: background 0.15s, color 0.15s;
+  user-select: none;
+}
+.sync-navitem:hover { background: var(--sy-surface2); }
+.sync-navitem.active { background: var(--sy-accent); color: #fff; }
+.sync-navitem .sync-navdot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--sy-muted); flex-shrink: 0;
+}
+.sync-navitem.active .sync-navdot { background: #fff; }
+
+/* ── Content pane ────────────────────────────────────────── */
+.sync-pane { flex: 1; min-width: 0; }
+.sync-pane-title {
+  font-size: 1.35em;
+  font-weight: 700;
+  margin: 2px 0 4px;
+}
+.sync-pane-sub {
+  color: var(--sy-muted);
+  margin: 0 0 18px;
+  max-width: 820px;
+  line-height: 1.5;
+}
+
+/* ── Cards ───────────────────────────────────────────────── */
+.sync-card {
+  background: var(--sy-surface);
+  border: 1px solid var(--sy-border);
+  border-radius: 12px;
+  padding: 18px 20px;
+  margin-bottom: 18px;
+}
+.sync-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 0 14px;
+  flex-wrap: wrap;
+}
+.sync-card-title { font-size: 1.05em; font-weight: 700; margin: 0; }
+.sync-card-hint { color: var(--sy-muted); font-size: 0.85em; margin: -6px 0 14px; line-height: 1.5; }
+
+/* ── Tables (fluid, full width, no horizontal scroll) ────── */
+.sync-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: auto;
+  font-size: 13px;
+}
+.sync-table th {
+  text-align: left;
+  padding: 9px 10px;
+  background: var(--sy-surface2);
+  border-bottom: 1px solid var(--sy-border);
+  font-weight: 600;
+  color: var(--sy-muted);
+  text-transform: uppercase;
+  letter-spacing: .03em;
+  font-size: 11px;
+  white-space: nowrap;
+}
+.sync-table th:first-child { border-top-left-radius: 8px; }
+.sync-table th:last-child  { border-top-right-radius: 8px; }
+.sync-table td {
+  padding: 9px 10px;
+  border-bottom: 1px solid var(--sy-border);
+  vertical-align: middle;
+  word-break: break-word;
+}
+.sync-table tbody tr:hover td { background: var(--sy-surface2); }
+.sync-table .sync-td-min { width: 1%; white-space: nowrap; }
+.sync-table code { font-size: 12px; color: var(--sy-fg); word-break: break-all; }
+
+/* ── Buttons ─────────────────────────────────────────────── */
+.sync-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--sy-surface2);
+  color: var(--sy-fg);
+  border: 1px solid var(--sy-border);
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, opacity 0.15s, border-color 0.15s;
+  font-family: inherit;
+}
+.sync-btn:hover { background: #3f4248; }
+.sync-btn-primary { background: var(--sy-accent); border-color: var(--sy-accent); color: #fff; }
+.sync-btn-primary:hover { background: var(--sy-accent-d); }
+.sync-btn-danger { background: transparent; border-color: rgba(231,76,60,0.5); color: #f08070; }
+.sync-btn-danger:hover { background: rgba(231,76,60,0.15); }
+.sync-btn-sm { padding: 5px 11px; font-size: 12px; }
+
+/* ── Forms ───────────────────────────────────────────────── */
+.sync-form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 14px 18px;
+}
+.sync-field { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.sync-field.sync-field-wide { grid-column: 1 / -1; }
+.sync-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--sy-muted);
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+.sync-input, .sync-select, .sync-textarea {
+  width: 100%;
+  padding: 9px 11px;
+  font-size: 13px;
+  border: 1px solid var(--sy-border);
+  border-radius: 8px;
+  background: var(--sy-surface2);
+  color: var(--sy-fg);
+  outline: none;
+  font-family: inherit;
+  transition: border-color 0.15s;
+}
+.sync-input::placeholder, .sync-textarea::placeholder { color: #777; }
+.sync-input:focus, .sync-select:focus, .sync-textarea:focus { border-color: var(--sy-accent); }
+.sync-textarea { resize: vertical; min-height: 110px; font-family: monospace; font-size: 12px; }
+.sync-select { cursor: pointer; }
+.sync-select option { background: var(--sy-surface); color: var(--sy-fg); }
+.sync-form-actions { display: flex; align-items: center; gap: 12px; margin-top: 16px; flex-wrap: wrap; }
+.sync-status-text { font-size: 13px; color: var(--sy-muted); }
+
+/* ── Toggle switch ───────────────────────────────────────── */
+.sync-toggle-row { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+.sync-toggle { position: relative; display: inline-block; width: 44px; height: 24px; flex-shrink: 0; }
+.sync-toggle input { opacity: 0; width: 0; height: 0; }
+.sync-toggle-slider {
+  position: absolute; cursor: pointer; inset: 0;
+  background: #5a5d62; border-radius: 24px; transition: .2s;
+}
+.sync-toggle-slider::before {
+  content: ''; position: absolute; width: 18px; height: 18px; left: 3px; bottom: 3px;
+  background: #fff; border-radius: 50%; transition: .2s;
+}
+.sync-toggle input:checked + .sync-toggle-slider { background: var(--sy-accent); }
+.sync-toggle input:checked + .sync-toggle-slider::before { transform: translateX(20px); }
+.sync-toggle-label { font-weight: 600; }
+
+/* ── Badges / tags ───────────────────────────────────────── */
+.sync-badge {
+  display: inline-block;
+  padding: 3px 9px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .02em;
+  white-space: nowrap;
+}
+.sync-badge-ok      { background: var(--sy-ok-bg);   color: #5be39a; }
+.sync-badge-warn    { background: var(--sy-warn-bg); color: #f0a868; }
+.sync-badge-off     { background: var(--sy-off-bg);  color: #c2cbcc; }
+.sync-badge-danger  { background: rgba(231,76,60,0.18); color: #f08070; }
+.sync-badge-accent  { background: rgba(9,121,216,0.18); color: #6fb6f5; }
+
+/* availability dots */
+.sync-avail { display: inline-flex; align-items: center; gap: 6px; }
+.sync-avail .dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+.sync-avail.free .dot     { background: var(--sy-ok); }
+.sync-avail.occupied .dot { background: var(--sy-danger); }
+.sync-avail.unknown .dot  { background: var(--sy-off); }
+
+/* ── Status bar (SAML) ───────────────────────────────────── */
+.sync-statusbar { margin: 0 0 16px; }
+
+/* ── Empty state ─────────────────────────────────────────── */
+.sync-empty {
+  padding: 26px;
+  text-align: center;
+  color: var(--sy-muted);
+  border: 1px dashed var(--sy-border);
+  border-radius: 10px;
+}
+
+/* ── Robin last-sync result ──────────────────────────────── */
+.sync-summary {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  flex-wrap: wrap;
+  margin-bottom: 4px;
+}
+.sync-summary-item { display: flex; flex-direction: column; gap: 2px; }
+.sync-summary-num { font-size: 1.5em; font-weight: 700; line-height: 1; }
+.sync-summary-lbl { font-size: 11px; color: var(--sy-muted); text-transform: uppercase; letter-spacing: .04em; }
+
+.sync-loc {
+  border: 1px solid var(--sy-border);
+  border-radius: 10px;
+  margin-top: 12px;
+  overflow: hidden;
+}
+.sync-loc-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 14px;
+  background: var(--sy-surface2);
+  cursor: pointer;
+  user-select: none;
+  flex-wrap: wrap;
+}
+.sync-loc-head:hover { background: #3f4248; }
+.sync-loc-caret { transition: transform 0.15s; color: var(--sy-muted); font-size: 12px; }
+.sync-loc.open .sync-loc-caret { transform: rotate(90deg); }
+.sync-loc-name { font-weight: 700; }
+.sync-loc-arrow { color: var(--sy-muted); }
+.sync-loc-spacer { flex: 1; }
+.sync-loc-body { display: none; }
+.sync-loc.open .sync-loc-body { display: block; }
+.sync-loc-body .sync-table th { background: var(--sy-surface); border-radius: 0; }
+
+/* ── Modal ───────────────────────────────────────────────── */
+.sync-modal {
+  display: none;
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.6);
+  z-index: 1000;
+}
+.sync-modal-box {
+  background: var(--sy-surface);
+  color: var(--sy-fg);
+  max-width: 860px;
+  margin: 56px auto;
+  padding: 22px;
+  border-radius: 12px;
+  max-height: 82%;
+  overflow: auto;
+  border: 1px solid var(--sy-border);
+}
+.sync-modal-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 14px;
+}
+.sync-modal-head h2 { margin: 0; font-size: 1.1em; }
+.sync-modal-body { font-family: monospace; font-size: 13px; white-space: pre-wrap; word-break: break-word; }
+
+@media (max-width: 1100px) {
+  .sync-layout { flex-direction: column; }
+  .sync-sidebar { flex-direction: row; width: 100%; flex: none; position: static; overflow-x: auto; }
+}

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"image"
 	"image/png"
 	"io/fs"
@@ -71,6 +72,8 @@ type adminData struct {
 	RobinMapOptions []string
 	RobinOrg        string
 	RobinSet        bool
+	RobinLastSync   RobinSyncResult
+	RobinHasSync    bool
 	Maps            []mapRow
 	DeskMaps        []string
 	Mapadmins       []adminUserRow
@@ -200,6 +203,14 @@ func (app *App) handleAdminPost(w http.ResponseWriter, r *http.Request, sess Ses
 			_ = app.db.SetSetting("robinOrganisation", strings.TrimSpace(r.FormValue("robinOrganisation")))
 			_ = app.db.AuditLog("LDAP", sess.Username, "Robin credentials updated")
 			return "Robin settings saved."
+		}
+		if r.FormValue("runRobinSync") != "" {
+			res := app.RunRobinSyncStructured()
+			_ = app.db.AuditLog("LDAP", sess.Username, "Robin meeting sync run")
+			if res.Note != "" {
+				return res.Note
+			}
+			return fmt.Sprintf("Robin sync complete: %d of %d room(s) matched a meeting desk.", res.MatchedRooms, res.TotalRooms)
 		}
 		if sn := strings.TrimSpace(r.FormValue("robinSpacename")); sn != "" {
 			id, err := strconv.Atoi(strings.TrimSpace(r.FormValue("robinSpaceid")))
@@ -480,6 +491,7 @@ func (app *App) buildAdminData(r *http.Request, sess Session, tab, msg string) a
 			d.RobinMapOptions = append(d.RobinMapOptions, name)
 		}
 		sort.Strings(d.RobinMapOptions)
+		d.RobinLastSync, d.RobinHasSync = app.LastRobinSyncResult()
 
 	case "maps":
 		maps, _ := app.db.ListMaps()

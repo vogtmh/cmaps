@@ -161,257 +161,352 @@
 
 {{else if eq .ActiveTab "ldap"}}
   {{if .IsEditor}}<script>token = "{{.Token}}"; username = "{{.Username}}"; console.log("Token: " + token);</script>{{end}}
-  <div style="display:flex; margin-left:20px;">
-    <div id="syncSidebar" style="flex:0 0 170px; width:170px; border-right:1px solid #555; padding:10px 10px 10px 0;">
+  <div class="sync-wrap">
+  <div class="sync-layout">
+    <div class="sync-sidebar" id="syncSidebar">
       {{if gt .PermLdap 0}}
-      <div class="syncnav" id="syncnav_ldap" onclick="showSyncSub('ldap')" style="padding:10px 14px; margin-bottom:6px; cursor:pointer; border-radius:6px;">LDAP</div>
+      <button type="button" class="sync-navitem" id="syncnav_ldap" onclick="showSyncSub('ldap')"><span class="sync-navdot"></span>LDAP</button>
       {{end}}
       {{if gt .PermAdminpanel 0}}
-      <div class="syncnav" id="syncnav_saml" onclick="showSyncSub('saml')" style="padding:10px 14px; margin-bottom:6px; cursor:pointer; border-radius:6px;">SAML SSO</div>
+      <button type="button" class="sync-navitem" id="syncnav_saml" onclick="showSyncSub('saml')"><span class="sync-navdot"></span>SAML SSO</button>
       {{end}}
       {{if gt .PermLdap 0}}
-      <div class="syncnav" id="syncnav_robin" onclick="showSyncSub('robin')" style="padding:10px 14px; margin-bottom:6px; cursor:pointer; border-radius:6px;">Robin</div>
+      <button type="button" class="sync-navitem" id="syncnav_robin" onclick="showSyncSub('robin')"><span class="sync-navdot"></span>Robin</button>
       {{end}}
     </div>
-    <div style="flex:1; min-width:0; padding-left:20px;">
+    <div class="sync-pane">
 
   {{if gt .PermLdap 0}}
   <div id="syncsub_ldap" class="syncsub" style="display:none;">
-  <table style="margin-left:0;">
-    <tr style="font-weight:bold;">
-      <td width="200">Description</td><td width="180">Server</td><td width="110">Type</td>
-      <td width="400">OU</td><td width="230">LdapUser</td><td width="150">LdapPass</td>
-      <td width="150">Last Sync</td><td width="150"></td><td width="100">&nbsp;</td>
-    </tr>
-    <tr><td>&nbsp;</td></tr>
-    {{range .LdapSources}}
-    <tr>
-      <td>{{.Description}}</td><td>{{.Server}}</td><td>{{.Type}}</td><td>{{.OU}}</td>
-      <td>{{.LdapUser}}</td><td>*****</td><td>{{.LastSync}}</td>
-      <td><input type="button" id="syncbutton{{.ID}}" value="Sync now" onClick="syncLDAP({{.ID}}, username)"></td>
-      <td>
-        {{if gt $.PermLdap 1}}
-        <form name="DeleteLdap" action="?tab=ldap" method="post">
-          <input type="hidden" name="tab" value="ldap">
-          <input type="hidden" name="deleteLdapID" value="{{.ID}}">
-          <input type="submit" value="Delete">
-        </form>
+    <h1 class="sync-pane-title">Active Directory / LDAP</h1>
+    <p class="sync-pane-sub">User and team data is synchronised from one or more LDAP directories. Add a connection below, then run a sync to import accounts.</p>
+
+    <div class="sync-card">
+      <div class="sync-card-head"><h2 class="sync-card-title">Connections</h2></div>
+      {{if .LdapSources}}
+      <table class="sync-table">
+        <thead>
+          <tr>
+            <th>Description</th><th>Server</th><th>Type</th><th>OU</th>
+            <th>Bind user</th><th>Last sync</th><th class="sync-td-min"></th>{{if gt .PermLdap 1}}<th class="sync-td-min"></th>{{end}}
+          </tr>
+        </thead>
+        <tbody>
+        {{range .LdapSources}}
+          <tr>
+            <td>{{.Description}}</td><td>{{.Server}}</td>
+            <td><span class="sync-badge sync-badge-accent">{{.Type}}</span></td>
+            <td>{{.OU}}</td><td>{{.LdapUser}}</td><td>{{.LastSync}}</td>
+            <td class="sync-td-min"><button type="button" class="sync-btn sync-btn-sm" id="syncbutton{{.ID}}" onClick="syncLDAP({{.ID}}, username)">Sync now</button></td>
+            {{if gt $.PermLdap 1}}
+            <td class="sync-td-min">
+              <form name="DeleteLdap" action="?tab=ldap" method="post" style="margin:0;" onsubmit="return confirm('Delete LDAP connection &quot;{{.Description}}&quot;? Users synced from this source will no longer be refreshed.');">
+                <input type="hidden" name="tab" value="ldap">
+                <input type="hidden" name="deleteLdapID" value="{{.ID}}">
+                <button type="submit" class="sync-btn sync-btn-sm sync-btn-danger">Delete</button>
+              </form>
+            </td>
+            {{end}}
+          </tr>
         {{end}}
-      </td>
-    </tr>
-    {{end}}
-    {{if gt .PermLdap 1}}
-    <tr><td>&nbsp;</td></tr>
-    <form name="AddLdap" action="?tab=ldap" method="post">
-      <tr>
-        <input type="hidden" name="tab" value="ldap">
-        <td><input type="text" name="newLdapDescription" style="width:190px;" placeholder="Description"></td>
-        <td><input type="text" name="newLdapServer" style="width:170px;" placeholder="Server"></td>
-        <td><select name="newLdapType" style="width:100px"><option value="LDAPS">LDAPS</option><option value="LDAP">LDAP</option></select></td>
-        <td><input type="text" name="newLdapOU" style="width:390px;" placeholder="OU"></td>
-        <td><input type="text" name="newLdapUser" style="width:220px;" placeholder="Bind user"></td>
-        <td><input type="password" name="newLdapPass" style="width:140px;" placeholder="Password"></td>
-        <td>&nbsp;</td>
-        <td><input type="submit" value="Create"></td>
-        <td>&nbsp;</td>
-      </tr>
-    </form>
-    {{end}}
-  </table>
-  <div style="margin:20px;">
-    <input type="button" value="Debug last sync" onClick="showLdapDebug()">
-  </div>
-  <div id="ldapDebugOverlay" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:1000;">
-    <div style="background:#fff;max-width:760px;margin:60px auto;padding:20px;border-radius:6px;max-height:80%;overflow:auto;">
-      <div style="display:flex;justify-content:space-between;align-items:center;">
-        <h2 style="margin:0;">Last AD sync diagnostics</h2>
-        <input type="button" value="Close" onClick="document.getElementById('ldapDebugOverlay').style.display='none'">
-      </div>
-      <div id="ldapDebugBody" style="margin-top:15px;font-family:monospace;font-size:13px;"></div>
+        </tbody>
+      </table>
+      {{else}}
+      <div class="sync-empty">No LDAP connections configured yet.</div>
+      {{end}}
     </div>
-  </div>
+
+    {{if gt .PermLdap 1}}
+    <div class="sync-card">
+      <div class="sync-card-head"><h2 class="sync-card-title">Add a connection</h2></div>
+      <form name="AddLdap" action="?tab=ldap" method="post">
+        <input type="hidden" name="tab" value="ldap">
+        <div class="sync-form-grid">
+          <div class="sync-field"><label class="sync-label">Description</label><input class="sync-input" type="text" name="newLdapDescription" placeholder="e.g. Corporate AD"></div>
+          <div class="sync-field"><label class="sync-label">Server</label><input class="sync-input" type="text" name="newLdapServer" placeholder="dc01.example.com"></div>
+          <div class="sync-field"><label class="sync-label">Type</label><select class="sync-select" name="newLdapType"><option value="LDAPS">LDAPS</option><option value="LDAP">LDAP</option></select></div>
+          <div class="sync-field sync-field-wide"><label class="sync-label">OU (search base)</label><input class="sync-input" type="text" name="newLdapOU" placeholder="OU=Users,DC=example,DC=com"></div>
+          <div class="sync-field"><label class="sync-label">Bind user</label><input class="sync-input" type="text" name="newLdapUser" placeholder="Bind user"></div>
+          <div class="sync-field"><label class="sync-label">Password</label><input class="sync-input" type="password" name="newLdapPass" placeholder="Password"></div>
+        </div>
+        <div class="sync-form-actions">
+          <button type="submit" class="sync-btn sync-btn-primary">Create connection</button>
+        </div>
+      </form>
+    </div>
+    {{end}}
+
+    <div class="sync-form-actions">
+      <button type="button" class="sync-btn" onClick="showLdapDebug()">Debug last sync</button>
+    </div>
+
+    <div id="ldapDebugOverlay" class="sync-modal">
+      <div class="sync-modal-box">
+        <div class="sync-modal-head">
+          <h2>Last AD sync diagnostics</h2>
+          <button type="button" class="sync-btn sync-btn-sm" onClick="document.getElementById('ldapDebugOverlay').style.display='none'">Close</button>
+        </div>
+        <div id="ldapDebugBody" class="sync-modal-body" style="font-family:inherit;white-space:normal;"></div>
+      </div>
+    </div>
   </div>
   {{end}}
 
   {{if gt .PermAdminpanel 0}}
   <div id="syncsub_saml" class="syncsub" style="display:none;">
-  <h2 style="margin-left:0;">SAML / Entra ID single sign-on</h2>
-  <div id="samlStatusBar" style="margin:10px 0 20px 0;"></div>
+    <h1 class="sync-pane-title">SAML / Entra ID single sign-on</h1>
+    <p class="sync-pane-sub">Let users sign in with your identity provider. Import the IdP metadata to auto-fill most fields, then enable SAML.</p>
+    <div id="samlStatusBar" class="sync-statusbar"></div>
 
-  <div style="max-width:1100px;">
-    <fieldset style="border:1px solid #555; border-radius:6px; padding:15px; margin-bottom:20px;">
-      <legend style="padding:0 8px;">Service Provider (this application)</legend>
-      <p style="margin:0 0 10px;">Use these values when configuring the application registration in Entra ID / your IdP:</p>
-      <table>
-        <tr><td style="padding-right:14px;">Entity ID</td><td><code id="sp_entity_id">-</code></td></tr>
-        <tr><td>Reply URL (ACS)</td><td><code id="sp_acs_url">-</code></td></tr>
-        <tr><td>Metadata URL</td><td><code id="sp_metadata_url">-</code></td></tr>
-        <tr><td>Login URL</td><td><code id="sp_login_url">-</code></td></tr>
+    <div class="sync-card">
+      <div class="sync-card-head"><h2 class="sync-card-title">Service Provider (this application)</h2></div>
+      <p class="sync-card-hint">Use these values when configuring the application registration in Entra ID / your IdP.</p>
+      <table class="sync-table">
+        <tbody>
+          <tr><td class="sync-td-min">Entity ID</td><td><code id="sp_entity_id">-</code></td></tr>
+          <tr><td class="sync-td-min">Reply URL (ACS)</td><td><code id="sp_acs_url">-</code></td></tr>
+          <tr><td class="sync-td-min">Metadata URL</td><td><code id="sp_metadata_url">-</code></td></tr>
+          <tr><td class="sync-td-min">Login URL</td><td><code id="sp_login_url">-</code></td></tr>
+        </tbody>
       </table>
-    </fieldset>
+    </div>
 
-    <fieldset style="border:1px solid #555; border-radius:6px; padding:15px; margin-bottom:20px;">
-      <legend style="padding:0 8px;">Import from IdP federation metadata</legend>
-      <p style="margin:0 0 10px;">Paste the Entra ID "App Federation Metadata Url" to auto-fill the Login URL, certificate, entity ID and tenant.</p>
-      <input type="text" id="saml_metadata_import_url" placeholder="https://login.microsoftonline.com/<tenant>/federationmetadata/2007-06/federationmetadata.xml?appid=..." style="width:760px;">
-      <input type="button" value="Import" onClick="importSamlMetadata()">
-      <span id="saml_import_status" style="margin-left:10px;"></span>
-    </fieldset>
+    <div class="sync-card">
+      <div class="sync-card-head"><h2 class="sync-card-title">Import from IdP federation metadata</h2></div>
+      <p class="sync-card-hint">Paste the Entra ID "App Federation Metadata Url" to auto-fill the Login URL, certificate, entity ID and tenant.</p>
+      <div class="sync-field">
+        <input class="sync-input" type="text" id="saml_metadata_import_url" placeholder="https://login.microsoftonline.com/<tenant>/federationmetadata/2007-06/federationmetadata.xml?appid=...">
+      </div>
+      <div class="sync-form-actions">
+        <button type="button" class="sync-btn sync-btn-primary" onClick="importSamlMetadata()">Import</button>
+        <span id="saml_import_status" class="sync-status-text"></span>
+      </div>
+    </div>
 
     <form id="samlSettingsForm" onsubmit="return false;">
-      <fieldset style="border:1px solid #555; border-radius:6px; padding:15px; margin-bottom:20px;">
-        <legend style="padding:0 8px;">General</legend>
-        <label style="display:block; margin-bottom:8px;"><input type="checkbox" id="saml_enabled"> Enable SAML single sign-on</label>
-        <label style="display:block; margin-bottom:8px;"><input type="checkbox" id="saml_allow_local"> Allow local username/password fallback</label>
-        <table>
-          <tr><td style="padding-right:14px;">NameID format</td><td><input type="text" id="saml_nameid" style="width:520px;" placeholder="urn:oasis:names:tc:SAML:2.0:nameid-format:persistent"></td></tr>
-        </table>
-      </fieldset>
+      <div class="sync-card">
+        <div class="sync-card-head"><h2 class="sync-card-title">General</h2></div>
+        <div class="sync-toggle-row">
+          <label class="sync-toggle"><input type="checkbox" id="saml_enabled"><span class="sync-toggle-slider"></span></label>
+          <span class="sync-toggle-label">Enable SAML single sign-on</span>
+        </div>
+        <div class="sync-toggle-row">
+          <label class="sync-toggle"><input type="checkbox" id="saml_allow_local"><span class="sync-toggle-slider"></span></label>
+          <span class="sync-toggle-label">Allow local username / password fallback</span>
+        </div>
+        <div class="sync-field" style="max-width:560px;">
+          <label class="sync-label">NameID format</label>
+          <input class="sync-input" type="text" id="saml_nameid" placeholder="urn:oasis:names:tc:SAML:2.0:nameid-format:persistent">
+        </div>
+      </div>
 
-      <fieldset style="border:1px solid #555; border-radius:6px; padding:15px; margin-bottom:20px;">
-        <legend style="padding:0 8px;">Identity Provider (Entra ID)</legend>
-        <table>
-          <tr><td style="padding-right:14px;">Tenant ID</td><td><input type="text" id="saml_tenant" style="width:520px;"></td></tr>
-          <tr><td>IdP Entity ID</td><td><input type="text" id="saml_entity" style="width:520px;" placeholder="https://sts.windows.net/<tenant>/"></td></tr>
-          <tr><td>Login URL (SSO)</td><td><input type="text" id="saml_login" style="width:520px;" placeholder="https://login.microsoftonline.com/<tenant>/saml2"></td></tr>
-          <tr><td style="vertical-align:top;">X.509 certificate</td><td><textarea id="saml_cert" style="width:520px; height:120px; font-family:monospace; font-size:12px;" placeholder="Base64 certificate (no PEM headers)"></textarea></td></tr>
-        </table>
-      </fieldset>
+      <div class="sync-card">
+        <div class="sync-card-head"><h2 class="sync-card-title">Identity Provider (Entra ID)</h2></div>
+        <div class="sync-form-grid">
+          <div class="sync-field"><label class="sync-label">Tenant ID</label><input class="sync-input" type="text" id="saml_tenant"></div>
+          <div class="sync-field"><label class="sync-label">IdP Entity ID</label><input class="sync-input" type="text" id="saml_entity" placeholder="https://sts.windows.net/<tenant>/"></div>
+          <div class="sync-field sync-field-wide"><label class="sync-label">Login URL (SSO)</label><input class="sync-input" type="text" id="saml_login" placeholder="https://login.microsoftonline.com/<tenant>/saml2"></div>
+          <div class="sync-field sync-field-wide"><label class="sync-label">X.509 certificate</label><textarea class="sync-textarea" id="saml_cert" placeholder="Base64 certificate (no PEM headers)"></textarea></div>
+        </div>
+      </div>
 
-      <fieldset style="border:1px solid #555; border-radius:6px; padding:15px; margin-bottom:20px;">
-        <legend style="padding:0 8px;">Service Provider overrides (optional)</legend>
-        <p style="margin:0 0 10px;">Leave blank to use the legacy SimpleSAMLphp paths shown above.</p>
-        <table>
-          <tr><td style="padding-right:14px;">App Entity ID</td><td><input type="text" id="saml_app_entity" style="width:520px;"></td></tr>
-          <tr><td>App Reply URL</td><td><input type="text" id="saml_app_reply" style="width:520px;"></td></tr>
-          <tr><td>App Logout URL</td><td><input type="text" id="saml_app_logout" style="width:520px;"></td></tr>
-        </table>
-      </fieldset>
+      <div class="sync-card">
+        <div class="sync-card-head"><h2 class="sync-card-title">Service Provider overrides (optional)</h2></div>
+        <p class="sync-card-hint">Leave blank to use the legacy SimpleSAMLphp paths shown above.</p>
+        <div class="sync-form-grid">
+          <div class="sync-field sync-field-wide"><label class="sync-label">App Entity ID</label><input class="sync-input" type="text" id="saml_app_entity"></div>
+          <div class="sync-field sync-field-wide"><label class="sync-label">App Reply URL</label><input class="sync-input" type="text" id="saml_app_reply"></div>
+          <div class="sync-field sync-field-wide"><label class="sync-label">App Logout URL</label><input class="sync-input" type="text" id="saml_app_logout"></div>
+        </div>
+      </div>
 
-      <fieldset style="border:1px solid #555; border-radius:6px; padding:15px; margin-bottom:20px;">
-        <legend style="padding:0 8px;">Attribute / claim overrides (optional)</legend>
-        <p style="margin:0 0 10px;">Leave blank to use the Azure AD defaults from the original CompanyMaps app.</p>
-        <table>
-          <tr><td style="padding-right:14px;">SamAccountName</td><td><input type="text" id="saml_attr_sam" style="width:600px;"></td></tr>
-          <tr><td>Given name</td><td><input type="text" id="saml_attr_given" style="width:600px;"></td></tr>
-          <tr><td>Surname</td><td><input type="text" id="saml_attr_sn" style="width:600px;"></td></tr>
-          <tr><td>Full name</td><td><input type="text" id="saml_attr_full" style="width:600px;"></td></tr>
-          <tr><td>Mail</td><td><input type="text" id="saml_attr_mail" style="width:600px;"></td></tr>
-        </table>
-      </fieldset>
+      <div class="sync-card">
+        <div class="sync-card-head"><h2 class="sync-card-title">Attribute / claim overrides (optional)</h2></div>
+        <p class="sync-card-hint">Leave blank to use the Azure AD defaults from the original CompanyMaps app.</p>
+        <div class="sync-form-grid">
+          <div class="sync-field"><label class="sync-label">SamAccountName</label><input class="sync-input" type="text" id="saml_attr_sam"></div>
+          <div class="sync-field"><label class="sync-label">Given name</label><input class="sync-input" type="text" id="saml_attr_given"></div>
+          <div class="sync-field"><label class="sync-label">Surname</label><input class="sync-input" type="text" id="saml_attr_sn"></div>
+          <div class="sync-field"><label class="sync-label">Full name</label><input class="sync-input" type="text" id="saml_attr_full"></div>
+          <div class="sync-field"><label class="sync-label">Mail</label><input class="sync-input" type="text" id="saml_attr_mail"></div>
+        </div>
+      </div>
 
-      <div style="margin-bottom:30px;">
-        <input type="button" value="Save settings" style="background:rgba(0,120,0,0.8); padding:6px 18px;" onClick="saveSamlSettings()">
-        <input type="button" value="Live test" style="padding:6px 18px;" onClick="window.open('../auth/saml/login?debug=1','_blank')">
-        <input type="button" value="Show last test result" style="padding:6px 18px;" onClick="showSamlDebug()">
-        <span id="saml_save_status" style="margin-left:12px;"></span>
+      <div class="sync-form-actions">
+        <button type="button" class="sync-btn sync-btn-primary" onClick="saveSamlSettings()">Save settings</button>
+        <button type="button" class="sync-btn" onClick="window.open('../auth/saml/login?debug=1','_blank')">Live test</button>
+        <button type="button" class="sync-btn" onClick="showSamlDebug()">Show last test result</button>
+        <span id="saml_save_status" class="sync-status-text"></span>
       </div>
     </form>
-  </div>
 
-  <div id="samlDebugOverlay" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:1000;">
-    <div style="background:#fff;color:#333;max-width:760px;margin:60px auto;padding:20px;border-radius:6px;max-height:80%;overflow:auto;">
-      <div style="display:flex;justify-content:space-between;align-items:center;">
-        <h2 style="margin:0;">Last SAML live test</h2>
-        <input type="button" value="Close" onClick="document.getElementById('samlDebugOverlay').style.display='none'">
+    <div id="samlDebugOverlay" class="sync-modal">
+      <div class="sync-modal-box">
+        <div class="sync-modal-head">
+          <h2>Last SAML live test</h2>
+          <button type="button" class="sync-btn sync-btn-sm" onClick="document.getElementById('samlDebugOverlay').style.display='none'">Close</button>
+        </div>
+        <pre id="samlDebugBody" class="sync-modal-body"></pre>
       </div>
-      <pre id="samlDebugBody" style="margin-top:15px;font-family:monospace;font-size:12px;white-space:pre-wrap;word-break:break-word;"></pre>
     </div>
-  </div>
   </div>
   {{end}}
 
   {{if gt .PermLdap 0}}
   <div id="syncsub_robin" class="syncsub" style="display:none;">
-  <h2 style="margin:0 0 0 0;">Meeting rooms (Robin)</h2>
-  <p style="margin-left:20px;max-width:760px;">
-    Meeting-room availability is polled from Robin. Configure the access token, then map each Robin
-    <b>location id</b> to a CompanyMaps map. The <b>map name</b> is optional — leave it blank to use the
-    space name, or set it so several Robin locations feed one map (e.g. point both
-    <i>goeppingenMain</i> and <i>goeppingenAux</i> at the <i>goeppingen</i> map). Meeting desks on a map
-    are matched to Robin rooms by name.
-  </p>
-  {{if gt .PermLdap 1}}
-  <form action="?tab=ldap" method="post" style="margin-left:20px;">
-    <input type="hidden" name="tab" value="ldap">
-    <input type="hidden" name="saveRobin" value="1">
-    <table>
-      <tr>
-        <td width="200">Access token</td>
-        <td><input type="password" name="robintoken" style="width:300px;" placeholder="{{if .RobinSet}}(configured — leave blank to keep){{else}}Robin access token{{end}}"></td>
-      </tr>
-      <tr>
-        <td>Organisation id</td>
-        <td><input type="text" name="robinOrganisation" style="width:300px;" value="{{.RobinOrg}}" placeholder="Robin organisation id (optional)"></td>
-      </tr>
-      <tr><td>&nbsp;</td><td><input type="submit" value="Save Robin settings"></td></tr>
-    </table>
-  </form>
-  {{end}}
+    <h1 class="sync-pane-title">Meeting rooms (Robin)</h1>
+    <p class="sync-pane-sub">Meeting-room availability is polled from Robin. Map each Robin location to a CompanyMaps map; meeting desks are matched to rooms by name. Point several locations at one map (e.g. <i>goeppingenMain</i> and <i>goeppingenAux</i> &rarr; <i>goeppingen</i>) when needed.</p>
 
-  <table style="margin-left:20px;margin-top:16px;">
-    <tr style="font-weight:bold;">
-      <td width="220">Space name</td><td width="220">Map name</td><td width="160">Robin location id</td><td width="100">&nbsp;</td>
-    </tr>
-    <tr><td>&nbsp;</td></tr>
-    {{range .RobinSpaces}}
-    <tr>
-      <td>{{.Spacename}}</td>
-      <td>
-        {{if gt $.PermLdap 1}}
-        {{$cur := .MapName}}
-        <form action="?tab=ldap" method="post" style="display:inline">
-          <input type="hidden" name="tab" value="ldap">
-          <input type="hidden" name="setRobinMapSpace" value="{{.Spacename}}">
-          <select name="robinMapname" style="width:200px;" onchange="this.form.submit()">
-            {{range $.RobinMapOptions}}
-            <option value="{{.}}"{{if eq . $cur}} selected{{end}}>{{.}}</option>
-            {{end}}
-          </select>
-        </form>
-        {{else}}{{.MapName}}{{end}}
-      </td>
-      <td>{{.Spaceid}}</td>
-      <td>
-        {{if gt $.PermLdap 1}}
-        <form action="?tab=ldap" method="post" style="display:inline">
-          <input type="hidden" name="tab" value="ldap">
-          <input type="hidden" name="deleteRobinSpace" value="{{.Spacename}}">
-          <input type="submit" value="Delete">
-        </form>
-        {{end}}
-      </td>
-    </tr>
-    {{end}}
     {{if gt .PermLdap 1}}
-    <tr><td>&nbsp;</td></tr>
-    <form action="?tab=ldap" method="post">
-      <tr>
+    <div class="sync-card">
+      <div class="sync-card-head"><h2 class="sync-card-title">Credentials</h2></div>
+      <form action="?tab=ldap" method="post">
         <input type="hidden" name="tab" value="ldap">
-        <td><input type="text" name="robinSpacename" style="width:210px;" placeholder="Space name (e.g. goeppingenMain)"></td>
-        <td><input type="text" name="robinMapname" style="width:210px;" placeholder="Map name (optional)"></td>
-        <td><input type="text" name="robinSpaceid" style="width:150px;" placeholder="Robin location id"></td>
-        <td><input type="submit" value="Add"></td>
-      </tr>
-    </form>
-    {{end}}
-  </table>
-  <div style="margin:20px;">
-    <input type="button" value="Test meeting sync" onClick="showRobinTest()">
-  </div>
-  <div id="robinDebugOverlay" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:1000;">
-    <div style="background:#fff;max-width:820px;margin:60px auto;padding:20px;border-radius:6px;max-height:80%;overflow:auto;">
-      <div style="display:flex;justify-content:space-between;align-items:center;">
-        <h2 style="margin:0;">Meeting sync log</h2>
-        <input type="button" value="Close" onClick="document.getElementById('robinDebugOverlay').style.display='none'">
-      </div>
-      <pre id="robinDebugBody" style="margin-top:15px;font-family:monospace;font-size:13px;white-space:pre-wrap;color:#000;"></pre>
+        <input type="hidden" name="saveRobin" value="1">
+        <div class="sync-form-grid">
+          <div class="sync-field"><label class="sync-label">Access token</label><input class="sync-input" type="password" name="robintoken" placeholder="{{if .RobinSet}}(configured — leave blank to keep){{else}}Robin access token{{end}}"></div>
+          <div class="sync-field"><label class="sync-label">Organisation id</label><input class="sync-input" type="text" name="robinOrganisation" value="{{.RobinOrg}}" placeholder="Robin organisation id (optional)"></div>
+        </div>
+        <div class="sync-form-actions">
+          <button type="submit" class="sync-btn sync-btn-primary">Save credentials</button>
+          {{if .RobinSet}}<span class="sync-badge sync-badge-ok">Token configured</span>{{else}}<span class="sync-badge sync-badge-warn">No token</span>{{end}}
+        </div>
+      </form>
     </div>
-  </div>
+    {{end}}
+
+    <div class="sync-card">
+      <div class="sync-card-head"><h2 class="sync-card-title">Location mappings</h2></div>
+      {{if .RobinSpaces}}
+      <table class="sync-table">
+        <thead><tr><th>Space name</th><th>Map</th><th>Robin location id</th>{{if gt .PermLdap 1}}<th class="sync-td-min"></th>{{end}}</tr></thead>
+        <tbody>
+        {{range .RobinSpaces}}
+          <tr>
+            <td>{{.Spacename}}</td>
+            <td>
+              {{if gt $.PermLdap 1}}
+              {{$cur := .MapName}}
+              <form action="?tab=ldap" method="post" style="margin:0;">
+                <input type="hidden" name="tab" value="ldap">
+                <input type="hidden" name="setRobinMapSpace" value="{{.Spacename}}">
+                <select class="sync-select" name="robinMapname" style="max-width:220px;" onchange="this.form.submit()">
+                  {{range $.RobinMapOptions}}<option value="{{.}}"{{if eq . $cur}} selected{{end}}>{{.}}</option>{{end}}
+                </select>
+              </form>
+              {{else}}{{.MapName}}{{end}}
+            </td>
+            <td><code>{{.Spaceid}}</code></td>
+            {{if gt $.PermLdap 1}}
+            <td class="sync-td-min">
+              <form action="?tab=ldap" method="post" style="margin:0;" onsubmit="return confirm('Remove Robin location &quot;{{.Spacename}}&quot;?');">
+                <input type="hidden" name="tab" value="ldap">
+                <input type="hidden" name="deleteRobinSpace" value="{{.Spacename}}">
+                <button type="submit" class="sync-btn sync-btn-sm sync-btn-danger">Delete</button>
+              </form>
+            </td>
+            {{end}}
+          </tr>
+        {{end}}
+        </tbody>
+      </table>
+      {{else}}
+      <div class="sync-empty">No Robin locations configured yet.</div>
+      {{end}}
+
+      {{if gt .PermLdap 1}}
+      <form action="?tab=ldap" method="post" style="margin-top:16px;">
+        <input type="hidden" name="tab" value="ldap">
+        <div class="sync-form-grid">
+          <div class="sync-field"><label class="sync-label">Space name</label><input class="sync-input" type="text" name="robinSpacename" placeholder="e.g. goeppingenMain"></div>
+          <div class="sync-field"><label class="sync-label">Map name (optional)</label><input class="sync-input" type="text" name="robinMapname" placeholder="Leave blank to use space name"></div>
+          <div class="sync-field"><label class="sync-label">Robin location id</label><input class="sync-input" type="text" name="robinSpaceid" placeholder="e.g. 22008"></div>
+        </div>
+        <div class="sync-form-actions"><button type="submit" class="sync-btn sync-btn-primary">Add location</button></div>
+      </form>
+      {{end}}
+    </div>
+
+    <div class="sync-card">
+      <div class="sync-card-head">
+        <h2 class="sync-card-title">Last sync</h2>
+        <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+          {{if gt .PermLdap 1}}
+          <form action="?tab=ldap" method="post" style="margin:0;">
+            <input type="hidden" name="tab" value="ldap">
+            <input type="hidden" name="runRobinSync" value="1">
+            <button type="submit" class="sync-btn sync-btn-primary">Run sync now</button>
+          </form>
+          {{end}}
+          <button type="button" class="sync-btn" onClick="showRobinTest()">View detailed log</button>
+        </div>
+      </div>
+
+      {{if .RobinHasSync}}
+        <div class="sync-summary">
+          <div class="sync-summary-item"><span class="sync-summary-num">{{.RobinLastSync.TotalRooms}}</span><span class="sync-summary-lbl">Rooms found</span></div>
+          <div class="sync-summary-item"><span class="sync-summary-num" style="color:var(--sy-ok);">{{.RobinLastSync.MatchedRooms}}</span><span class="sync-summary-lbl">Matched a desk</span></div>
+          <div class="sync-summary-item"><span class="sync-summary-num" style="font-size:1.05em;">{{.RobinLastSync.Time}}</span><span class="sync-summary-lbl">Last run</span></div>
+        </div>
+        {{if .RobinLastSync.Note}}<p class="sync-card-hint" style="margin-top:10px;">{{.RobinLastSync.Note}}</p>{{end}}
+        {{range .RobinLastSync.Locations}}
+        <div class="sync-loc">
+          <div class="sync-loc-head" onclick="this.parentNode.classList.toggle('open')">
+            <span class="sync-loc-caret">&#9654;</span>
+            <span class="sync-loc-name">{{.Spacename}}</span>
+            <span class="sync-loc-arrow">&rarr; {{.Mapname}}</span>
+            <span class="sync-badge sync-badge-off">id {{.Spaceid}}</span>
+            <span class="sync-loc-spacer"></span>
+            {{if .Err}}<span class="sync-badge sync-badge-danger">error</span>
+            {{else}}<span class="sync-badge sync-badge-accent">{{len .Rooms}} room(s)</span>{{end}}
+          </div>
+          <div class="sync-loc-body">
+            {{if .Err}}
+              <div style="padding:12px 14px; color:#f08070;">{{.Err}}</div>
+            {{else if .Rooms}}
+              <table class="sync-table">
+                <thead><tr><th>Room</th><th>Availability</th><th>Match</th><th>Now / Next</th></tr></thead>
+                <tbody>
+                {{range .Rooms}}
+                  <tr>
+                    <td>{{.Name}}</td>
+                    <td>
+                      {{if .Err}}<span class="sync-badge sync-badge-danger">error</span>
+                      {{else if eq .Availability "free"}}<span class="sync-avail free"><span class="dot"></span>free</span>
+                      {{else if .Availability}}<span class="sync-avail occupied"><span class="dot"></span>{{.Availability}}</span>
+                      {{else}}<span class="sync-avail unknown"><span class="dot"></span>unknown</span>{{end}}
+                    </td>
+                    <td>{{if .Matched}}<span class="sync-badge sync-badge-ok">desk {{.Deskid}}</span>{{else}}<span class="sync-badge sync-badge-warn">no desk</span>{{end}}</td>
+                    <td>{{if .NowTitle}}{{.NowTitle}}{{else if .NextTitle}}next: {{.NextTitle}}{{else}}&mdash;{{end}}</td>
+                  </tr>
+                {{end}}
+                </tbody>
+              </table>
+            {{else}}
+              <div style="padding:12px 14px; color:var(--sy-muted);">No rooms returned for this location.</div>
+            {{end}}
+          </div>
+        </div>
+        {{end}}
+      {{else}}
+        <div class="sync-empty">No sync has run yet. Click &ldquo;Run sync now&rdquo; to poll Robin and see which rooms match a meeting desk.</div>
+      {{end}}
+    </div>
+
+    <div id="robinDebugOverlay" class="sync-modal">
+      <div class="sync-modal-box">
+        <div class="sync-modal-head">
+          <h2>Meeting sync log</h2>
+          <button type="button" class="sync-btn sync-btn-sm" onClick="document.getElementById('robinDebugOverlay').style.display='none'">Close</button>
+        </div>
+        <pre id="robinDebugBody" class="sync-modal-body"></pre>
+      </div>
+    </div>
   </div>
   {{end}}
 
     </div>
+  </div>
   </div>
   <script>
     showSyncSub("{{if .SyncSub}}{{.SyncSub}}{{else}}ldap{{end}}");

@@ -240,7 +240,7 @@ function showSyncSub(name) {
     var content = document.getElementById('syncsub_' + s);
     var nav = document.getElementById('syncnav_' + s);
     if (content) content.style.display = (s === name) ? 'block' : 'none';
-    if (nav) nav.style.background = (s === name) ? '#505050' : 'transparent';
+    if (nav) nav.classList.toggle('active', s === name);
   });
 }
 
@@ -372,9 +372,9 @@ function loadSamlSettings() {
   $.ajax({
     url: '../rest/saml/status', type: 'get', dataType: 'JSON',
     success: function(st) {
-      var color = st.enabled ? (st.configured ? '#2ecc71' : '#e67e22') : '#888';
+      var cls = st.enabled ? (st.configured ? 'sync-badge-ok' : 'sync-badge-warn') : 'sync-badge-off';
       var text = st.enabled ? (st.configured ? 'SAML enabled and configured' : 'SAML enabled but incomplete (missing Login URL or certificate)') : 'SAML disabled';
-      $('#samlStatusBar').html('<span style="background:'+color+';color:#fff;padding:4px 10px;border-radius:4px;">'+esc(text)+'</span>');
+      $('#samlStatusBar').html('<span class="sync-badge '+cls+'" style="font-size:13px;padding:5px 12px;">'+esc(text)+'</span>');
     }
   });
 }
