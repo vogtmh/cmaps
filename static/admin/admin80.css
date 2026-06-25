@@ -35,6 +35,7 @@
   font-size: 14px;
   color: var(--sy-fg);
   box-sizing: border-box;
+  padding: 0 24px;
 }
 .sync-wrap *, .sync-wrap *::before, .sync-wrap *::after { box-sizing: border-box; }
 

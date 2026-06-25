@@ -177,8 +177,6 @@
 
   {{if gt .PermLdap 0}}
   <div id="syncsub_ldap" class="syncsub" style="display:none;">
-    <h1 class="sync-pane-title">Active Directory / LDAP</h1>
-
     <div class="sync-card">
       <div class="sync-card-head">
         <h2 class="sync-card-title">Connections</h2>
@@ -257,7 +255,6 @@
 
   {{if gt .PermAdminpanel 0}}
   <div id="syncsub_saml" class="syncsub" style="display:none;">
-    <h1 class="sync-pane-title">SAML / Entra ID single sign-on</h1>
     <div id="samlStatusBar" class="sync-statusbar"></div>
 
     <div class="sync-card">
@@ -363,8 +360,6 @@
 
   {{if gt .PermLdap 0}}
   <div id="syncsub_robin" class="syncsub" style="display:none;">
-    <h1 class="sync-pane-title">Meeting rooms (Robin)</h1>
-    <p class="sync-pane-sub">Meeting-room availability is polled from Robin. Map each Robin location to a CompanyMaps map; meeting desks are matched to rooms by name. Point several locations at one map (e.g. <i>goeppingenMain</i> and <i>goeppingenAux</i> &rarr; <i>goeppingen</i>) when needed.</p>
 
     {{if gt .PermLdap 1}}
     <div class="sync-card">
@@ -452,7 +447,10 @@
       <div class="sync-card-head">
         <h2 class="sync-card-title">Last sync</h2>
         {{if gt .PermLdap 1}}
-        <button type="button" class="sync-btn sync-btn-primary" id="robinSyncBtn" onClick="startRobinSync()">Run sync now</button>
+        <div style="display:flex; gap:10px; align-items:center;">
+          <button type="button" class="sync-btn" id="robinReloadBtn" style="display:none;">View updated results</button>
+          <button type="button" class="sync-btn sync-btn-primary" id="robinSyncBtn" onClick="startRobinSync()">Run sync now</button>
+        </div>
         {{end}}
       </div>
 

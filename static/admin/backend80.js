@@ -510,19 +510,24 @@ function pollSync(prefix, progressUrl, subTab) {
       url: progressUrl, type: 'GET', dataType: 'JSON',
       success: function(snap) {
         renderSyncProgress(prefix, snap);
-        if (snap.done || (!snap.running && snap.cur >= snap.total && snap.total > 0)) {
-          if (!snap.running) {
-            clearInterval(timer);
-            var fill = document.getElementById(prefix + 'ProgFill');
-            if (fill) { fill.classList.remove('indeterminate'); fill.style.width = '100%'; }
-            var stage = document.getElementById(prefix + 'ProgStage');
-            if (stage) stage.textContent = snap.error ? ('Error: ' + snap.error) : (snap.summary || 'Done');
-            var btn = document.getElementById(prefix + 'SyncBtn');
-            if (btn) { btn.disabled = false; btn.textContent = 'Run sync now'; }
-            // Refresh the structured "last sync" view after a short pause.
-            setTimeout(function() {
-              window.location.href = '?tab=ldap&sub=' + subTab;
-            }, 1500);
+        if (!snap.running && snap.done) {
+          clearInterval(timer);
+          var fill = document.getElementById(prefix + 'ProgFill');
+          if (fill) {
+            fill.classList.remove('indeterminate');
+            fill.style.width = '100%';
+            if (snap.error) fill.style.background = 'var(--sy-danger)';
+          }
+          var stage = document.getElementById(prefix + 'ProgStage');
+          if (stage) stage.textContent = snap.error ? ('Error: ' + snap.error) : (snap.summary || 'Done');
+          var btn = document.getElementById(prefix + 'SyncBtn');
+          if (btn) { btn.disabled = false; btn.textContent = 'Run sync now'; }
+          // Offer to refresh the structured "last sync" view without wiping the
+          // log the user just ran the sync to read.
+          var reloadBtn = document.getElementById(prefix + 'ReloadBtn');
+          if (reloadBtn) {
+            reloadBtn.style.display = 'inline-flex';
+            reloadBtn.onclick = function() { window.location.href = '?tab=ldap&sub=' + subTab; };
           }
         }
       },
