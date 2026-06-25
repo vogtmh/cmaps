@@ -1,5 +1,6 @@
 # CompanyMaps 9 (Go) build artifacts & runtime data
 /cmaps
+/companymaps
 /config.json
 /data/
 .DS_Store
