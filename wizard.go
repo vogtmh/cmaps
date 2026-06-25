@@ -47,7 +47,9 @@ func (app *App) handleSetupDemo(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
-// handleSetupImport runs PATH B step 1 (MySQL import).
+// handleSetupImport runs PATH B step 1 (MySQL import). The import runs in the
+// background so large databases don't hit the reverse-proxy gateway timeout; the
+// browser polls /setup/import/progress for live status.
 func (app *App) handleSetupImport(w http.ResponseWriter, r *http.Request) {
 	if _, ok := app.requireAdmin(w, r); !ok {
 		return
@@ -59,16 +61,33 @@ func (app *App) handleSetupImport(w http.ResponseWriter, r *http.Request) {
 		User:     r.FormValue("user"),
 		Password: r.FormValue("password"),
 	}
-	res, err := app.ImportFromMySQL(c)
-	if err != nil {
-		http.Redirect(w, r, "/setup?error="+urlMsg("Import failed: "+err.Error()), http.StatusSeeOther)
+	if !app.importProg.start() {
+		writeJSON(w, map[string]interface{}{"started": false, "message": "An import is already running."})
 		return
 	}
-	_ = app.db.SetMeta("migrate_step", "datacopy")
-	_ = app.db.SetMeta("setup_mode", "migrate")
-	msg := fmt.Sprintf("Imported %d maps, %d desks, %d LDAP users, %d bookings, %d teams.",
-		res.Maps, res.Desks, res.LdapUsers, res.Bookings, res.Teams)
-	http.Redirect(w, r, "/setup?status="+urlMsg(msg), http.StatusSeeOther)
+	go func() {
+		res, err := app.ImportFromMySQL(c, func(stage string, r ImportResult) {
+			app.importProg.update(stage, r)
+		})
+		if err != nil {
+			app.importProg.finish("", "Import failed: "+err.Error())
+			return
+		}
+		_ = app.db.SetMeta("migrate_step", "datacopy")
+		_ = app.db.SetMeta("setup_mode", "migrate")
+		summary := fmt.Sprintf("Imported %d maps, %d desks, %d LDAP users, %d bookings, %d teams.",
+			res.Maps, res.Desks, res.LdapUsers, res.Bookings, res.Teams)
+		app.importProg.finish(summary, "")
+	}()
+	writeJSON(w, map[string]interface{}{"started": true})
+}
+
+// handleSetupImportProgress returns the current MySQL import progress as JSON.
+func (app *App) handleSetupImportProgress(w http.ResponseWriter, r *http.Request) {
+	if _, ok := app.requireAdmin(w, r); !ok {
+		return
+	}
+	writeJSON(w, app.importProg.snapshot())
 }
 
 // handleSetupDataCopy runs PATH B step 2 (copy maps + avatarcache from legacy disk path).

@@ -101,6 +101,7 @@ func (app *App) routes(mux *http.ServeMux) {
 	mux.HandleFunc("/setup", app.handleSetup)
 	mux.HandleFunc("/setup/demo", app.handleSetupDemo)
 	mux.HandleFunc("/setup/import", app.handleSetupImport)
+	mux.HandleFunc("/setup/import/progress", app.handleSetupImportProgress)
 	mux.HandleFunc("/setup/datacopy", app.handleSetupDataCopy)
 	mux.HandleFunc("/setup/ldap", app.handleSetupLdap)
 	mux.HandleFunc("/setup/robin", app.handleSetupRobin)

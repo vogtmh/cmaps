@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"sync"
 
 	_ "github.com/go-sql-driver/mysql"
 )
@@ -36,10 +37,77 @@ type ImportResult struct {
 	Whitelist  int `json:"whitelist"`
 }
 
+// ImportProgress tracks the state of an in-flight (or finished) MySQL import so
+// the setup UI can poll it while the import runs in the background. All access
+// goes through its methods, which are safe for concurrent use.
+type ImportProgress struct {
+	mu      sync.Mutex
+	running bool
+	done    bool
+	stage   string
+	result  ImportResult
+	summary string
+	errMsg  string
+}
+
+// start marks the import as running and clears any previous state. It returns
+// false if an import is already in flight.
+func (p *ImportProgress) start() bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.running {
+		return false
+	}
+	p.running = true
+	p.done = false
+	p.stage = "Starting"
+	p.result = ImportResult{}
+	p.summary = ""
+	p.errMsg = ""
+	return true
+}
+
+// update records the current stage and counts.
+func (p *ImportProgress) update(stage string, res ImportResult) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.stage = stage
+	p.result = res
+}
+
+// finish records the terminal state (success summary or error message).
+func (p *ImportProgress) finish(summary, errMsg string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.running = false
+	p.done = true
+	p.summary = summary
+	p.errMsg = errMsg
+}
+
+// snapshot returns a JSON-serializable copy of the current progress.
+func (p *ImportProgress) snapshot() map[string]interface{} {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return map[string]interface{}{
+		"running": p.running,
+		"done":    p.done,
+		"stage":   p.stage,
+		"result":  p.result,
+		"summary": p.summary,
+		"error":   p.errMsg,
+	}
+}
+
+// progressBatch controls how often row-level progress is reported while reading
+// large tables (changelog, stats, bookings).
+const progressBatch = 500
+
 // ImportFromMySQL connects to a CompanyMaps 8 MySQL database and copies every
 // relevant table into the BoltDB buckets. It is idempotent: re-running overwrites
-// keyed records.
-func (app *App) ImportFromMySQL(c MySQLConfig) (*ImportResult, error) {
+// keyed records. The optional report callback is invoked as work progresses so a
+// caller can surface live progress to the UI; it may be nil.
+func (app *App) ImportFromMySQL(c MySQLConfig, report func(stage string, res ImportResult)) (*ImportResult, error) {
 	dsn := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?charset=utf8mb4&parseTime=false",
 		c.User, c.Password, c.Host, c.Port, c.Database)
 	sqldb, err := sql.Open("mysql", dsn)
@@ -54,6 +122,14 @@ func (app *App) ImportFromMySQL(c MySQLConfig) (*ImportResult, error) {
 	res := &ImportResult{}
 	db := app.db
 
+	// progress reports the current stage and counts to the caller (if any).
+	progress := func(stage string) {
+		if report != nil {
+			report(stage, *res)
+		}
+	}
+	progress("Connecting")
+
 	// config_general -> settings
 	if rows, err := sqldb.Query("SELECT `variable`,`value` FROM `config_general`"); err == nil {
 		for rows.Next() {
@@ -66,6 +142,7 @@ func (app *App) ImportFromMySQL(c MySQLConfig) (*ImportResult, error) {
 		}
 		rows.Close()
 	}
+	progress("Settings")
 
 	// config_maplist -> maps
 	mapNames := []string{}
@@ -81,6 +158,7 @@ func (app *App) ImportFromMySQL(c MySQLConfig) (*ImportResult, error) {
 		}
 		rows.Close()
 	}
+	progress("Maps")
 
 	// desks_<map> -> desks
 	for _, mn := range mapNames {
@@ -99,11 +177,15 @@ func (app *App) ImportFromMySQL(c MySQLConfig) (*ImportResult, error) {
 				d.Map = mn
 				if db.PutDesk(d) == nil {
 					res.Desks++
+					if res.Desks%progressBatch == 0 {
+						progress("Desks")
+					}
 				}
 			}
 		}
 		rows.Close()
 	}
+	progress("Desks")
 
 	// ldap-mirror -> ldapmirror
 	if rows, err := sqldb.Query("SELECT `givenname`,`surname`,`telephonenumber`,`mail`,`physicaldeliveryofficename`,`ipphone`,`description`,`department`,`mobile` FROM `ldap-mirror`"); err == nil {
@@ -119,6 +201,7 @@ func (app *App) ImportFromMySQL(c MySQLConfig) (*ImportResult, error) {
 			res.LdapUsers = len(users)
 		}
 	}
+	progress("Address book")
 
 	// bookings -> bookings
 	if rows, err := sqldb.Query("SELECT `date`,`map`,`desk`,`user`,`fullname`,`phone`,`mail` FROM `bookings`"); err == nil {
@@ -127,11 +210,15 @@ func (app *App) ImportFromMySQL(c MySQLConfig) (*ImportResult, error) {
 			if rows.Scan(&b.Date, &b.Map, &b.Desk, &b.User, &b.Fullname, &b.Phone, &b.Mail) == nil {
 				if db.AddBooking(b) == nil {
 					res.Bookings++
+					if res.Bookings%progressBatch == 0 {
+						progress("Bookings")
+					}
 				}
 			}
 		}
 		rows.Close()
 	}
+	progress("Bookings")
 
 	// config_teams -> teams
 	if rows, err := sqldb.Query("SELECT `teamname`,`teammembers` FROM `config_teams`"); err == nil {
@@ -240,11 +327,15 @@ func (app *App) ImportFromMySQL(c MySQLConfig) (*ImportResult, error) {
 			if rows.Scan(&e.Year, &e.Month, &e.Day, &e.Hour, &e.Minute, &e.Name, &e.Avatar, &e.Type, &e.Oldvalue, &e.Newvalue) == nil {
 				if db.AddChangelog(e) == nil {
 					res.Changelog++
+					if res.Changelog%progressBatch == 0 {
+						progress("Change history")
+					}
 				}
 			}
 		}
 		rows.Close()
 	}
+	progress("Change history")
 
 	// stats -> stats
 	if rows, err := sqldb.Query("SELECT `date`,`year`,`month`,`day`,`count` FROM `stats`"); err == nil {
@@ -253,11 +344,15 @@ func (app *App) ImportFromMySQL(c MySQLConfig) (*ImportResult, error) {
 			if rows.Scan(&s.Date, &s.Year, &s.Month, &s.Day, &s.Count) == nil {
 				if db.PutStat(s) == nil {
 					res.Stats++
+					if res.Stats%progressBatch == 0 {
+						progress("Statistics")
+					}
 				}
 			}
 		}
 		rows.Close()
 	}
+	progress("Statistics")
 
 	// health_whitelist -> whitelist
 	if rows, err := sqldb.Query("SELECT `type`,`text` FROM `health_whitelist`"); err == nil {
@@ -273,5 +368,6 @@ func (app *App) ImportFromMySQL(c MySQLConfig) (*ImportResult, error) {
 	}
 
 	_ = db.AuditLog("setup", "admin", fmt.Sprintf("MySQL import complete: %d maps, %d desks, %d ldap users", res.Maps, res.Desks, res.LdapUsers))
+	progress("Done")
 	return res, nil
 }

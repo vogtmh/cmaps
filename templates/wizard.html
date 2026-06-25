@@ -49,7 +49,8 @@
     <div class="card">
       <span class="step">Path B — migrate CompanyMaps 8</span>
       <h2>Step 1 · Import the MySQL database</h2>
-      <form method="POST" action="/setup/import">
+      <p class="sub">For large databases this can take a while. The import runs in the background and the progress below updates live — you can leave this page open.</p>
+      <form id="importForm" method="POST" action="/setup/import">
         <div class="row">
           <div><label>Host</label><input type="text" name="host" value="localhost"></div>
           <div><label>Port</label><input type="text" name="port" value="3306"></div>
@@ -59,8 +60,17 @@
           <div><label>User</label><input type="text" name="user"></div>
           <div><label>Password</label><input type="password" name="password"></div>
         </div>
-        <button class="btn" type="submit">Import database</button>
+        <button class="btn" type="submit" id="importBtn">Import database</button>
       </form>
+      <div id="importProgress" style="display:none; margin-top:18px;">
+        <div style="font-size:.9em; color:#444; margin-bottom:6px;">
+          <span id="importStage">Starting…</span>
+        </div>
+        <div style="background:#e6e8eb; border-radius:6px; overflow:hidden; height:10px;">
+          <div id="importBar" style="background:#0a66c2; height:100%; width:0; transition:width .3s;"></div>
+        </div>
+        <pre id="importCounts" style="font-size:.8em; color:#555; margin:10px 0 0; white-space:pre-wrap;"></pre>
+      </div>
     </div>
 
     <div class="card">
@@ -110,5 +120,85 @@
       </form>
     </div>
   </div>
+  <script>
+    (function () {
+      var form = document.getElementById('importForm');
+      if (!form) return;
+      var btn = document.getElementById('importBtn');
+      var box = document.getElementById('importProgress');
+      var stageEl = document.getElementById('importStage');
+      var barEl = document.getElementById('importBar');
+      var countsEl = document.getElementById('importCounts');
+      // Stage order used to estimate the progress-bar width.
+      var stages = ['Starting', 'Connecting', 'Settings', 'Maps', 'Desks',
+        'Address book', 'Bookings', 'Change history', 'Statistics', 'Done'];
+      var poll;
+
+      function renderCounts(res) {
+        if (!res) return '';
+        var labels = {
+          maps: 'Maps', desks: 'Desks', ldap_users: 'Address book',
+          bookings: 'Bookings', teams: 'Teams', changelog: 'Change history',
+          stats: 'Statistics', settings: 'Settings'
+        };
+        var out = [];
+        for (var k in labels) {
+          if (res[k]) out.push(labels[k] + ': ' + res[k].toLocaleString());
+        }
+        return out.join('\n');
+      }
+
+      function update(p) {
+        stageEl.textContent = p.error ? p.error : (p.stage || 'Working…');
+        var idx = stages.indexOf(p.stage);
+        var pct = p.done ? 100 : (idx >= 0 ? Math.round((idx / (stages.length - 1)) * 100) : 5);
+        barEl.style.width = pct + '%';
+        if (p.error) barEl.style.background = '#b71c1c';
+        countsEl.textContent = renderCounts(p.result);
+        if (p.done) {
+          clearInterval(poll);
+          if (p.error) {
+            btn.disabled = false;
+            btn.textContent = 'Retry import';
+          } else {
+            stageEl.textContent = p.summary || 'Import complete.';
+            btn.textContent = 'Import complete';
+            setTimeout(function () { location.href = '/setup?status=' + encodeURIComponent(p.summary || 'Import complete.'); }, 1200);
+          }
+        }
+      }
+
+      function startPolling() {
+        poll = setInterval(function () {
+          fetch('/setup/import/progress', { credentials: 'same-origin' })
+            .then(function (r) { return r.json(); })
+            .then(update)
+            .catch(function () {});
+        }, 1000);
+      }
+
+      form.addEventListener('submit', function (e) {
+        e.preventDefault();
+        btn.disabled = true;
+        btn.textContent = 'Importing…';
+        box.style.display = 'block';
+        barEl.style.background = '#0a66c2';
+        var data = new URLSearchParams(new FormData(form));
+        fetch('/setup/import', { method: 'POST', body: data, credentials: 'same-origin' })
+          .then(function (r) { return r.json(); })
+          .then(function (resp) {
+            if (resp.started === false) {
+              stageEl.textContent = resp.message || 'An import is already running.';
+            }
+            startPolling();
+          })
+          .catch(function () {
+            btn.disabled = false;
+            btn.textContent = 'Import database';
+            stageEl.textContent = 'Could not start the import.';
+          });
+      });
+    })();
+  </script>
 </body>
 </html>

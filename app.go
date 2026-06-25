@@ -12,11 +12,12 @@ import (
 
 // App is the central application container shared by all handlers.
 type App struct {
-	cfg      *Config
-	db       *DB
-	sessions *SessionStore
-	tmpl     *template.Template
-	staticFS fs.FS
+	cfg        *Config
+	db         *DB
+	sessions   *SessionStore
+	tmpl       *template.Template
+	staticFS   fs.FS
+	importProg ImportProgress
 }
 
 // Session holds the authenticated user's identity, mirroring the PHP $_SESSION
