@@ -59,6 +59,7 @@ func (app *App) registerRESTRoutes(mux *http.ServeMux) {
 	rest("/rest/meeting", app.handleRestMeeting)
 	rest("/rest/system", app.handleRestSystem)
 	rest("/rest/ldap", app.handleRestLdap)
+	rest("/rest/ldap/debug", app.handleRestLdapDebug)
 }
 
 // handleIndex serves the main client UI (or the setup wizard on first run).
@@ -129,7 +130,6 @@ func (app *App) handleChanges(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "template error: "+err.Error(), http.StatusInternalServerError)
 	}
 }
-
 
 // handleLogin renders the login form (GET) and authenticates local users (POST).
 func (app *App) handleLogin(w http.ResponseWriter, r *http.Request) {

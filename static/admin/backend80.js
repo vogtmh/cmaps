@@ -226,6 +226,77 @@ function syncLDAP(ldap_id, adminuser) {
   })
 }
 
+function showLdapDebug() {
+  var body = document.getElementById('ldapDebugBody');
+  body.innerHTML = 'Loading...';
+  document.getElementById('ldapDebugOverlay').style.display = 'block';
+  $.ajax({
+    url: '../rest/ldap/debug?token='+token,
+    async: true,
+    type: 'get',
+    dataType: 'JSON',
+    success: function(d) {
+      body.innerHTML = renderLdapDebug(d);
+    },
+    error: function() {
+      body.innerHTML = '<span style="color:#a00;">Failed to load debug data (forbidden or server error).</span>';
+    }
+  })
+}
+
+function esc(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function renderLdapDebug(d) {
+  if (!d || !d.when) {
+    return '<p>No sync has run yet since the server started. Click "Sync now" on a source first.</p>';
+  }
+  var h = '<p><b>When:</b> ' + esc(d.when) + ' &nbsp; <b>Total mirrored:</b> ' + esc(d.total) + '</p>';
+  var srcs = d.sources || [];
+  if (srcs.length === 0) {
+    h += '<p>No sources were processed (none configured?).</p>';
+    return h;
+  }
+  for (var i = 0; i < srcs.length; i++) {
+    var s = srcs[i];
+    h += '<div style="border:1px solid #ccc;border-radius:4px;padding:10px;margin-bottom:12px;">';
+    h += '<div style="font-weight:bold;font-size:14px;">' + esc(s.description || '(no description)') + '</div>';
+    h += '<table style="border:0;margin-top:6px;">';
+    h += '<tr><td style="padding-right:14px;">Server</td><td>' + esc(s.server) + ' (' + esc(s.type) + ')</td></tr>';
+    h += '<tr><td>OU</td><td>' + esc(s.ou) + '</td></tr>';
+    h += '<tr><td>Bind user</td><td>' + esc(s.bind_user) + '</td></tr>';
+    h += '<tr><td>Connected</td><td>' + (s.connected ? 'yes' : 'NO') + '</td></tr>';
+    h += '<tr><td>Bound</td><td>' + (s.bound ? 'yes' : 'NO') + '</td></tr>';
+    h += '<tr><td>Entries found</td><td>' + esc(s.entries_found) + '</td></tr>';
+    h += '<tr><td>Mirrored</td><td>' + esc(s.mirrored) + '</td></tr>';
+    h += '<tr><td>Skipped</td><td>' + esc(s.skipped) + '</td></tr>';
+    h += '</table>';
+    if (s.error) {
+      h += '<div style="color:#a00;margin-top:6px;"><b>Error:</b> ' + esc(s.error) + '</div>';
+    }
+    if (s.skip_reasons && Object.keys(s.skip_reasons).length > 0) {
+      h += '<div style="margin-top:6px;"><b>Skip reasons:</b><ul style="margin:4px 0;">';
+      for (var k in s.skip_reasons) {
+        h += '<li>' + esc(k) + ': ' + esc(s.skip_reasons[k]) + '</li>';
+      }
+      h += '</ul></div>';
+    }
+    if (s.attribute_names && s.attribute_names.length > 0) {
+      h += '<div style="margin-top:6px;"><b>Attributes returned by AD (first entry):</b><br>' +
+           esc(s.attribute_names.join(', ')) + '</div>';
+    } else if (s.entries_found > 0) {
+      h += '<div style="margin-top:6px;color:#a60;">Entries were returned but no attributes were captured.</div>';
+    } else {
+      h += '<div style="margin-top:6px;color:#a60;">No entries matched the search filter ' +
+           '<code>(&amp;(physicaldeliveryofficename=*)(givenname=A*..Z*))</code> under the OU.</div>';
+    }
+    h += '</div>';
+  }
+  return h;
+}
+
 function showCharts(interval, divname) {
 
   // Check if canvas already exists or create one

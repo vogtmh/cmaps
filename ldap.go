@@ -16,6 +16,31 @@ var ldapSyncAttrs = []string{
 	"physicaldeliveryofficename", "samaccountname", "title", "department", "mobile",
 }
 
+// SourceDebug records diagnostics for one AD source during a sync run so the
+// admin panel can explain results like "0 users found".
+type SourceDebug struct {
+	Description    string         `json:"description"`
+	Server         string         `json:"server"`
+	Type           string         `json:"type"`
+	OU             string         `json:"ou"`
+	BindUser       string         `json:"bind_user"`
+	Connected      bool           `json:"connected"`
+	Bound          bool           `json:"bound"`
+	EntriesFound   int            `json:"entries_found"`
+	Mirrored       int            `json:"mirrored"`
+	Skipped        int            `json:"skipped"`
+	SkipReasons    map[string]int `json:"skip_reasons"`
+	AttributeNames []string       `json:"attribute_names"`
+	Error          string         `json:"error"`
+}
+
+// ADSyncDebug is the full diagnostic snapshot of the most recent sync.
+type ADSyncDebug struct {
+	When    string        `json:"when"`
+	Total   int           `json:"total"`
+	Sources []SourceDebug `json:"sources"`
+}
+
 // RunADSync mirrors all configured AD sources into the ldapmirror bucket,
 // recording employee/title/name changes in the changelog. It returns the number
 // of mirrored desk placements (one per office value; an office field may list
@@ -45,11 +70,15 @@ func (app *App) RunADSync() (int, error) {
 
 	var combined []LdapUser
 	seen := make(map[string]bool)
+	debug := ADSyncDebug{When: now.Format("2006-01-02 15:04:05")}
 
 	for _, src := range sources {
-		users, err := app.syncOneSource(src)
+		users, dbg, err := app.syncOneSource(src)
+		debug.Sources = append(debug.Sources, dbg)
 		if err != nil {
 			log.Printf("AD sync: source %q: %v", src.Description, err)
+			debug.Total = len(combined)
+			app.setSyncDebug(debug)
 			return len(combined), fmt.Errorf("source %q: %w", src.Description, err)
 		}
 
@@ -86,20 +115,51 @@ func (app *App) RunADSync() (int, error) {
 	if err := app.db.ReplaceLdap(combined); err != nil {
 		return len(combined), fmt.Errorf("writing mirror: %w", err)
 	}
+	debug.Total = len(combined)
+	app.setSyncDebug(debug)
 	return len(combined), nil
 }
 
+// setSyncDebug stores the most recent sync diagnostics (concurrency-safe).
+func (app *App) setSyncDebug(d ADSyncDebug) {
+	app.syncDebugMu.Lock()
+	app.syncDebug = d
+	app.syncDebugMu.Unlock()
+}
+
+// SyncDebug returns the most recent sync diagnostics (concurrency-safe).
+func (app *App) SyncDebug() ADSyncDebug {
+	app.syncDebugMu.Lock()
+	defer app.syncDebugMu.Unlock()
+	return app.syncDebug
+}
+
 // syncOneSource queries one AD source A-Z and returns the mirrored placements.
-func (app *App) syncOneSource(src LdapSource) ([]LdapUser, error) {
+// The returned SourceDebug captures diagnostics (entries found, skip reasons,
+// the attribute names AD actually returned) to help explain empty results.
+func (app *App) syncOneSource(src LdapSource) ([]LdapUser, SourceDebug, error) {
+	dbg := SourceDebug{
+		Description: src.Description,
+		Server:      src.Server,
+		Type:        src.Type,
+		OU:          src.OU,
+		BindUser:    src.LdapUser,
+		SkipReasons: map[string]int{},
+	}
+
 	conn, err := dialLDAP(src)
 	if err != nil {
-		return nil, err
+		dbg.Error = err.Error()
+		return nil, dbg, err
 	}
 	defer conn.Close()
+	dbg.Connected = true
 
 	if err := conn.Bind(src.LdapUser, src.LdapPass); err != nil {
-		return nil, fmt.Errorf("bind: %w", err)
+		dbg.Error = "bind: " + err.Error()
+		return nil, dbg, fmt.Errorf("bind: %w", err)
 	}
+	dbg.Bound = true
 
 	var out []LdapUser
 	for letter := 'A'; letter <= 'Z'; letter++ {
@@ -112,20 +172,45 @@ func (app *App) syncOneSource(src LdapSource) ([]LdapUser, error) {
 		)
 		sr, err := conn.SearchWithPaging(req, 1000)
 		if err != nil {
-			return nil, fmt.Errorf("search %c: %w", letter, err)
+			dbg.Error = fmt.Sprintf("search %c: %v", letter, err)
+			return nil, dbg, fmt.Errorf("search %c: %w", letter, err)
 		}
+		dbg.EntriesFound += len(sr.Entries)
 		for _, e := range sr.Entries {
-			givenname := e.GetAttributeValue("givenname")
-			surname := e.GetAttributeValue("sn")
-			mail := e.GetAttributeValue("mail")
-			office := e.GetAttributeValue("physicaldeliveryofficename")
-			userid := e.GetAttributeValue("samaccountname")
-			title := e.GetAttributeValue("title")
+			// Record the attribute names AD returned for the first entry seen;
+			// a case mismatch here is the usual cause of empty mirrors.
+			if dbg.AttributeNames == nil && len(e.Attributes) > 0 {
+				for _, a := range e.Attributes {
+					dbg.AttributeNames = append(dbg.AttributeNames, a.Name)
+				}
+			}
+
+			givenname := e.GetEqualFoldAttributeValue("givenname")
+			surname := e.GetEqualFoldAttributeValue("sn")
+			mail := e.GetEqualFoldAttributeValue("mail")
+			office := e.GetEqualFoldAttributeValue("physicaldeliveryofficename")
+			userid := e.GetEqualFoldAttributeValue("samaccountname")
+			title := e.GetEqualFoldAttributeValue("title")
 			if title == "" {
 				title = "-"
 			}
 
-			if office == "" || office == "-" || givenname == "" || surname == "" || mail == "" {
+			switch {
+			case office == "" || office == "-":
+				dbg.Skipped++
+				dbg.SkipReasons["no office"]++
+				continue
+			case givenname == "":
+				dbg.Skipped++
+				dbg.SkipReasons["no givenname"]++
+				continue
+			case surname == "":
+				dbg.Skipped++
+				dbg.SkipReasons["no surname"]++
+				continue
+			case mail == "":
+				dbg.Skipped++
+				dbg.SkipReasons["no mail"]++
 				continue
 			}
 
@@ -133,11 +218,11 @@ func (app *App) syncOneSource(src LdapSource) ([]LdapUser, error) {
 				Userid:          userid,
 				Givenname:       givenname,
 				Surname:         surname,
-				Telephonenumber: e.GetAttributeValue("telephonenumber"),
+				Telephonenumber: e.GetEqualFoldAttributeValue("telephonenumber"),
 				Mail:            mail,
 				Description:     title,
-				Department:      e.GetAttributeValue("department"),
-				Mobile:          e.GetAttributeValue("mobile"),
+				Department:      e.GetEqualFoldAttributeValue("department"),
+				Mobile:          e.GetEqualFoldAttributeValue("mobile"),
 			}
 
 			// An office field may encode several desk places separated by "|".
@@ -158,7 +243,8 @@ func (app *App) syncOneSource(src LdapSource) ([]LdapUser, error) {
 			}
 		}
 	}
-	return out, nil
+	dbg.Mirrored = len(out)
+	return out, dbg, nil
 }
 
 // dialLDAP opens a connection to an AD source honouring its LDAP/LDAPS type.

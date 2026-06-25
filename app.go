@@ -18,6 +18,9 @@ type App struct {
 	tmpl       *template.Template
 	staticFS   fs.FS
 	importProg ImportProgress
+
+	syncDebugMu sync.Mutex
+	syncDebug   ADSyncDebug
 }
 
 // Session holds the authenticated user's identity, mirroring the PHP $_SESSION

@@ -57,14 +57,14 @@ type adminData struct {
 	PermStats    int
 	PermAuditlog int
 
-	GeneralVars []kv
-	Vips        []VIP
-	LdapSources []LdapSource
-	Maps        []mapRow
-	DeskMaps    []string
-	Mapadmins   []adminUserRow
-	Roles       []Role
-	Teams       []Team
+	GeneralVars  []kv
+	Vips         []VIP
+	LdapSources  []LdapSource
+	Maps         []mapRow
+	DeskMaps     []string
+	Mapadmins    []adminUserRow
+	Roles        []Role
+	Teams        []Team
 	AuditEntries []AuditEntry
 	AuditFilter  string
 	AuditTypes   []string
@@ -442,7 +442,12 @@ func (app *App) handleRestLdap(w http.ResponseWriter, r *http.Request) {
 			srcs, _ := app.db.ListLdapSources()
 			for _, s := range srcs {
 				if s.ID == id {
-					users, err := app.syncOneSource(s)
+					users, dbg, err := app.syncOneSource(s)
+					app.setSyncDebug(ADSyncDebug{
+						When:    nowTimestamp(),
+						Total:   len(users),
+						Sources: []SourceDebug{dbg},
+					})
 					if err != nil {
 						http.Error(w, err.Error(), http.StatusInternalServerError)
 						return
@@ -466,6 +471,17 @@ func (app *App) handleRestLdap(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, map[string]interface{}{"status": "ok", "count": count})
+}
+
+// handleRestLdapDebug returns diagnostics from the most recent AD sync so the
+// admin panel can show why a sync mirrored few/no users.
+func (app *App) handleRestLdapDebug(w http.ResponseWriter, r *http.Request) {
+	sess, ok := app.currentSession(r)
+	if !ok || app.permLevel(sess, "ldap") < 1 {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	writeJSON(w, app.SyncDebug())
 }
 
 // orDefaultStr returns v trimmed, or def when empty.
