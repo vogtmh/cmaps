@@ -61,24 +61,25 @@ type adminData struct {
 	PermAuditlog   int
 	PermAdminpanel int
 
-	GeneralVars  []kv
-	Vips         []VIP
-	LogoRegular  string
-	LogoHover    string
-	LdapSources  []LdapSource
-	RobinSpaces  []RobinSpace
-	RobinOrg     string
-	RobinSet     bool
-	Maps         []mapRow
-	DeskMaps     []string
-	Mapadmins    []adminUserRow
-	Roles        []Role
-	Teams        []Team
-	AuditEntries []AuditEntry
-	AuditFilter  string
-	AuditTypes   []string
-	Countryflags []string
-	Timezones    []string
+	GeneralVars     []kv
+	Vips            []VIP
+	LogoRegular     string
+	LogoHover       string
+	LdapSources     []LdapSource
+	RobinSpaces     []RobinSpace
+	RobinMapOptions []string
+	RobinOrg        string
+	RobinSet        bool
+	Maps            []mapRow
+	DeskMaps        []string
+	Mapadmins       []adminUserRow
+	Roles           []Role
+	Teams           []Team
+	AuditEntries    []AuditEntry
+	AuditFilter     string
+	AuditTypes      []string
+	Countryflags    []string
+	Timezones       []string
 }
 
 // commonTimezones is the curated timezone list offered when creating a map. The
@@ -162,6 +163,18 @@ func (app *App) handleAdminPost(w http.ResponseWriter, r *http.Request, sess Ses
 			_ = app.db.DeleteRobinSpace(name)
 			_ = app.db.AuditLog("LDAP", sess.Username, "Robin space removed ("+name+")")
 			return "Robin space removed."
+		}
+		if sn := r.FormValue("setRobinMapSpace"); sn != "" {
+			spaces, _ := app.db.ListRobinSpaces()
+			for _, s := range spaces {
+				if s.Spacename == sn {
+					s.Mapname = strings.ToLower(strings.TrimSpace(r.FormValue("robinMapname")))
+					_ = app.db.PutRobinSpace(s)
+					_ = app.db.AuditLog("LDAP", sess.Username, "Robin space map updated ("+sn+")")
+					break
+				}
+			}
+			return "Robin map updated."
 		}
 		if r.FormValue("saveRobin") != "" {
 			if tok := strings.TrimSpace(r.FormValue("robintoken")); tok != "" {
@@ -433,6 +446,23 @@ func (app *App) buildAdminData(r *http.Request, sess Session, tab, msg string) a
 		sort.Slice(d.RobinSpaces, func(i, j int) bool { return d.RobinSpaces[i].Spacename < d.RobinSpaces[j].Spacename })
 		d.RobinOrg = app.db.GetSetting("robinOrganisation")
 		d.RobinSet = app.db.GetSetting("robintoken") != ""
+		// Build the map dropdown: published maps plus any value currently in use
+		// (so every row's selection stays selectable even if it isn't a real map yet).
+		mapSet := map[string]bool{}
+		if maps, err := app.db.ListMaps(); err == nil {
+			for _, m := range maps {
+				if m.Published == "yes" && m.Mapname != "overview" && !strings.Contains(m.Mapname, "-nomap") {
+					mapSet[m.Mapname] = true
+				}
+			}
+		}
+		for _, s := range d.RobinSpaces {
+			mapSet[s.MapName()] = true
+		}
+		for name := range mapSet {
+			d.RobinMapOptions = append(d.RobinMapOptions, name)
+		}
+		sort.Strings(d.RobinMapOptions)
 
 	case "maps":
 		maps, _ := app.db.ListMaps()

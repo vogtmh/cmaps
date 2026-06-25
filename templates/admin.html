@@ -254,7 +254,22 @@
     <tr><td>&nbsp;</td></tr>
     {{range .RobinSpaces}}
     <tr>
-      <td>{{.Spacename}}</td><td>{{.MapName}}</td><td>{{.Spaceid}}</td>
+      <td>{{.Spacename}}</td>
+      <td>
+        {{if gt $.PermLdap 1}}
+        {{$cur := .MapName}}
+        <form action="?tab=ldap" method="post" style="display:inline">
+          <input type="hidden" name="tab" value="ldap">
+          <input type="hidden" name="setRobinMapSpace" value="{{.Spacename}}">
+          <select name="robinMapname" style="width:200px;" onchange="this.form.submit()">
+            {{range $.RobinMapOptions}}
+            <option value="{{.}}"{{if eq . $cur}} selected{{end}}>{{.}}</option>
+            {{end}}
+          </select>
+        </form>
+        {{else}}{{.MapName}}{{end}}
+      </td>
+      <td>{{.Spaceid}}</td>
       <td>
         {{if gt $.PermLdap 1}}
         <form action="?tab=ldap" method="post" style="display:inline">
