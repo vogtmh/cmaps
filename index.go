@@ -78,7 +78,8 @@ type indexData struct {
 	Findme    string
 	Teamlabel string
 
-	SAMLEnabled bool
+	SAMLEnabled        bool
+	AllowLocalFallback bool
 }
 
 // renderIndex computes the page state and renders index.html.
@@ -281,7 +282,8 @@ func (app *App) renderIndex(w http.ResponseWriter, r *http.Request, sess Session
 		Findme:    findme,
 		Teamlabel: q.Get("teamlabel"),
 
-		SAMLEnabled: app.cfg.SAML.Enabled,
+		SAMLEnabled:        app.cfg.SAML.Enabled,
+		AllowLocalFallback: app.cfg.SAML.AllowLocalPasswordFallback,
 	}
 
 	app.render(w, "index.html", data)

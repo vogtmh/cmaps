@@ -188,6 +188,9 @@
     var region = "{{.Region}}";
     var tzOffset = "{{.TzOffset}}";
 
+    // Whether the SAML "Login via SSO" option should be offered on the login form.
+    var saml_login_available = {{if and .SAMLEnabled (not .DisableSAML)}}1{{else}}0{{end}};
+
     console.log("Timezone set to: " + region);
     var clockID;
     var d = new Date();
@@ -277,7 +280,7 @@
 <!-- Login icon -->
 {{if not .LoggedIn}}
 <div class="loginicon" id="loginicon" style="position:fixed; bottom:10px;left:10px; width:50px; z-index:3; transform:scale({{.Autozoom}});transform-origin:0% 100%;">
-  {{if and .SAMLEnabled (not .DisableSAML)}}
+  {{if and .SAMLEnabled (not .DisableSAML) (not .AllowLocalFallback)}}
   <input type="image" src="images/login-user.png" alt="e" onclick="location.href='/auth/saml/login'" onmouseover='this.src="images/login-user_on.png"' onmouseout='this.src="images/login-user.png"' style="width:50px;">
   {{else}}
   <input type="image" src="images/login-user.png" alt="e" onClick="loginForm(true)" onmouseover='this.src="images/login-user_on.png"' onmouseout='this.src="images/login-user.png"'>

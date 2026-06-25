@@ -213,6 +213,15 @@ function loginForm (showform,mode) {
     switch (showform) {
       case true:
 
+        var samlButton = '';
+        if (typeof saml_login_available !== 'undefined' && saml_login_available == 1) {
+          samlButton = `
+              <div style="clear:both; text-align:center; margin-top:18px; padding-top:14px; border-top:1px solid #555;">
+                <div style="margin-bottom:8px; opacity:0.7;">OR</div>
+                <input type="button" value="Login via SAML" style="width:92%; background-color:#0a66c2;" onClick="location.href='/auth/saml/login'">
+              </div>`;
+        }
+
         var logindata =`
           <div id="logindata" style="position:absolute; left:25%; top:25%; width:50%; height:50%;">
             <form id="LoginForm" name="Login" method="post" autocomplete="off">
@@ -224,8 +233,9 @@ function loginForm (showform,mode) {
               <input type="submit" value="Login" style="width:45%; float: left;" formaction='javascript:loginUser("`+mode+`")'>
             </form>
             <input type="button" value="Cancel" style="width:45%; float:right; background-color:#f00;" onClick="loginForm(false)">
-            <div id="loginstatus" style="height:43px; border-top: 8px; width:100%;border-radius:4px;background-color:#00f;float:left;display:none;text-align:center;line-height:43px;"></div>
-          </div>
+            <div id="loginstatus" style="height:43px; border-top: 8px; width:100%;border-radius:4px;background-color:#00f;float:left;display:none;text-align:center;line-height:43px;"></div>`
+            + samlButton +
+          `</div>
         `;
         var newElement = document.createElement('div');
         newElement.setAttribute('id', 'loginform');
