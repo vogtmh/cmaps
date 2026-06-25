@@ -277,8 +277,8 @@
 <!-- Login icon -->
 {{if not .LoggedIn}}
 <div class="loginicon" id="loginicon" style="position:fixed; bottom:10px;left:10px; width:50px; z-index:3; transform:scale({{.Autozoom}});transform-origin:0% 100%;">
-  {{if .DisableSAML}}
-  <input type="image" src="images/login-user.png" alt="e" onclick="location.href='rest/account'" onmouseover='this.src="images/login-user_on.png"' onmouseout='this.src="images/login-user.png"' style="width:50px;">
+  {{if and .SAMLEnabled (not .DisableSAML)}}
+  <input type="image" src="images/login-user.png" alt="e" onclick="location.href='/auth/saml/login'" onmouseover='this.src="images/login-user_on.png"' onmouseout='this.src="images/login-user.png"' style="width:50px;">
   {{else}}
   <input type="image" src="images/login-user.png" alt="e" onClick="loginForm(true)" onmouseover='this.src="images/login-user_on.png"' onmouseout='this.src="images/login-user.png"'>
   {{end}}
