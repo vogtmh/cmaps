@@ -4,8 +4,8 @@
 <head>
   <title>{{.AppTitle}}</title>
   <meta charset="utf-8">
-  <link rel="stylesheet" type="text/css" href="cmaps80.css">
-  <link rel="stylesheet" type="text/css" href="client80.css">
+  <link rel="stylesheet" type="text/css" href="cmaps80.css?v={{assetver}}">
+  <link rel="stylesheet" type="text/css" href="client80.css?v={{assetver}}">
   <link rel="apple-touch-icon" sizes="57x57" href="favicons/apple-touch-icon-57x57.png">
   <link rel="apple-touch-icon" sizes="60x60" href="favicons/apple-touch-icon-60x60.png">
   <link rel="apple-touch-icon" sizes="72x72" href="favicons/apple-touch-icon-72x72.png">
@@ -25,11 +25,11 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=4.0, user-scalable=yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <script src="tools/jquery3.js"></script>
-  <script src="tools/jquery-migrate-1.4.1.min.js"></script>
-  <script src="user80.js"></script>
-  <script src="tools/resize80.js"></script>
-  <script src="tools/underscore.js"></script>
+  <script src="tools/jquery3.js?v={{assetver}}"></script>
+  <script src="tools/jquery-migrate-1.4.1.min.js?v={{assetver}}"></script>
+  <script src="user80.js?v={{assetver}}"></script>
+  <script src="tools/resize80.js?v={{assetver}}"></script>
+  <script src="tools/underscore.js?v={{assetver}}"></script>
 </head>
 
 <body style="min-height:1920px; width:100%; margin:0px; overflow-x:hidden;{{if .Printmode}} background:none;transform-origin:50% 0%;{{end}}">
@@ -162,7 +162,7 @@
   <div id="group_label" style="position: absolute; color: #FF7F00; text-align:center; width: 200px; height: 70px; left:0px;top:0px;visibility:hidden; font-size:50px; font-weight: bold; z-index:100;background-color: rgba(0, 0, 0, 0.3);"></div>
   <div id="group_border" style="position: absolute; border-radius: 25px;border: 8px solid #FF7F00; background-color: rgba(255, 127, 0, 0.2); padding: 20px; width: 200px; height: 150px; left:0px;top:0px;visibility:hidden;"></div>
 
-  {{if .IsEditor}}<script src="admin80.js"></script>{{else}}<script src="tools/empty.js"></script>{{end}}
+  {{if .IsEditor}}<script src="admin80.js?v={{assetver}}"></script>{{else}}<script src="tools/empty.js?v={{assetver}}"></script>{{end}}
 
   <script>
     var targetScreenWidth = {{.TargetScreenWidth}};

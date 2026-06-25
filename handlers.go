@@ -117,6 +117,11 @@ func (app *App) serveStaticAsset(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	// Embedded files carry a zero modtime, so ServeContent emits no
+	// Last-Modified/ETag and browsers refetch on every load. Set an explicit
+	// Cache-Control so static assets (CSS/JS/images, the map background) are
+	// cached. JS/CSS are versioned with ?v= so deploys still bust the cache.
+	w.Header().Set("Cache-Control", "public, max-age=86400")
 	http.ServeContent(w, r, info.Name(), info.ModTime(), rs)
 }
 

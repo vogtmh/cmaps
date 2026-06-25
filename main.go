@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"time"
 )
 
@@ -22,6 +23,31 @@ var staticFS embed.FS
 //
 //go:embed sample
 var sampleFS embed.FS
+
+// assetVersion is appended as a ?v= query to versioned assets (JS/CSS) so a new
+// deployment busts the browser cache. It is derived from the running binary's
+// modification time, which changes on every deploy/rebuild.
+var assetVersion = computeAssetVersion()
+
+func computeAssetVersion() string {
+	if exe, err := os.Executable(); err == nil {
+		if fi, err := os.Stat(exe); err == nil {
+			return strconv.FormatInt(fi.ModTime().Unix(), 36)
+		}
+	}
+	return strconv.FormatInt(time.Now().Unix(), 36)
+}
+
+// cacheControl wraps a handler and adds a long-lived public Cache-Control header
+// so browsers cache static assets and user images instead of refetching them on
+// every page load. Versioned assets (JS/CSS via ?v=) are safe to cache long-term.
+func cacheControl(maxAge time.Duration, h http.Handler) http.Handler {
+	value := "public, max-age=" + strconv.Itoa(int(maxAge.Seconds()))
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", value)
+		h.ServeHTTP(w, r)
+	})
+}
 
 func main() {
 	cfg, err := loadOrCreateConfig()
@@ -43,7 +69,8 @@ func main() {
 	defer db.Close()
 
 	tmpl, err := template.New("").Funcs(template.FuncMap{
-		"ucfirst": ucfirst,
+		"ucfirst":  ucfirst,
+		"assetver": func() string { return assetVersion },
 	}).ParseFS(templateFS, "templates/*.html")
 	if err != nil {
 		log.Fatalf("templates: %v", err)
@@ -91,12 +118,12 @@ func (app *App) routes(mux *http.ServeMux) {
 	mux.HandleFunc("/changes", app.handleChanges)
 
 	// Static assets (embedded)
-	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.FS(app.staticFS))))
+	mux.Handle("/static/", cacheControl(24*time.Hour, http.StripPrefix("/static/", http.FileServer(http.FS(app.staticFS)))))
 
 	// User data served from the data directory (maps, avatar cache).
-	mux.Handle("/maps/", http.StripPrefix("/maps/", http.FileServer(http.Dir(app.cfg.dataPath("maps")))))
-	mux.Handle("/avatarcache/", http.StripPrefix("/avatarcache/", http.FileServer(http.Dir(app.cfg.dataPath("avatarcache")))))
-	mux.Handle("/logos/", http.StripPrefix("/logos/", http.FileServer(http.Dir(app.cfg.dataPath("logos")))))
+	mux.Handle("/maps/", cacheControl(24*time.Hour, http.StripPrefix("/maps/", http.FileServer(http.Dir(app.cfg.dataPath("maps"))))))
+	mux.Handle("/avatarcache/", cacheControl(24*time.Hour, http.StripPrefix("/avatarcache/", http.FileServer(http.Dir(app.cfg.dataPath("avatarcache"))))))
+	mux.Handle("/logos/", cacheControl(24*time.Hour, http.StripPrefix("/logos/", http.FileServer(http.Dir(app.cfg.dataPath("logos"))))))
 
 	// First-run setup wizard.
 	mux.HandleFunc("/setup", app.handleSetup)
