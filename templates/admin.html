@@ -131,6 +131,26 @@
   </script>
 
 {{else if eq .ActiveTab "config"}}
+  <h2 style="margin-left:20px">Logo</h2><br />
+  <form action="?tab=config" method="post" enctype="multipart/form-data">
+    <input type="hidden" name="tab" value="config">
+    <table style="margin-left: 20px">
+      <tr style="font-weight:bold"><td width="270">Variable</td><td width="260">Current</td><td>Upload new (PNG/JPG/GIF)</td></tr>
+      <tr>
+        <td>logo_regular</td>
+        <td><img src="{{.LogoRegular}}" height="45" alt="logo_regular" style="background:#333;padding:4px;border-radius:4px;"></td>
+        <td><input type="file" name="logoRegular" accept="image/png,image/jpeg,image/gif"></td>
+      </tr>
+      <tr>
+        <td>logo_hover</td>
+        <td><img src="{{.LogoHover}}" height="45" alt="logo_hover" style="background:#333;padding:4px;border-radius:4px;"></td>
+        <td><input type="file" name="logoHover" accept="image/png,image/jpeg,image/gif"></td>
+      </tr>
+      <tr><td>&nbsp;</td></tr>
+      <tr><td><input type="submit" value="Upload logos" style="background:rgba(0,120,0,0.8); padding:6px 18px;"></td></tr>
+    </table>
+  </form>
+  <br/>
   <h2 style="margin-left:20px">Configured base variables</h2><br />
   <table style="margin-left: 20px">
     <tr style="font-weight:bold"><td width="270">Variable</td><td width="300">Value</td></tr>

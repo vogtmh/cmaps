@@ -30,7 +30,7 @@ func main() {
 	}
 
 	// Ensure the data directory and its subfolders exist.
-	for _, d := range []string{cfg.DataDir, cfg.dataPath("maps"), cfg.dataPath("avatarcache")} {
+	for _, d := range []string{cfg.DataDir, cfg.dataPath("maps"), cfg.dataPath("avatarcache"), cfg.dataPath("logos")} {
 		if err := os.MkdirAll(d, 0755); err != nil {
 			log.Fatalf("creating data dir %s: %v", d, err)
 		}
@@ -96,6 +96,7 @@ func (app *App) routes(mux *http.ServeMux) {
 	// User data served from the data directory (maps, avatar cache).
 	mux.Handle("/maps/", http.StripPrefix("/maps/", http.FileServer(http.Dir(app.cfg.dataPath("maps")))))
 	mux.Handle("/avatarcache/", http.StripPrefix("/avatarcache/", http.FileServer(http.Dir(app.cfg.dataPath("avatarcache")))))
+	mux.Handle("/logos/", http.StripPrefix("/logos/", http.FileServer(http.Dir(app.cfg.dataPath("logos")))))
 
 	// First-run setup wizard.
 	mux.HandleFunc("/setup", app.handleSetup)

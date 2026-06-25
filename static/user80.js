@@ -198,7 +198,7 @@ function logoutUser(mode) {
       }
       if (logstatus == 'ok') { 
         if (mode == 'admin') { 
-          location.href='../index.php'; 
+          location.href='/'; 
         }
         else {
           location.reload(); 

@@ -1,7 +1,10 @@
 package main
 
 import (
+	"image"
+	"image/png"
 	"io/fs"
+	"mime/multipart"
 	"net/http"
 	"os"
 	"sort"
@@ -60,6 +63,8 @@ type adminData struct {
 
 	GeneralVars  []kv
 	Vips         []VIP
+	LogoRegular  string
+	LogoHover    string
 	LdapSources  []LdapSource
 	Maps         []mapRow
 	DeskMaps     []string
@@ -236,8 +241,61 @@ func (app *App) handleAdminPost(w http.ResponseWriter, r *http.Request, sess Ses
 			_ = app.db.AuditLog("Teams", sess.Username, "New team created ("+name+")")
 			return "Team created."
 		}
+
+	case "config":
+		if app.permLevel(sess, "config") < 2 {
+			return ""
+		}
+		return app.saveLogosFromForm(r, sess)
 	}
 	return ""
+}
+
+// saveLogosFromForm stores any uploaded logo images and points the matching
+// settings (logo_regular / logo_hover) at the served file path.
+func (app *App) saveLogosFromForm(r *http.Request, sess Session) string {
+	uploads := []struct{ field, setting string }{
+		{"logoRegular", "logo_regular"},
+		{"logoHover", "logo_hover"},
+	}
+	saved := 0
+	for _, u := range uploads {
+		if r.MultipartForm == nil || len(r.MultipartForm.File[u.field]) == 0 {
+			continue
+		}
+		if err := app.saveLogoImage(u.setting, r.MultipartForm.File[u.field][0]); err != nil {
+			return "Error saving logo: " + err.Error()
+		}
+		_ = app.db.SetSetting(u.setting, "/logos/"+u.setting+".png")
+		_ = app.db.AuditLog("Settings", sess.Username, "Logo updated ("+u.setting+")")
+		saved++
+	}
+	if saved == 0 {
+		return ""
+	}
+	return "Logo updated."
+}
+
+// saveLogoImage decodes an uploaded image and writes it as a PNG into the data
+// directory's logos folder, named after the setting it backs.
+func (app *App) saveLogoImage(name string, fh *multipart.FileHeader) error {
+	src, err := fh.Open()
+	if err != nil {
+		return err
+	}
+	defer src.Close()
+
+	img, _, err := image.Decode(src)
+	if err != nil {
+		return err
+	}
+
+	dst, err := os.Create(app.cfg.dataPath("logos", name+".png"))
+	if err != nil {
+		return err
+	}
+	defer dst.Close()
+	return png.Encode(dst, img)
 }
 
 // createMapFromForm creates a new map (single-step: metadata + image upload).
@@ -336,6 +394,8 @@ func (app *App) buildAdminData(r *http.Request, sess Session, tab, msg string) a
 		}
 		sort.Slice(d.GeneralVars, func(i, j int) bool { return d.GeneralVars[i].Variable < d.GeneralVars[j].Variable })
 		d.Vips, _ = app.db.ListVips()
+		d.LogoRegular = app.settingOr("logo_regular", "/static/images/cmaps-regular.png")
+		d.LogoHover = app.settingOr("logo_hover", "/static/images/cmaps-hover.png")
 
 	case "ldap":
 		d.LdapSources, _ = app.db.ListLdapSources()
