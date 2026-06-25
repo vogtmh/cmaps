@@ -668,6 +668,84 @@ func (app *App) handleRestRobinTest(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]interface{}{"log": app.RunRobinSyncVerbose()})
 }
 
+// handleRestRobinSync starts a Robin meeting sync in the background (if one is
+// not already running) so the admin Sync tab can poll for live progress.
+func (app *App) handleRestRobinSync(w http.ResponseWriter, r *http.Request) {
+	sess, ok := app.currentSession(r)
+	if !ok || app.permLevel(sess, "ldap") < 2 {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	if !app.robinProg.start(0, "Starting…") {
+		writeJSON(w, map[string]interface{}{"started": false, "running": true})
+		return
+	}
+	_ = app.db.AuditLog("LDAP", sess.Username, "Robin meeting sync run")
+	go func() {
+		defer func() {
+			if rec := recover(); rec != nil {
+				app.robinProg.finish("", fmt.Sprintf("sync crashed: %v", rec))
+			}
+		}()
+		res := app.runRobinSyncStructured(&app.robinProg)
+		if res.Note != "" {
+			app.robinProg.finish(res.Note, "")
+			return
+		}
+		app.robinProg.finish(fmt.Sprintf("%d of %d room(s) matched a meeting desk.", res.MatchedRooms, res.TotalRooms), "")
+	}()
+	writeJSON(w, map[string]interface{}{"started": true})
+}
+
+// handleRestRobinProgress returns the current Robin sync progress snapshot.
+func (app *App) handleRestRobinProgress(w http.ResponseWriter, r *http.Request) {
+	sess, ok := app.currentSession(r)
+	if !ok || app.permLevel(sess, "ldap") < 1 {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	writeJSON(w, app.robinProg.snapshot())
+}
+
+// handleRestLdapSync starts an AD sync of all sources in the background so the
+// admin Sync tab can poll for live progress.
+func (app *App) handleRestLdapSync(w http.ResponseWriter, r *http.Request) {
+	sess, ok := app.currentSession(r)
+	if !ok || app.permLevel(sess, "ldap") < 2 {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	if !app.ldapProg.start(0, "Starting…") {
+		writeJSON(w, map[string]interface{}{"started": false, "running": true})
+		return
+	}
+	_ = app.db.AuditLog("LDAP", sess.Username, "Manual AD sync (all sources)")
+	go func() {
+		defer func() {
+			if rec := recover(); rec != nil {
+				app.ldapProg.finish("", fmt.Sprintf("sync crashed: %v", rec))
+			}
+		}()
+		count, err := app.runADSync(&app.ldapProg)
+		if err != nil {
+			app.ldapProg.finish("", err.Error())
+			return
+		}
+		app.ldapProg.finish(fmt.Sprintf("Mirrored %d placement(s).", count), "")
+	}()
+	writeJSON(w, map[string]interface{}{"started": true})
+}
+
+// handleRestLdapProgress returns the current AD sync progress snapshot.
+func (app *App) handleRestLdapProgress(w http.ResponseWriter, r *http.Request) {
+	sess, ok := app.currentSession(r)
+	if !ok || app.permLevel(sess, "ldap") < 1 {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	writeJSON(w, app.ldapProg.snapshot())
+}
+
 // orDefaultStr returns v trimmed, or def when empty.
 func orDefaultStr(v, def string) string {
 	v = strings.TrimSpace(v)

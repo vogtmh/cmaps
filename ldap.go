@@ -49,12 +49,23 @@ type ADSyncDebug struct {
 // This is the Go port of tools/ldap_connector.php (CLI path). MS Teams
 // notifications from the original are intentionally dropped.
 func (app *App) RunADSync() (int, error) {
+	return app.runADSync(nil)
+}
+
+// runADSync is the worker behind RunADSync. When prog is non-nil it reports
+// per-source progress and a live log so the admin Sync tab can render a progress
+// bar during a manual sync.
+func (app *App) runADSync(prog *syncProgress) (int, error) {
 	sources, err := app.db.ListLdapSources()
 	if err != nil {
 		return 0, fmt.Errorf("loading AD sources: %w", err)
 	}
 	if len(sources) == 0 {
 		return 0, fmt.Errorf("no AD sources configured")
+	}
+	if prog != nil {
+		prog.setTotal(len(sources))
+		prog.logf("Starting sync of %d source(s)…", len(sources))
 	}
 
 	// Snapshot the existing mirror, keyed by userid, for change detection.
@@ -73,13 +84,30 @@ func (app *App) RunADSync() (int, error) {
 	debug := ADSyncDebug{When: now.Format("2006-01-02 15:04:05")}
 
 	for _, src := range sources {
+		if prog != nil {
+			prog.setStage("Syncing " + src.Description)
+			prog.logf("→ %s: connecting to %s (%s)…", src.Description, src.Server, src.Type)
+		}
 		users, dbg, err := app.syncOneSource(src)
 		debug.Sources = append(debug.Sources, dbg)
 		if err != nil {
 			log.Printf("AD sync: source %q: %v", src.Description, err)
 			debug.Total = len(combined)
 			app.setSyncDebug(debug)
+			if prog != nil {
+				prog.logf("   ✗ %s: %s", src.Description, err.Error())
+				prog.step("")
+			}
 			return len(combined), fmt.Errorf("source %q: %w", src.Description, err)
+		}
+		if prog != nil {
+			prog.logf("   connected=%v bound=%v · entries found: %d · mirrored: %d · skipped: %d",
+				dbg.Connected, dbg.Bound, dbg.EntriesFound, dbg.Mirrored, dbg.Skipped)
+			if len(dbg.SkipReasons) > 0 {
+				for reason, n := range dbg.SkipReasons {
+					prog.logf("      skipped %d × %s", n, reason)
+				}
+			}
 		}
 
 		for _, u := range users {
@@ -110,6 +138,9 @@ func (app *App) RunADSync() (int, error) {
 			log.Printf("AD sync: updating LastSync for %q: %v", src.Description, err)
 		}
 		_ = app.db.AuditLog("LDAP", "System", src.Description+" has been synced.")
+		if prog != nil {
+			prog.step("")
+		}
 	}
 
 	if err := app.db.ReplaceLdap(combined); err != nil {
@@ -117,6 +148,9 @@ func (app *App) RunADSync() (int, error) {
 	}
 	debug.Total = len(combined)
 	app.setSyncDebug(debug)
+	if prog != nil {
+		prog.logf("Done. Mirrored %d placement(s) from %d source(s).", len(combined), len(sources))
+	}
 	return len(combined), nil
 }
 

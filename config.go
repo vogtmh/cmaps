@@ -56,11 +56,15 @@ const (
 	attrMailDefault       = "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name"
 )
 
-func (s SAMLConfig) attrSamAccount() string { return orDefault(s.AttributeSamAccount, attrSamAccountDefault) }
-func (s SAMLConfig) attrGivenName() string  { return orDefault(s.AttributeGivenName, attrGivenNameDefault) }
-func (s SAMLConfig) attrSurname() string    { return orDefault(s.AttributeSurname, attrSurnameDefault) }
-func (s SAMLConfig) attrFullName() string   { return orDefault(s.AttributeFullName, attrFullNameDefault) }
-func (s SAMLConfig) attrMail() string       { return orDefault(s.AttributeMail, attrMailDefault) }
+func (s SAMLConfig) attrSamAccount() string {
+	return orDefault(s.AttributeSamAccount, attrSamAccountDefault)
+}
+func (s SAMLConfig) attrGivenName() string {
+	return orDefault(s.AttributeGivenName, attrGivenNameDefault)
+}
+func (s SAMLConfig) attrSurname() string  { return orDefault(s.AttributeSurname, attrSurnameDefault) }
+func (s SAMLConfig) attrFullName() string { return orDefault(s.AttributeFullName, attrFullNameDefault) }
+func (s SAMLConfig) attrMail() string     { return orDefault(s.AttributeMail, attrMailDefault) }
 
 func orDefault(v, def string) string {
 	if v == "" {

@@ -3,8 +3,8 @@ package main
 import (
 	"image"
 	_ "image/gif"
-	_ "image/jpeg"
 	"image/jpeg"
+	_ "image/jpeg"
 	_ "image/png"
 	"net/http"
 	"os"

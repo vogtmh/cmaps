@@ -452,6 +452,93 @@ function showSamlDebug() {
   });
 }
 
+// ── Collapsible (one-time config) sections ──────────────────
+function toggleCollapse(id, btn) {
+  var el = document.getElementById(id);
+  if (!el) return;
+  var open = el.classList.toggle('open');
+  if (btn) btn.classList.toggle('open', open);
+}
+
+// ── Background sync with progress bar + live log ────────────
+function renderSyncProgress(prefix, snap) {
+  var wrap = document.getElementById(prefix + 'Progress');
+  var fill = document.getElementById(prefix + 'ProgFill');
+  var stage = document.getElementById(prefix + 'ProgStage');
+  var count = document.getElementById(prefix + 'ProgCount');
+  var logEl = document.getElementById(prefix + 'Log');
+
+  if (wrap) wrap.classList.add('show');
+  if (stage) stage.textContent = snap.stage || (snap.done ? 'Done' : 'Working…');
+
+  if (fill) {
+    if (snap.total > 0) {
+      fill.classList.remove('indeterminate');
+      var pct = Math.round((snap.cur / snap.total) * 100);
+      if (pct > 100) pct = 100;
+      fill.style.width = pct + '%';
+      if (count) count.textContent = snap.cur + ' / ' + snap.total;
+    } else {
+      fill.classList.add('indeterminate');
+      if (count) count.textContent = '';
+    }
+  }
+
+  if (logEl) {
+    var lines = snap.log || [];
+    logEl.style.display = lines.length ? 'block' : 'none';
+    logEl.textContent = lines.join('\n');
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+}
+
+function startSync(prefix, startUrl, progressUrl, subTab) {
+  var btn = document.getElementById(prefix + 'SyncBtn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Syncing…'; }
+  var logEl = document.getElementById(prefix + 'Log');
+  if (logEl) { logEl.textContent = ''; logEl.style.display = 'block'; }
+
+  $.ajax({
+    url: startUrl, type: 'POST', dataType: 'JSON',
+    complete: function() { pollSync(prefix, progressUrl, subTab); }
+  });
+}
+
+function pollSync(prefix, progressUrl, subTab) {
+  var timer = setInterval(function() {
+    $.ajax({
+      url: progressUrl, type: 'GET', dataType: 'JSON',
+      success: function(snap) {
+        renderSyncProgress(prefix, snap);
+        if (snap.done || (!snap.running && snap.cur >= snap.total && snap.total > 0)) {
+          if (!snap.running) {
+            clearInterval(timer);
+            var fill = document.getElementById(prefix + 'ProgFill');
+            if (fill) { fill.classList.remove('indeterminate'); fill.style.width = '100%'; }
+            var stage = document.getElementById(prefix + 'ProgStage');
+            if (stage) stage.textContent = snap.error ? ('Error: ' + snap.error) : (snap.summary || 'Done');
+            var btn = document.getElementById(prefix + 'SyncBtn');
+            if (btn) { btn.disabled = false; btn.textContent = 'Run sync now'; }
+            // Refresh the structured "last sync" view after a short pause.
+            setTimeout(function() {
+              window.location.href = '?tab=ldap&sub=' + subTab;
+            }, 1500);
+          }
+        }
+      },
+      error: function() { clearInterval(timer); }
+    });
+  }, 800);
+}
+
+function startRobinSync() {
+  startSync('robin', '../rest/robin/sync', '../rest/robin/progress', 'robin');
+}
+
+function startLdapSync() {
+  startSync('ldap', '../rest/ldap/sync', '../rest/ldap/progress', 'ldap');
+}
+
 function showCharts(interval, divname) {
 
   // Check if canvas already exists or create one

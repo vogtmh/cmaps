@@ -381,5 +381,3 @@ func toCase(s string, upper bool) string {
 	}
 	return string(b)
 }
-
-

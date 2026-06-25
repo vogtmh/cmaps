@@ -46,10 +46,12 @@ func (app *App) robinGet(path string, out interface{}) error {
 // --- Robin API response shapes (only the fields used) ---
 
 type robinSpaceList struct {
-	Data []struct {
-		ID   int    `json:"id"`
-		Name string `json:"name"`
-	} `json:"data"`
+	Data []robinSpaceEntry `json:"data"`
+}
+
+type robinSpaceEntry struct {
+	ID   int    `json:"id"`
+	Name string `json:"name"`
 }
 
 type robinState struct {
@@ -335,12 +337,22 @@ type RobinSyncResult struct {
 // cache, and records a structured per-room result (with match status and the
 // time of the run) so the admin Sync tab can show exactly what was synced.
 func (app *App) RunRobinSyncStructured() RobinSyncResult {
+	return app.runRobinSyncStructured(nil)
+}
+
+// runRobinSyncStructured is the worker behind RunRobinSyncStructured. When prog
+// is non-nil it reports determinate progress (room-by-room) and a live log so
+// the admin Sync tab can render a progress bar during the (often slow) sync.
+func (app *App) runRobinSyncStructured(prog *syncProgress) RobinSyncResult {
 	res := RobinSyncResult{
 		Time: time.Now().Format("2006-01-02 15:04:05"),
 		Org:  app.db.GetSetting("robinOrganisation"),
 	}
 	if app.db.GetSetting("robintoken") == "" {
 		res.Note = "Robin access token is not configured."
+		if prog != nil {
+			prog.logf("Robin access token is not configured.")
+		}
 		app.saveRobinSyncResult(res)
 		return res
 	}
@@ -348,23 +360,70 @@ func (app *App) RunRobinSyncStructured() RobinSyncResult {
 	sort.Slice(spaces, func(i, j int) bool { return spaces[i].Spacename < spaces[j].Spacename })
 	if len(spaces) == 0 {
 		res.Note = "No Robin locations configured yet."
+		if prog != nil {
+			prog.logf("No Robin locations configured yet.")
+		}
 		app.saveRobinSyncResult(res)
 		return res
+	}
+
+	// Phase 1: fetch the room list for every location so we know the total room
+	// count up-front (this makes the progress bar determinate).
+	type locRooms struct {
+		loc   RobinSyncLocation
+		rooms []robinSpaceEntry
+	}
+	var work []locRooms
+	totalRooms := 0
+	if prog != nil {
+		prog.setStage("Fetching locations…")
+		prog.logf("Found %d configured location(s). Fetching room lists…", len(spaces))
 	}
 	for _, s := range spaces {
 		loc := RobinSyncLocation{Spacename: s.Spacename, Mapname: s.MapName(), Spaceid: s.Spaceid}
 		var list robinSpaceList
 		if err := app.robinGet(fmt.Sprintf("/locations/%d/spaces?page=1&per_page=200", s.Spaceid), &list); err != nil {
 			loc.Err = err.Error()
-			res.Locations = append(res.Locations, loc)
+			if prog != nil {
+				prog.logf("✗ %s (id %d): %s", s.Spacename, s.Spaceid, err.Error())
+			}
+			work = append(work, locRooms{loc: loc})
 			continue
 		}
-		for _, room := range list.Data {
-			r := app.pollRobinRoomStructured(room.ID, room.Name, s.MapName())
+		if prog != nil {
+			prog.logf("• %s → %s (id %d): %d room(s)", s.Spacename, s.MapName(), s.Spaceid, len(list.Data))
+		}
+		totalRooms += len(list.Data)
+		work = append(work, locRooms{loc: loc, rooms: list.Data})
+	}
+	if prog != nil {
+		prog.setTotal(totalRooms)
+		prog.setStage("Polling rooms…")
+	}
+
+	// Phase 2: poll each room (the slow part: two API calls per room).
+	for _, w := range work {
+		loc := w.loc
+		for _, room := range w.rooms {
+			if prog != nil {
+				prog.setStage(fmt.Sprintf("Polling %s · %s", loc.Spacename, room.Name))
+			}
+			r := app.pollRobinRoomStructured(room.ID, room.Name, loc.Mapname)
 			loc.Rooms = append(loc.Rooms, r)
 			res.TotalRooms++
 			if r.Matched {
 				res.MatchedRooms++
+			}
+			if prog != nil {
+				switch {
+				case r.Err != "":
+					prog.logf("    ✗ %s: %s", room.Name, r.Err)
+				case r.Matched:
+					prog.logf("    ✓ %s → desk %s (%s)", room.Name, r.Deskid, r.Availability)
+				default:
+					prog.logf("    – %s: no matching desk (%s)", room.Name, r.Availability)
+				}
+				prog.step("")
 			}
 		}
 		res.Locations = append(res.Locations, loc)

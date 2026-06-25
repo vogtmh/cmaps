@@ -60,7 +60,11 @@ func (app *App) registerRESTRoutes(mux *http.ServeMux) {
 	rest("/rest/system", app.handleRestSystem)
 	rest("/rest/ldap", app.handleRestLdap)
 	rest("/rest/ldap/debug", app.handleRestLdapDebug)
+	rest("/rest/ldap/sync", app.handleRestLdapSync)
+	rest("/rest/ldap/progress", app.handleRestLdapProgress)
 	rest("/rest/robin/test", app.handleRestRobinTest)
+	rest("/rest/robin/sync", app.handleRestRobinSync)
+	rest("/rest/robin/progress", app.handleRestRobinProgress)
 }
 
 // handleIndex serves the main client UI (or the setup wizard on first run).

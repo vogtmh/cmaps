@@ -21,6 +21,9 @@ type App struct {
 
 	syncDebugMu sync.Mutex
 	syncDebug   ADSyncDebug
+
+	robinProg syncProgress
+	ldapProg  syncProgress
 }
 
 // Session holds the authenticated user's identity, mirroring the PHP $_SESSION
