@@ -374,10 +374,6 @@ func (db *DB) SetSetting(name, value string) error {
 	return putJSON(db, bucketSettings, []byte(name), value)
 }
 
-func (db *DB) DeleteSetting(name string) error {
-	return deleteKey(db, bucketSettings, []byte(name))
-}
-
 // --- Robin configuration (org, token, last-sync) ---
 
 func (db *DB) GetRobinSetting(name string) string {

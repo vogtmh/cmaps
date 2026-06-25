@@ -355,10 +355,11 @@ func (app *App) handleAdminPost(w http.ResponseWriter, r *http.Request, sess Ses
 		if app.permLevel(sess, "config") < 2 {
 			return ""
 		}
-		if del := strings.TrimSpace(r.FormValue("deleteSetting")); del != "" {
-			_ = app.db.DeleteSetting(del)
-			_ = app.db.AuditLog("Settings", sess.Username, "Base variable deleted ("+del+")")
-			return "Variable removed."
+		if name := strings.TrimSpace(r.FormValue("editSetting")); name != "" {
+			value := r.FormValue("settingValue")
+			_ = app.db.SetSetting(name, value)
+			_ = app.db.AuditLog("Settings", sess.Username, "Base variable updated ("+name+")")
+			return "Variable updated."
 		}
 		return app.saveLogosFromForm(r, sess)
 	}
@@ -501,6 +502,10 @@ func (app *App) buildAdminData(r *http.Request, sess Session, tab, msg string) a
 	case "config":
 		settings, _ := app.db.AllSettings()
 		for k, v := range settings {
+			// Logos are managed by the logo selector above, so hide them here.
+			if k == "logo_regular" || k == "logo_hover" {
+				continue
+			}
 			d.GeneralVars = append(d.GeneralVars, kv{Variable: k, Value: v})
 		}
 		sort.Slice(d.GeneralVars, func(i, j int) bool { return d.GeneralVars[i].Variable < d.GeneralVars[j].Variable })
