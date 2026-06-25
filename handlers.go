@@ -206,6 +206,27 @@ func (app *App) handleLogout(w http.ResponseWriter, r *http.Request) {
 // the /login form for local users; SAML via /auth/saml/login).
 func (app *App) handleRestAccount(w http.ResponseWriter, r *http.Request) {
 	switch r.URL.Query().Get("mode") {
+	case "login":
+		username := strings.TrimSpace(r.FormValue("user"))
+		if username == "" {
+			username = strings.TrimSpace(r.FormValue("username"))
+		}
+		password := r.FormValue("password")
+		sess, ok := app.authenticateLocal(username, password)
+		if !ok {
+			time.Sleep(2 * time.Second) // throttle brute force, matching the PHP delay
+			app.db.AuditLog("login", username, "failed local login from "+clientIP(r))
+			writeJSON(w, map[string]interface{}{"status": "error", "message": "Invalid username or password."})
+			return
+		}
+		token, err := app.sessions.Create(sess)
+		if err != nil {
+			writeJSON(w, map[string]interface{}{"status": "error", "message": "Session error."})
+			return
+		}
+		app.setSessionCookie(w, token)
+		app.db.AuditLog("login", sess.Username, "local login from "+clientIP(r))
+		writeJSON(w, map[string]interface{}{"status": "ok", "message": "Login successful."})
 	case "logout":
 		if c, err := r.Cookie(sessionCookie); err == nil {
 			app.sessions.Delete(c.Value)
