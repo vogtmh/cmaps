@@ -27,6 +27,7 @@ type mapRow struct {
 // adminUserRow is a users-tab row (a config_mapadmins entry).
 type adminUserRow struct {
 	Username string
+	Name     string
 	Role     int
 	RoleName string
 }
@@ -287,6 +288,16 @@ func (app *App) handleAdminPost(w http.ResponseWriter, r *http.Request, sess Ses
 			_ = app.db.AuditLog("Users", sess.Username, "Admin removed ("+del+")")
 			return "User removed."
 		}
+		if chg := r.FormValue("changeRoleUser"); chg != "" {
+			roleInt, _ := strconv.Atoi(r.FormValue("changeRole"))
+			if existing, found, _ := app.db.GetUser(chg); found {
+				existing.Role = roleInt
+				_ = app.db.PutUser(existing)
+				_ = app.db.AuditLog("Users", sess.Username, "Role changed ("+chg+", role "+r.FormValue("changeRole")+")")
+				return "Role updated."
+			}
+			return ""
+		}
 		user := r.FormValue("newadminuser")
 		role := r.FormValue("newadminrole")
 		if user != "" && role != "" {
@@ -541,15 +552,45 @@ func (app *App) buildAdminData(r *http.Request, sess Session, tab, msg string) a
 		for _, ro := range d.Roles {
 			roleName[ro.ID] = ro.Rolename
 		}
+		// Build a lookup of full names from the cached LDAP mirror, keyed by
+		// lowercased samaccountname (userid), so we can show a friendly name for
+		// AD-derived admins.
+		ldapNames := map[string]string{}
+		if ldapUsers, err := app.db.ListLdap(); err == nil {
+			for _, lu := range ldapUsers {
+				full := strings.TrimSpace(lu.Givenname + " " + lu.Surname)
+				if full != "" {
+					ldapNames[strings.ToLower(lu.Userid)] = full
+				}
+			}
+		}
 		users, _ := app.db.ListUsers()
 		for _, u := range users {
 			name := roleName[u.Role]
 			if name == "" {
 				name = strconv.Itoa(u.Role)
 			}
-			d.Mapadmins = append(d.Mapadmins, adminUserRow{Username: u.Username, Role: u.Role, RoleName: name})
+			// Resolve a display name: prefer a stored full name, then the cached
+			// LDAP data (matched on samaccountname after stripping any DOMAIN\
+			// prefix), and finally fall back to the username itself.
+			display := strings.TrimSpace(u.Fullname)
+			if display == "" {
+				sam := u.Username
+				if idx := strings.LastIndex(sam, "\\"); idx >= 0 {
+					sam = sam[idx+1:]
+				}
+				if full, ok := ldapNames[strings.ToLower(sam)]; ok {
+					display = full
+				}
+			}
+			if display == "" {
+				display = u.Username
+			}
+			d.Mapadmins = append(d.Mapadmins, adminUserRow{Username: u.Username, Name: display, Role: u.Role, RoleName: name})
 		}
-		sort.Slice(d.Mapadmins, func(i, j int) bool { return d.Mapadmins[i].Username < d.Mapadmins[j].Username })
+		sort.Slice(d.Mapadmins, func(i, j int) bool {
+			return strings.ToLower(d.Mapadmins[i].Name) < strings.ToLower(d.Mapadmins[j].Name)
+		})
 
 	case "teams":
 		d.Teams, _ = app.db.ListTeams()
