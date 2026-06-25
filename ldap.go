@@ -80,6 +80,8 @@ func (app *App) runADSync(prog *syncProgress) (int, error) {
 	now := time.Now().In(app.db.loc)
 
 	var combined []LdapUser
+	var allDir []DirectoryUser
+	dirSeen := make(map[string]bool)
 	seen := make(map[string]bool)
 	debug := ADSyncDebug{When: now.Format("2006-01-02 15:04:05")}
 
@@ -88,7 +90,9 @@ func (app *App) runADSync(prog *syncProgress) (int, error) {
 			prog.setStage("Syncing " + src.Description)
 			prog.logf("→ %s: connecting to %s (%s)…", src.Description, src.Server, src.Type)
 		}
-		users, dbg, err := app.syncOneSource(src)
+		dirUsers, dbg, err := app.fetchSourceDirectory(src)
+		users := deriveMirrorUsers(dirUsers)
+		dbg.Mirrored = len(users)
 		debug.Sources = append(debug.Sources, dbg)
 		if err != nil {
 			log.Printf("AD sync: source %q: %v", src.Description, err)
@@ -101,13 +105,18 @@ func (app *App) runADSync(prog *syncProgress) (int, error) {
 			return len(combined), fmt.Errorf("source %q: %w", src.Description, err)
 		}
 		if prog != nil {
-			prog.logf("   connected=%v bound=%v · entries found: %d · mirrored: %d · skipped: %d",
-				dbg.Connected, dbg.Bound, dbg.EntriesFound, dbg.Mirrored, dbg.Skipped)
-			if len(dbg.SkipReasons) > 0 {
-				for reason, n := range dbg.SkipReasons {
-					prog.logf("      skipped %d × %s", n, reason)
-				}
+			prog.logf("   connected=%v bound=%v · directory: %d · desk placements: %d",
+				dbg.Connected, dbg.Bound, dbg.EntriesFound, dbg.Mirrored)
+		}
+
+		// Accumulate the full directory snapshot (deduplicated across sources).
+		for _, d := range dirUsers {
+			key := strings.ToLower(d.Userid)
+			if dirSeen[key] {
+				continue
 			}
+			dirSeen[key] = true
+			allDir = append(allDir, d)
 		}
 
 		for _, u := range users {
@@ -143,15 +152,56 @@ func (app *App) runADSync(prog *syncProgress) (int, error) {
 		}
 	}
 
+	if err := app.db.ReplaceDirectory(allDir); err != nil {
+		log.Printf("AD sync: writing directory: %v", err)
+	}
 	if err := app.db.ReplaceLdap(combined); err != nil {
 		return len(combined), fmt.Errorf("writing mirror: %w", err)
 	}
+	// Refresh stored full names for existing admins from the fresh directory.
+	app.refreshAdminNames(allDir)
 	debug.Total = len(combined)
 	app.setSyncDebug(debug)
 	if prog != nil {
-		prog.logf("Done. Mirrored %d placement(s) from %d source(s).", len(combined), len(sources))
+		prog.logf("Done. %d directory user(s), %d desk placement(s) from %d source(s).", len(allDir), len(combined), len(sources))
 	}
 	return len(combined), nil
+}
+
+// refreshAdminNames updates the stored Fullname of each admin user from the
+// freshly fetched directory, so the Users tab shows live names even if the
+// directory is later cleared. Usernames are matched on samaccountname after
+// stripping any DOMAIN\ prefix.
+func (app *App) refreshAdminNames(dir []DirectoryUser) {
+	if len(dir) == 0 {
+		return
+	}
+	byID := make(map[string]DirectoryUser, len(dir))
+	for _, d := range dir {
+		byID[strings.ToLower(d.Userid)] = d
+	}
+	users, err := app.db.ListUsers()
+	if err != nil {
+		return
+	}
+	for _, u := range users {
+		sam := u.Username
+		if idx := strings.LastIndex(sam, "\\"); idx >= 0 {
+			sam = sam[idx+1:]
+		}
+		d, ok := byID[strings.ToLower(sam)]
+		if !ok {
+			continue
+		}
+		name := d.DisplayName()
+		if name != "" && name != u.Fullname {
+			u.Fullname = name
+			if d.Mail != "" {
+				u.Mail = d.Mail
+			}
+			_ = app.db.PutUser(u)
+		}
+	}
 }
 
 // setSyncDebug stores the most recent sync diagnostics (concurrency-safe).
@@ -168,10 +218,26 @@ func (app *App) SyncDebug() ADSyncDebug {
 	return app.syncDebug
 }
 
-// syncOneSource queries one AD source A-Z and returns the mirrored placements.
-// The returned SourceDebug captures diagnostics (entries found, skip reasons,
-// the attribute names AD actually returned) to help explain empty results.
+// syncOneSource queries one AD source A-Z and returns the office-filtered mirror
+// placements for that source. It is a thin wrapper that fetches the full
+// directory for the source and then derives the mirror locally, so callers that
+// only need the mirror (e.g. the per-source "Sync now" button) keep working.
 func (app *App) syncOneSource(src LdapSource) ([]LdapUser, SourceDebug, error) {
+	dir, dbg, err := app.fetchSourceDirectory(src)
+	if err != nil {
+		return nil, dbg, err
+	}
+	mirror := deriveMirrorUsers(dir)
+	dbg.Mirrored = len(mirror)
+	return mirror, dbg, nil
+}
+
+// fetchSourceDirectory queries one AD source A-Z and returns EVERY enabled user
+// account it finds (regardless of the office attribute) as DirectoryUser records.
+// This full snapshot powers admin autocomplete and name resolution, and is the
+// local data the office-filtered mirror is derived from. Disabled accounts are
+// excluded via the userAccountControl bit filter.
+func (app *App) fetchSourceDirectory(src LdapSource) ([]DirectoryUser, SourceDebug, error) {
 	dbg := SourceDebug{
 		Description: src.Description,
 		Server:      src.Server,
@@ -195,9 +261,12 @@ func (app *App) syncOneSource(src LdapSource) ([]LdapUser, SourceDebug, error) {
 	}
 	dbg.Bound = true
 
-	var out []LdapUser
+	seen := map[string]bool{}
+	var out []DirectoryUser
 	for letter := 'A'; letter <= 'Z'; letter++ {
-		filter := fmt.Sprintf("(&(physicaldeliveryofficename=*)(givenname=%c*))", letter)
+		// Every enabled person with a given name starting with this letter, no
+		// office requirement (the office filter now happens locally).
+		filter := fmt.Sprintf("(&(givenname=%c*)(!(userAccountControl:1.2.840.113556.1.4.803:=2)))", letter)
 		req := ldap.NewSearchRequest(
 			src.OU,
 			ldap.ScopeWholeSubtree, ldap.NeverDerefAliases,
@@ -219,66 +288,85 @@ func (app *App) syncOneSource(src LdapSource) ([]LdapUser, SourceDebug, error) {
 				}
 			}
 
-			givenname := e.GetEqualFoldAttributeValue("givenname")
-			surname := e.GetEqualFoldAttributeValue("sn")
-			mail := e.GetEqualFoldAttributeValue("mail")
-			office := e.GetEqualFoldAttributeValue("physicaldeliveryofficename")
 			userid := e.GetEqualFoldAttributeValue("samaccountname")
+			if userid == "" {
+				dbg.Skipped++
+				dbg.SkipReasons["no samaccountname"]++
+				continue
+			}
+			if key := strings.ToLower(userid); seen[key] {
+				continue // same account can match several letters via aliases
+			} else {
+				seen[key] = true
+			}
+
 			title := e.GetEqualFoldAttributeValue("title")
 			if title == "" {
 				title = "-"
 			}
-
-			switch {
-			case office == "" || office == "-":
-				dbg.Skipped++
-				dbg.SkipReasons["no office"]++
-				continue
-			case givenname == "":
-				dbg.Skipped++
-				dbg.SkipReasons["no givenname"]++
-				continue
-			case surname == "":
-				dbg.Skipped++
-				dbg.SkipReasons["no surname"]++
-				continue
-			case mail == "":
-				dbg.Skipped++
-				dbg.SkipReasons["no mail"]++
-				continue
-			}
-
-			base := LdapUser{
-				Userid:          userid,
-				Givenname:       givenname,
-				Surname:         surname,
-				Telephonenumber: e.GetEqualFoldAttributeValue("telephonenumber"),
-				Mail:            mail,
-				Description:     title,
-				Department:      e.GetEqualFoldAttributeValue("department"),
-				Mobile:          e.GetEqualFoldAttributeValue("mobile"),
-			}
-
-			// An office field may encode several desk places separated by "|".
-			office = strings.ReplaceAll(office, " ", "")
-			if strings.Contains(office, "|") {
-				for _, place := range strings.Split(office, "|") {
-					if place == "" {
-						continue
-					}
-					u := base
-					u.Office = place
-					out = append(out, u)
-				}
-			} else {
-				u := base
-				u.Office = office
-				out = append(out, u)
-			}
+			out = append(out, DirectoryUser{
+				Userid:     userid,
+				Givenname:  e.GetEqualFoldAttributeValue("givenname"),
+				Surname:    e.GetEqualFoldAttributeValue("sn"),
+				Mail:       e.GetEqualFoldAttributeValue("mail"),
+				Office:     e.GetEqualFoldAttributeValue("physicaldeliveryofficename"),
+				Department: e.GetEqualFoldAttributeValue("department"),
+				Title:      title,
+				Phone:      e.GetEqualFoldAttributeValue("telephonenumber"),
+				Mobile:     e.GetEqualFoldAttributeValue("mobile"),
+			})
 		}
 	}
-	dbg.Mirrored = len(out)
 	return out, dbg, nil
+}
+
+// deriveMirrorUsers applies the office/name/mail rules locally to a directory
+// snapshot, producing the office-filtered desk-placement mirror that the maps
+// and desks features consume. An office field may encode several desk places
+// separated by "|"; each becomes its own placement.
+func deriveMirrorUsers(dir []DirectoryUser) []LdapUser {
+	var out []LdapUser
+	for _, d := range dir {
+		office := d.Office
+		switch {
+		case office == "" || office == "-":
+			continue
+		case d.Givenname == "":
+			continue
+		case d.Surname == "":
+			continue
+		case d.Mail == "":
+			continue
+		}
+
+		base := LdapUser{
+			Userid:          d.Userid,
+			Givenname:       d.Givenname,
+			Surname:         d.Surname,
+			Telephonenumber: d.Phone,
+			Mail:            d.Mail,
+			Description:     d.Title,
+			Department:      d.Department,
+			Mobile:          d.Mobile,
+		}
+
+		office = strings.ReplaceAll(office, " ", "")
+		if strings.Contains(office, "|") {
+			for _, place := range strings.Split(office, "|") {
+				if place == "" {
+					continue
+				}
+				u := base
+				u.Office = place
+				out = append(out, u)
+			}
+		} else {
+			u := base
+			u.Office = office
+			out = append(out, u)
+		}
+	}
+	return out
 }
 
 // dialLDAP opens a connection to an AD source honouring its LDAP/LDAPS type.

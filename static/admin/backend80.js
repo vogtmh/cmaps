@@ -544,6 +544,73 @@ function startLdapSync() {
   startSync('ldap', '../rest/ldap/sync', '../rest/ldap/progress', 'ldap');
 }
 
+// ── Admin add-user directory autocomplete ───────────────────
+var _dirSearchTimer = null;
+var _dirResults = [];
+
+function searchDirectory(q) {
+  // Typing a new name invalidates any previous pick.
+  var picked = document.getElementById('newadminuser');
+  if (picked) picked.value = '';
+  var pickedName = document.getElementById('newadminname');
+  if (pickedName) pickedName.value = '';
+  var info = document.getElementById('adminUserPicked');
+  if (info) info.textContent = '';
+
+  q = (q || '').trim();
+  if (q.length < 2) { hideDirectoryResults(); return; }
+
+  if (_dirSearchTimer) clearTimeout(_dirSearchTimer);
+  _dirSearchTimer = setTimeout(function() {
+    $.ajax({
+      url: '../rest/directory/search?q=' + encodeURIComponent(q),
+      type: 'GET', dataType: 'JSON',
+      success: function(list) { renderDirectoryResults(list || []); },
+      error: function() { hideDirectoryResults(); }
+    });
+  }, 250);
+}
+
+function renderDirectoryResults(list) {
+  var box = document.getElementById('adminUserResults');
+  if (!box) return;
+  _dirResults = list;
+  if (!list.length) {
+    box.innerHTML = '<div class="dir-empty">No matching directory users.</div>';
+    box.style.display = 'block';
+    return;
+  }
+  var html = '';
+  for (var i = 0; i < list.length; i++) {
+    var d = list[i];
+    var sub = [d.sam];
+    if (d.office) sub.push(d.office);
+    if (d.mail) sub.push(d.mail);
+    html += '<div class="dir-item" onclick="pickDirectoryUser(' + i + ')">' +
+            '<span class="dir-name">' + esc(d.name) + '</span>' +
+            '<span class="dir-sub">' + esc(sub.join(' · ')) + '</span></div>';
+  }
+  box.innerHTML = html;
+  box.style.display = 'block';
+}
+
+function pickDirectoryUser(i) {
+  var d = _dirResults[i];
+  if (!d) return;
+  document.getElementById('newadminuser').value = d.username || d.sam;
+  document.getElementById('newadminname').value = d.name || '';
+  var search = document.getElementById('adminUserSearch');
+  if (search) search.value = d.name || d.sam;
+  var info = document.getElementById('adminUserPicked');
+  if (info) info.innerHTML = 'Selected <b>' + esc(d.name) + '</b> (<code>' + esc(d.username || d.sam) + '</code>)';
+  hideDirectoryResults();
+}
+
+function hideDirectoryResults() {
+  var box = document.getElementById('adminUserResults');
+  if (box) box.style.display = 'none';
+}
+
 function showCharts(interval, divname) {
 
   // Check if canvas already exists or create one

@@ -18,6 +18,7 @@ var (
 	bucketMaps      = []byte("maplist")         // config_maplist (key = mapname)
 	bucketDesks     = []byte("desks")           // desks_<map> (key = "<map>:<id>")
 	bucketLdap      = []byte("ldapmirror")      // ldap-mirror (key = userid/ipphone)
+	bucketDirectory = []byte("directory")       // full AD directory, all users (key = samaccountname)
 	bucketBookings  = []byte("bookings")        // bookings (key = seq)
 	bucketTeams     = []byte("teams")           // config_teams (key = teamname)
 	bucketRoles     = []byte("roles")           // config_roles (key = id)
@@ -39,7 +40,7 @@ var allBuckets = [][]byte{
 	bucketSettings, bucketMaps, bucketDesks, bucketLdap, bucketBookings, bucketTeams,
 	bucketRoles, bucketUsers, bucketChangelog, bucketStats, bucketTracking, bucketVips,
 	bucketDepts, bucketRobin, bucketMeeting, bucketWhitelist, bucketLdapSrc, bucketAudit,
-	bucketMeta,
+	bucketMeta, bucketDirectory,
 }
 
 type DB struct {
@@ -94,6 +95,31 @@ type LdapUser struct {
 	Description     string `json:"description"`
 	Department      string `json:"department"`
 	Mobile          string `json:"mobile"`
+}
+
+// DirectoryUser is a single AD account from the full directory snapshot (every
+// user, regardless of the office attribute). It powers admin autocomplete and
+// name resolution, and is the local source the office-filtered ldapmirror is
+// derived from.
+type DirectoryUser struct {
+	Userid     string `json:"userid"` // samaccountname
+	Givenname  string `json:"givenname"`
+	Surname    string `json:"surname"`
+	Mail       string `json:"mail"`
+	Office     string `json:"office"`
+	Department string `json:"department"`
+	Title      string `json:"title"`
+	Phone      string `json:"phone"`
+	Mobile     string `json:"mobile"`
+}
+
+// DisplayName returns "Givenname Surname", falling back to the samaccountname.
+func (d DirectoryUser) DisplayName() string {
+	name := strings.TrimSpace(d.Givenname + " " + d.Surname)
+	if name == "" {
+		return d.Userid
+	}
+	return name
 }
 
 // Booking mirrors a row of the bookings table.
@@ -447,6 +473,73 @@ func (db *DB) ReplaceLdap(users []LdapUser) error {
 		}
 		return nil
 	})
+}
+
+// --- Directory (full AD snapshot) ---
+
+func (db *DB) ListDirectory() ([]DirectoryUser, error) {
+	return listJSON[DirectoryUser](db, bucketDirectory, "")
+}
+
+// ReplaceDirectory clears the directory snapshot and stores the given users
+// (used by full sync). Keyed by lowercased samaccountname.
+func (db *DB) ReplaceDirectory(users []DirectoryUser) error {
+	return db.bolt.Update(func(tx *bolt.Tx) error {
+		if err := tx.DeleteBucket(bucketDirectory); err != nil && err != bolt.ErrBucketNotFound {
+			return err
+		}
+		b, err := tx.CreateBucket(bucketDirectory)
+		if err != nil {
+			return err
+		}
+		for _, u := range users {
+			key := strings.ToLower(strings.TrimSpace(u.Userid))
+			if key == "" {
+				continue
+			}
+			data, err := json.Marshal(u)
+			if err != nil {
+				return err
+			}
+			if err := b.Put([]byte(key), data); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
+// GetDirectoryUser looks up a single account by samaccountname (case-insensitive).
+func (db *DB) GetDirectoryUser(sam string) (DirectoryUser, bool, error) {
+	return getJSON[DirectoryUser](db, bucketDirectory, []byte(strings.ToLower(strings.TrimSpace(sam))))
+}
+
+// SearchDirectory returns up to limit users whose name, samaccountname or mail
+// contains the (case-insensitive) query, ordered by display name.
+func (db *DB) SearchDirectory(query string, limit int) ([]DirectoryUser, error) {
+	all, err := db.ListDirectory()
+	if err != nil {
+		return nil, err
+	}
+	q := strings.ToLower(strings.TrimSpace(query))
+	var out []DirectoryUser
+	for _, u := range all {
+		if q == "" {
+			out = append(out, u)
+			continue
+		}
+		hay := strings.ToLower(u.DisplayName() + " " + u.Userid + " " + u.Mail)
+		if strings.Contains(hay, q) {
+			out = append(out, u)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool {
+		return strings.ToLower(out[i].DisplayName()) < strings.ToLower(out[j].DisplayName())
+	})
+	if limit > 0 && len(out) > limit {
+		out = out[:limit]
+	}
+	return out, nil
 }
 
 // --- Bookings ---

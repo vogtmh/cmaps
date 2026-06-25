@@ -302,14 +302,38 @@ func (app *App) handleAdminPost(w http.ResponseWriter, r *http.Request, sess Ses
 		role := r.FormValue("newadminrole")
 		if user != "" && role != "" {
 			roleInt, _ := strconv.Atoi(role)
-			existing, found, _ := app.db.GetUser(user)
+
+			// Resolve the entered value against the directory so the admin can
+			// type a display name (or samaccountname) and we save the proper
+			// DOMAIN\samaccountname plus the full name automatically.
+			username := strings.TrimSpace(user)
+			fullname := strings.TrimSpace(r.FormValue("newadminname"))
+			mail := ""
+			if d, ok := app.resolveDirectoryEntry(user); ok {
+				domain := app.db.GetSetting("domain")
+				if domain != "" {
+					username = domain + "\\" + d.Userid
+				} else {
+					username = d.Userid
+				}
+				fullname = d.DisplayName()
+				mail = d.Mail
+			}
+
+			existing, found, _ := app.db.GetUser(username)
 			if found {
 				existing.Role = roleInt
+				if fullname != "" {
+					existing.Fullname = fullname
+				}
+				if mail != "" {
+					existing.Mail = mail
+				}
 				_ = app.db.PutUser(existing)
 			} else {
-				_ = app.db.PutUser(User{Username: user, Role: roleInt})
+				_ = app.db.PutUser(User{Username: username, Role: roleInt, Fullname: fullname, Mail: mail})
 			}
-			_ = app.db.AuditLog("Users", sess.Username, "New admin created ("+user+", role "+role+")")
+			_ = app.db.AuditLog("Users", sess.Username, "New admin created ("+username+", role "+role+")")
 			return "User created."
 		}
 
@@ -552,16 +576,13 @@ func (app *App) buildAdminData(r *http.Request, sess Session, tab, msg string) a
 		for _, ro := range d.Roles {
 			roleName[ro.ID] = ro.Rolename
 		}
-		// Build a lookup of full names from the cached LDAP mirror, keyed by
-		// lowercased samaccountname (userid), so we can show a friendly name for
-		// AD-derived admins.
+		// Build a lookup of full names from the cached full directory, keyed by
+		// lowercased samaccountname, so we can show a friendly name for every
+		// AD-derived admin (not just those with an office attribute).
 		ldapNames := map[string]string{}
-		if ldapUsers, err := app.db.ListLdap(); err == nil {
-			for _, lu := range ldapUsers {
-				full := strings.TrimSpace(lu.Givenname + " " + lu.Surname)
-				if full != "" {
-					ldapNames[strings.ToLower(lu.Userid)] = full
-				}
+		if dir, err := app.db.ListDirectory(); err == nil {
+			for _, d := range dir {
+				ldapNames[strings.ToLower(d.Userid)] = d.DisplayName()
 			}
 		}
 		users, _ := app.db.ListUsers()
@@ -695,6 +716,71 @@ func (app *App) handleRestLdapDebug(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, app.SyncDebug())
+}
+
+// handleRestDirectorySearch returns directory users matching a query, for the
+// admin add-user autocomplete. Each result includes the resolved username
+// (DOMAIN\samaccountname) so the caller never has to know the samaccountname.
+func (app *App) handleRestDirectorySearch(w http.ResponseWriter, r *http.Request) {
+	sess, ok := app.currentSession(r)
+	if !ok || app.permLevel(sess, "users") < 2 {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	q := r.URL.Query().Get("q")
+	results, _ := app.db.SearchDirectory(q, 20)
+	domain := app.db.GetSetting("domain")
+	out := make([]map[string]string, 0, len(results))
+	for _, d := range results {
+		username := d.Userid
+		if domain != "" {
+			username = domain + "\\" + d.Userid
+		}
+		out = append(out, map[string]string{
+			"name":     d.DisplayName(),
+			"sam":      d.Userid,
+			"username": username,
+			"mail":     d.Mail,
+			"office":   d.Office,
+		})
+	}
+	writeJSON(w, out)
+}
+
+// resolveDirectoryEntry maps an entered value (samaccountname, DOMAIN\sam, or a
+// display name) to a directory user. It returns false when nothing matches, in
+// which case the caller keeps the raw input (e.g. a manual local username).
+func (app *App) resolveDirectoryEntry(input string) (DirectoryUser, bool) {
+	v := strings.TrimSpace(input)
+	if v == "" {
+		return DirectoryUser{}, false
+	}
+	// Strip any DOMAIN\ prefix and try a direct samaccountname lookup.
+	sam := v
+	if idx := strings.LastIndex(sam, "\\"); idx >= 0 {
+		sam = sam[idx+1:]
+	}
+	if d, found, _ := app.db.GetDirectoryUser(sam); found {
+		return d, true
+	}
+	// Fall back to an exact (case-insensitive) display-name match.
+	dir, err := app.db.ListDirectory()
+	if err != nil {
+		return DirectoryUser{}, false
+	}
+	lv := strings.ToLower(v)
+	var match DirectoryUser
+	count := 0
+	for _, d := range dir {
+		if strings.ToLower(d.DisplayName()) == lv {
+			match = d
+			count++
+		}
+	}
+	if count == 1 {
+		return match, true
+	}
+	return DirectoryUser{}, false
 }
 
 // handleRestRobinTest runs a full Robin meeting sync and returns the step-by-step

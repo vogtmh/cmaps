@@ -396,3 +396,33 @@
   .sync-tab { width: 100%; justify-content: center; }
   .sync-step-desc, .sync-step-body { margin-left: 0; }
 }
+
+/* ── Directory autocomplete (add-user) ───────────────────── */
+.dir-autocomplete {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 50;
+  margin-top: 4px;
+  max-height: 320px;
+  overflow-y: auto;
+  background: var(--sy-surface2);
+  border: 1px solid var(--sy-border);
+  border-radius: 8px;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.35);
+}
+.dir-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 9px 12px;
+  cursor: pointer;
+  border-bottom: 1px solid var(--sy-border);
+}
+.dir-item:last-child { border-bottom: none; }
+.dir-item:hover { background: var(--sy-accent); color: #fff; }
+.dir-name { font-weight: 600; font-size: 14px; }
+.dir-sub { font-size: 12px; color: var(--sy-muted); }
+.dir-item:hover .dir-sub { color: rgba(255,255,255,0.85); }
+.dir-empty { padding: 10px 12px; color: var(--sy-muted); font-size: 13px; }

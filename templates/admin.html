@@ -645,13 +645,20 @@
       {{end}}
 
       {{if gt .PermUsers 1}}
-      <form name="AddAdmin" action="?tab=users" method="post" style="margin-top:16px;">
+      <form name="AddAdmin" action="?tab=users" method="post" style="margin-top:16px;" autocomplete="off">
         <input type="hidden" name="tab" value="users">
+        <input type="hidden" name="newadminuser" id="newadminuser">
+        <input type="hidden" name="newadminname" id="newadminname">
         <div class="sync-form-grid">
-          <div class="sync-field"><label class="sync-label">Username</label><input class="sync-input" type="text" name="newadminuser" placeholder="DOMAIN\username or local user"></div>
+          <div class="sync-field" style="position:relative;">
+            <label class="sync-label">Name</label>
+            <input class="sync-input" type="text" id="adminUserSearch" placeholder="Start typing a name, e.g. Maximilian Vogt" autocomplete="off" oninput="searchDirectory(this.value)" onblur="setTimeout(hideDirectoryResults, 200)">
+            <div id="adminUserResults" class="dir-autocomplete" style="display:none;"></div>
+            <div id="adminUserPicked" class="sync-status-text" style="margin-top:6px;"></div>
+          </div>
           <div class="sync-field"><label class="sync-label">Role</label><select class="sync-select" name="newadminrole">{{range .Roles}}<option value="{{.ID}}">{{.Rolename}}</option>{{end}}</select></div>
         </div>
-        <div class="sync-form-actions"><button type="submit" class="sync-btn sync-btn-primary">Add user</button></div>
+        <div class="sync-form-actions"><button type="submit" class="sync-btn sync-btn-primary" id="addAdminBtn">Add user</button></div>
       </form>
       {{end}}
     </div>
