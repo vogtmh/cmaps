@@ -1,7 +1,9 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
+	"html/template"
 	"image"
 	"image/png"
 	"io/fs"
@@ -84,6 +86,7 @@ type adminData struct {
 	AuditTypes      []string
 	Countryflags    []string
 	Timezones       []string
+	DepartmentsJSON template.JS
 }
 
 // commonTimezones is the curated timezone list offered when creating a map. The
@@ -522,6 +525,15 @@ func (app *App) buildAdminData(r *http.Request, sess Session, tab, msg string) a
 				d.DeskMaps = append(d.DeskMaps, m.Mapname)
 			}
 		}
+		// deskSummary() in backend80.js iterates the global "departments" object
+		// (keyed by index, matching the legacy JSON_FORCE_OBJECT output).
+		deptObj := map[string]string{}
+		depts, _ := app.db.ListDepartments()
+		for i, dp := range depts {
+			deptObj[strconv.Itoa(i)] = dp
+		}
+		deptJSON, _ := json.Marshal(deptObj)
+		d.DepartmentsJSON = template.JS(deptJSON)
 
 	case "users":
 		d.Roles, _ = app.db.ListRoles()

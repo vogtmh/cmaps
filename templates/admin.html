@@ -582,6 +582,7 @@
   </table>
 
 {{else if eq .ActiveTab "desks"}}
+  <script>var departments = {{.DepartmentsJSON}};</script>
   {{range .DeskMaps}}
   <div id="{{.}}" class="deskstats"><img src="../images/spinner.png" style="margin-left:117px" /></div>
   <script>deskSummary('{{.}}')</script>

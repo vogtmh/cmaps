@@ -1,5 +1,10 @@
 // Additional functions for the admin panel
 
+// Safe global default. The Desks tab overrides this with the real department
+// list via an inline <script> before deskSummary() runs; declaring it here means
+// deskSummary() can never throw a ReferenceError even if invoked early.
+var departments = {};
+
 function submitWhitelist(WLtype, WLtext) {
   console.log('add to whitelist: '+WLtext+', '+WLtype);
   document.getElementById("ignoreHealthType").value = WLtype;
