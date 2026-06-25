@@ -67,7 +67,6 @@ type adminData struct {
 	PermAdminpanel int
 
 	GeneralVars     []kv
-	Vips            []VIP
 	LogoRegular     string
 	LogoHover       string
 	LdapSources     []LdapSource
@@ -355,12 +354,6 @@ func (app *App) handleAdminPost(w http.ResponseWriter, r *http.Request, sess Ses
 		if app.permLevel(sess, "config") < 2 {
 			return ""
 		}
-		if name := strings.TrimSpace(r.FormValue("editSetting")); name != "" {
-			value := r.FormValue("settingValue")
-			_ = app.db.SetSetting(name, value)
-			_ = app.db.AuditLog("Settings", sess.Username, "Base variable updated ("+name+")")
-			return "Variable updated."
-		}
 		return app.saveLogosFromForm(r, sess)
 	}
 	return ""
@@ -509,7 +502,6 @@ func (app *App) buildAdminData(r *http.Request, sess Session, tab, msg string) a
 			d.GeneralVars = append(d.GeneralVars, kv{Variable: k, Value: v})
 		}
 		sort.Slice(d.GeneralVars, func(i, j int) bool { return d.GeneralVars[i].Variable < d.GeneralVars[j].Variable })
-		d.Vips, _ = app.db.ListVips()
 		d.LogoRegular = app.settingOr("logo_regular", "/static/images/cmaps-regular.png")
 		d.LogoHover = app.settingOr("logo_hover", "/static/images/cmaps-hover.png")
 
@@ -780,6 +772,101 @@ func (app *App) handleRestDirectoryMatch(w http.ResponseWriter, r *http.Request)
 		"directory": len(dir),
 		"message":   fmt.Sprintf("%d user(s) matched, %d name(s) updated.", matched, updated),
 	})
+}
+
+// handleRestSetting saves a single base variable and returns the stored value
+// so the config tab can update it in place without a full page reload.
+func (app *App) handleRestSetting(w http.ResponseWriter, r *http.Request) {
+	sess, ok := app.currentSession(r)
+	if !ok || app.permLevel(sess, "config") < 2 {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	name := strings.TrimSpace(r.FormValue("name"))
+	if name == "" || name == "logo_regular" || name == "logo_hover" {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	value := r.FormValue("value")
+	_ = app.db.SetSetting(name, value)
+	_ = app.db.AuditLog("Settings", sess.Username, "Base variable updated ("+name+")")
+	writeJSON(w, map[string]string{"name": name, "value": value})
+}
+
+// vipCategoryList defines the fixed VIP categories and the border colors the
+// maps use for each. Order matters for display.
+var vipCategoryList = []struct{ Type, Color string }{
+	{"Board", "#ffa500"},
+	{"VP", "#800080"},
+	{"Director", "#00bbff"},
+	{"TeamManager", "#00CC00"},
+}
+
+// vipCategoriesPayload groups the stored VIP tags into the fixed categories so
+// the admin chips UI can render (and the JS can re-render after edits).
+func (app *App) vipCategoriesPayload() []map[string]interface{} {
+	vips, _ := app.db.ListVips()
+	byType := map[string][]string{}
+	for _, v := range vips {
+		if v.Title == "" {
+			continue
+		}
+		byType[v.Type] = append(byType[v.Type], v.Title)
+	}
+	out := make([]map[string]interface{}, 0, len(vipCategoryList))
+	for _, c := range vipCategoryList {
+		tags := byType[c.Type]
+		sort.Slice(tags, func(i, j int) bool { return strings.ToLower(tags[i]) < strings.ToLower(tags[j]) })
+		out = append(out, map[string]interface{}{
+			"type":  c.Type,
+			"color": c.Color,
+			"tags":  tags,
+		})
+	}
+	return out
+}
+
+// handleRestVips powers the VIP chips UI: GET returns the grouped categories,
+// POST adds or removes a tag and returns the updated grouping (so the page
+// never has to reload).
+func (app *App) handleRestVips(w http.ResponseWriter, r *http.Request) {
+	sess, ok := app.currentSession(r)
+	if !ok || app.permLevel(sess, "config") < 1 {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	if r.Method == http.MethodPost {
+		if app.permLevel(sess, "config") < 2 {
+			http.Error(w, "forbidden", http.StatusForbidden)
+			return
+		}
+		action := r.FormValue("action")
+		typ := strings.TrimSpace(r.FormValue("type"))
+		tag := strings.TrimSpace(r.FormValue("tag"))
+		valid := false
+		for _, c := range vipCategoryList {
+			if c.Type == typ {
+				valid = true
+				break
+			}
+		}
+		if !valid || tag == "" {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		switch action {
+		case "add":
+			_ = app.db.AddVipTag(typ, tag)
+			_ = app.db.AuditLog("Settings", sess.Username, "VIP tag added ("+typ+": "+tag+")")
+		case "remove":
+			_ = app.db.DeleteVipTag(typ, tag)
+			_ = app.db.AuditLog("Settings", sess.Username, "VIP tag removed ("+typ+": "+tag+")")
+		default:
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+	}
+	writeJSON(w, app.vipCategoriesPayload())
 }
 
 // resolveDirectoryEntry maps an entered value (samaccountname, DOMAIN\sam, or a

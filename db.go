@@ -721,6 +721,41 @@ func (db *DB) AddVip(v VIP) error {
 	})
 }
 
+// AddVipTag adds a tag (parsed job-title text) to a category, ignoring the
+// request when an identical tag already exists for that category.
+func (db *DB) AddVipTag(typ, title string) error {
+	vips, _ := db.ListVips()
+	for _, v := range vips {
+		if v.Type == typ && strings.EqualFold(v.Title, title) {
+			return nil
+		}
+	}
+	return db.AddVip(VIP{Title: title, Type: typ})
+}
+
+// DeleteVipTag removes every VIP entry matching the given category and tag.
+func (db *DB) DeleteVipTag(typ, title string) error {
+	return db.bolt.Update(func(tx *bolt.Tx) error {
+		bkt := tx.Bucket(bucketVips)
+		var doomed [][]byte
+		_ = bkt.ForEach(func(k, val []byte) error {
+			var v VIP
+			if json.Unmarshal(val, &v) == nil && v.Type == typ && strings.EqualFold(v.Title, title) {
+				key := make([]byte, len(k))
+				copy(key, k)
+				doomed = append(doomed, key)
+			}
+			return nil
+		})
+		for _, k := range doomed {
+			if err := bkt.Delete(k); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
 // --- Departments ---
 
 func (db *DB) ListDepartments() ([]string, error) {

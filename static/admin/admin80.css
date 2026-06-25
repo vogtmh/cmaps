@@ -426,3 +426,57 @@
 .dir-sub { font-size: 12px; color: var(--sy-muted); }
 .dir-item:hover .dir-sub { color: rgba(255,255,255,0.85); }
 .dir-empty { padding: 10px 12px; color: var(--sy-muted); font-size: 13px; }
+
+/* ── VIP desk border categories (chips) ───────────────────── */
+.vip-cats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(320px, 1fr));
+  gap: 16px;
+  max-width: 1100px;
+  margin-top: 14px;
+}
+.vip-card {
+  background: var(--sy-surface2);
+  border: 1px solid var(--sy-border);
+  border-left: 4px solid var(--sy-border);
+  border-radius: 10px;
+  padding: 14px 16px;
+}
+.vip-card-head { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+.vip-dot { width: 12px; height: 12px; border-radius: 50%; display: inline-block; }
+.vip-card-title { font-weight: 700; font-size: 15px; }
+.vip-chips { display: flex; flex-wrap: wrap; gap: 8px; min-height: 28px; }
+.vip-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 500;
+}
+.vip-chip-x {
+  border: none;
+  background: rgba(0,0,0,0.25);
+  color: #fff;
+  width: 16px;
+  height: 16px;
+  line-height: 14px;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 13px;
+  padding: 0;
+}
+.vip-chip-x:hover { background: rgba(0,0,0,0.45); }
+.vip-empty { color: var(--sy-muted); font-size: 13px; }
+.vip-add { display: flex; gap: 8px; margin-top: 12px; }
+.vip-add-input {
+  flex: 1;
+  background: var(--sy-surface);
+  border: 1px solid var(--sy-border);
+  border-radius: 6px;
+  color: var(--sy-fg);
+  padding: 6px 10px;
+  font-size: 13px;
+}

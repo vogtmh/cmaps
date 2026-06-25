@@ -611,6 +611,141 @@ function hideDirectoryResults() {
   if (box) box.style.display = 'none';
 }
 
+// Save a single base variable without reloading the page.
+function saveSetting(name, btn) {
+  var row = btn.closest('tr');
+  var input = row ? row.querySelector('input[type=text]') : null;
+  if (!input) return;
+  var orig = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = 'Saving\u2026';
+  var body = 'name=' + encodeURIComponent(name) + '&value=' + encodeURIComponent(input.value);
+  fetch('../rest/setting', {
+    method: 'POST',
+    credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: body
+  }).then(function (r) {
+    if (!r.ok) throw new Error('save failed');
+    return r.json();
+  }).then(function () {
+    btn.disabled = false;
+    btn.textContent = 'Saved';
+    setTimeout(function () { btn.textContent = orig; }, 1200);
+  }).catch(function () {
+    btn.disabled = false;
+    btn.textContent = 'Failed';
+    setTimeout(function () { btn.textContent = orig; }, 1500);
+  });
+}
+
+// ── VIP desk border categories (chips) ───────────────────────
+var _vipEditable = false;
+
+function loadVips(editable) {
+  _vipEditable = !!editable;
+  fetch('../rest/vips', { credentials: 'same-origin' })
+    .then(function (r) { return r.json(); })
+    .then(renderVips)
+    .catch(function () {
+      var c = document.getElementById('vipCategories');
+      if (c) c.textContent = 'Could not load VIP categories.';
+    });
+}
+
+function renderVips(cats) {
+  var c = document.getElementById('vipCategories');
+  if (!c) return;
+  c.innerHTML = '';
+  (cats || []).forEach(function (cat) {
+    var card = document.createElement('div');
+    card.className = 'vip-card';
+    card.style.borderLeftColor = cat.color;
+
+    var head = document.createElement('div');
+    head.className = 'vip-card-head';
+    var dot = document.createElement('span');
+    dot.className = 'vip-dot';
+    dot.style.background = cat.color;
+    head.appendChild(dot);
+    var title = document.createElement('span');
+    title.className = 'vip-card-title';
+    title.textContent = cat.type;
+    head.appendChild(title);
+    card.appendChild(head);
+
+    var chips = document.createElement('div');
+    chips.className = 'vip-chips';
+    (cat.tags || []).forEach(function (tag) {
+      var chip = document.createElement('span');
+      chip.className = 'vip-chip';
+      chip.style.background = cat.color;
+      var label = document.createElement('span');
+      label.textContent = tag;
+      chip.appendChild(label);
+      if (_vipEditable) {
+        var x = document.createElement('button');
+        x.type = 'button';
+        x.className = 'vip-chip-x';
+        x.innerHTML = '&times;';
+        x.title = 'Remove';
+        x.onclick = (function (t, tg) { return function () { removeVipTag(t, tg); }; })(cat.type, tag);
+        chip.appendChild(x);
+      }
+      chips.appendChild(chip);
+    });
+    if (!(cat.tags && cat.tags.length)) {
+      var empty = document.createElement('span');
+      empty.className = 'vip-empty';
+      empty.textContent = 'No tags yet.';
+      chips.appendChild(empty);
+    }
+    card.appendChild(chips);
+
+    if (_vipEditable) {
+      var addRow = document.createElement('div');
+      addRow.className = 'vip-add';
+      var input = document.createElement('input');
+      input.type = 'text';
+      input.className = 'vip-add-input';
+      input.placeholder = 'Add tag\u2026';
+      input.onkeydown = (function (t, inp) {
+        return function (e) { if (e.key === 'Enter') { e.preventDefault(); addVipTag(t, inp); } };
+      })(cat.type, input);
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'sync-btn sync-btn-sm';
+      btn.textContent = 'Add';
+      btn.onclick = (function (t, inp) { return function () { addVipTag(t, inp); }; })(cat.type, input);
+      addRow.appendChild(input);
+      addRow.appendChild(btn);
+      card.appendChild(addRow);
+    }
+
+    c.appendChild(card);
+  });
+}
+
+function postVip(action, type, tag) {
+  var body = 'action=' + encodeURIComponent(action) + '&type=' + encodeURIComponent(type) + '&tag=' + encodeURIComponent(tag);
+  return fetch('../rest/vips', {
+    method: 'POST',
+    credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: body
+  }).then(function (r) { return r.json(); }).then(renderVips);
+}
+
+function addVipTag(type, input) {
+  var tag = (input.value || '').trim();
+  if (!tag) return;
+  postVip('add', type, tag);
+}
+
+function removeVipTag(type, tag) {
+  postVip('remove', type, tag);
+}
+
 // Re-match existing admins to full names from the cached AD directory. Useful
 // for accounts created before the directory cache existed.
 function matchAdminNames() {
