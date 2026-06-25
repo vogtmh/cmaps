@@ -45,6 +45,7 @@ type adminData struct {
 	TopHeader         int
 
 	ActiveTab string
+	SyncSub   string
 	Username  string
 	IsEditor  bool
 	Token     string
@@ -122,17 +123,33 @@ func (app *App) handleAdmin(w http.ResponseWriter, r *http.Request) {
 	if tab == "" {
 		tab = "dashboard"
 	}
-	// Fall back to dashboard if the user lacks permission for the tab. The SAML
-	// tab is gated by the same "adminpanel" permission its REST endpoints use.
-	permKey := tab
-	if tab == "saml" {
-		permKey = "adminpanel"
+	// SAML is now a subtab of the merged "Sync" tab (ActiveTab "ldap"). Keep the
+	// legacy ?tab=saml link working by aliasing it to the SAML subtab.
+	syncSub := r.FormValue("sub")
+	if syncSub == "" {
+		syncSub = r.URL.Query().Get("sub")
 	}
-	if tab != "dashboard" && app.permLevel(sess, permKey) == 0 {
-		tab = "dashboard"
+	if tab == "saml" {
+		tab = "ldap"
+		if syncSub == "" {
+			syncSub = "saml"
+		}
+	}
+	// Fall back to dashboard if the user lacks permission for the tab. The Sync
+	// tab (ldap) is accessible with either the "ldap" permission (LDAP/Robin
+	// subtabs) or the "adminpanel" permission (SAML subtab).
+	if tab != "dashboard" {
+		allowed := app.permLevel(sess, tab) > 0
+		if tab == "ldap" && app.permLevel(sess, "adminpanel") > 0 {
+			allowed = true
+		}
+		if !allowed {
+			tab = "dashboard"
+		}
 	}
 
 	data := app.buildAdminData(r, sess, tab, msg)
+	data.SyncSub = syncSub
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := app.tmpl.ExecuteTemplate(w, "admin.html", data); err != nil {
 		http.Error(w, "template error: "+err.Error(), http.StatusInternalServerError)

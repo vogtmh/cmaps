@@ -226,6 +226,24 @@ function syncLDAP(ldap_id, adminuser) {
   })
 }
 
+function showSyncSub(name) {
+  var subs = ['ldap', 'saml', 'robin'];
+  // Fall back to the first available subsection if the requested one is not
+  // rendered (e.g. the user lacks the matching permission).
+  if (!document.getElementById('syncsub_' + name)) {
+    name = null;
+    for (var i = 0; i < subs.length; i++) {
+      if (document.getElementById('syncsub_' + subs[i])) { name = subs[i]; break; }
+    }
+  }
+  subs.forEach(function(s) {
+    var content = document.getElementById('syncsub_' + s);
+    var nav = document.getElementById('syncnav_' + s);
+    if (content) content.style.display = (s === name) ? 'block' : 'none';
+    if (nav) nav.style.background = (s === name) ? '#505050' : 'transparent';
+  });
+}
+
 function showLdapDebug() {
   var body = document.getElementById('ldapDebugBody');
   body.innerHTML = 'Loading...';
