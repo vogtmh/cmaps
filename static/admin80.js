@@ -518,20 +518,14 @@ function dragElement(elmnt, deskType) {
 
     hideNameplate(1);
     
-    // calc page scaling
-    pageScale = $('#container').width()/targetScreenWidth;
-    var div = $('#content').css('transform');
-    var values = div.split('(')[1];
-    values = values.split(')')[0];
-    values = values.split(',');
-    var a = values[0];
-    var b = values[1];
-
-    var pageScale = Math.sqrt(a*a + b*b);
+    // calc page scaling. #content now uses CSS zoom (not transform), and each
+    // desk ball additionally uses zoom:itemscale, so the cursor delta in screen
+    // pixels must be divided by both to get the desk ball's own layout delta.
+    var pageScale = parseFloat(window.getComputedStyle(document.getElementById('content')).zoom) || 1;
 
     // calculate the new cursor position:
-    diffX = (e.clientX-startJsX)/pageScale;
-    diffY = (e.clientY-startJsY)/pageScale;
+    diffX = (e.clientX-startJsX)/(pageScale*itemscale);
+    diffY = (e.clientY-startJsY)/(pageScale*itemscale);
     diffItemX = parseInt($('#'+elementId).css("left"))-startItemX;
     diffItemY = parseInt($('#'+elementId).css("top"))-startItemY;
 
@@ -558,8 +552,8 @@ function dragElement(elmnt, deskType) {
       attr = result_old.desks.find(o => Object.entries(o).find(([k, value]) => k === 'id' && value === elmnt.id) !== undefined);
       itemid = attr.id;
       itemdesktype = attr.desktype;
-      itemx = parseInt(attr.x)+parseInt(diffItemX);
-      itemy = parseInt(attr.y)+parseInt(diffItemY);
+      itemx = parseInt(attr.x)+Math.round(diffItemX*itemscale);
+      itemy = parseInt(attr.y)+Math.round(diffItemY*itemscale);
       itemdsk = attr.dsk;
       itemempl = attr.empl;
       itemavtr = attr.avtr;

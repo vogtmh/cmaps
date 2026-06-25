@@ -36,6 +36,8 @@ type indexData struct {
 	ZoomOut           int
 	ZoomScaled        string // zoom/100
 	ContentScale      string // zoom/100*autozoom
+	ContentLeft       string // LeftPos / ContentScale (for the zoom-based layout)
+	ContentTop        string // TopHeader / ContentScale (for the zoom-based layout)
 	LeftPos           int
 	TopHeader         int // 69*autozoom
 	Top72             int // 72*autozoom
@@ -215,6 +217,17 @@ func (app *App) renderIndex(w http.ResponseWriter, r *http.Request, sess Session
 		usermodeColor = "orange"
 	}
 
+	// Content scale + zoom-based positioning. The map is laid out at a fixed
+	// design width and shown with CSS `zoom` (instead of transform:scale) so the
+	// browser re-rasterizes text at the final size and fonts stay crisp. Because
+	// `zoom` also scales an element's left/top offsets, we pre-divide them here.
+	contentScale := float64(zoom) / 100 * float64(autozoom)
+	if contentScale <= 0 {
+		contentScale = 1
+	}
+	contentLeft := float64(leftPos) / contentScale
+	contentTop := float64(69*autozoom) / contentScale
+
 	findme := q.Get("findme")
 	if xssCheck(findme) {
 		findme = ""
@@ -237,6 +250,8 @@ func (app *App) renderIndex(w http.ResponseWriter, r *http.Request, sess Session
 		ZoomOut:           zoom - 10,
 		ZoomScaled:        strconv.FormatFloat(float64(zoom)/100, 'f', -1, 64),
 		ContentScale:      strconv.FormatFloat(float64(zoom)/100*float64(autozoom), 'f', -1, 64),
+		ContentLeft:       strconv.FormatFloat(contentLeft, 'f', -1, 64),
+		ContentTop:        strconv.FormatFloat(contentTop, 'f', -1, 64),
 		LeftPos:           leftPos,
 		TopHeader:         69 * autozoom,
 		Top72:             72 * autozoom,

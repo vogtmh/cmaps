@@ -36,8 +36,10 @@ $(function(){
   // declare all variables used in scalePages function
   var page = $('.page_content');
   var controlcontainer = $('.control_container');
+  var controlcontent = $('.control_content');
   var controlback = $('.control_background');
   var notifycontainer = $('.notify_container');
+  var notifycontent = $('.notify_content');
   var loginicon = $('.loginicon');
   var buttonsleft = $('.buttons_left');
   var buttonsright = $('.buttons_right');
@@ -90,28 +92,34 @@ $(function(){
   // Change this DIVs only in Desktop mode
   if (typeof detectMobile === 'function') {
     if( !detectMobile() ) {
-      controlcontainer.attr('style', 'position:fixed; left: 0px; top: 0px; height:69px;width:100%;background-color:#333333;opacity:1.0;z-index:1; transition: all 300ms ease-in-out !important; transform-origin:50% 0%; transform:scale(' + basePage.scale + ');');
+      controlcontainer.attr('style', 'position:fixed; left: 0px; top: 0px; height:' + (69*basePage.scale) + 'px;width:100%;background-color:#333333;opacity:1.0;z-index:1; transition: all 300ms ease-in-out !important; display:flex; justify-content:center; align-items:flex-start;');
       controlback.attr('style', 'width:100%; height: 69px; position: fixed; top: 0px; left: 0px;background: #333333;transform-origin:50% 0%;z-index:1; transform:scaleY(' + basePage.scale + ');');
       loginicon.attr('style', 'position:fixed; bottom:10px;left:10px; z-index:3; opacity:0.7;transform:scale(' + basePage.scale + ');transform-origin:0% 100%;');
     }
     else {
-      controlcontainer.attr('style', 'position:fixed; left: 0px; top: 0px; height:69px;width:100%;background-color:#333333;opacity:1.0;z-index:1; transition: all 300ms ease-in-out !important; transform-origin:50% 0%; transform:scale(' + basePage.scale + ');display:none;');
+      controlcontainer.attr('style', 'position:fixed; left: 0px; top: 0px; height:' + (69*basePage.scale) + 'px;width:100%;background-color:#333333;opacity:1.0;z-index:1; transition: all 300ms ease-in-out !important; display:flex; justify-content:center; align-items:flex-start;display:none;');
       controlback.attr('style', 'width:100%; height: 69px; position: fixed; top: 0px; left: 0px;background: #333333;transform-origin:50% 0%;z-index:1; transform:scaleY(' + basePage.scale + ');display:none;');
       loginicon.attr('style', 'position:fixed; bottom:10px;left:10px; z-index:3; opacity:0.7;transform:scale(' + basePage.scale + ');transform-origin:0% 100%;display:none;');
     }
   }
   else {
-    controlcontainer.attr('style', 'position:fixed; left: 0px; top: 0px; height:69px;width:100%;background-color:#333333;opacity:1.0;z-index:1; transition: all 300ms ease-in-out !important; transform-origin:50% 0%; transform:scale(' + basePage.scale + ');');
+    controlcontainer.attr('style', 'position:fixed; left: 0px; top: 0px; height:' + (69*basePage.scale) + 'px;width:100%;background-color:#333333;opacity:1.0;z-index:1; transition: all 300ms ease-in-out !important; display:flex; justify-content:center; align-items:flex-start;');
     controlback.attr('style', 'width:100%; height: 69px; position: fixed; top: 0px; left: 0px;background: #333333;transform-origin:50% 0%;z-index:1; transform:scaleY(' + basePage.scale + ');');
     loginicon.attr('style', 'position:fixed; bottom:10px;left:10px; z-index:3; opacity:0.7;transform:scale(' + basePage.scale + ');transform-origin:0% 100%;');
   }
-  notifycontainer.attr('style', 'position:fixed; left: 0px; top:' + (72*basePage.scale) + 'px; height:40px;width:100%;background-color:transparent;z-index:1; pointer-events: none;transition: all 300ms ease-in-out !important; transform-origin:50% 0%; transform:scale(' + basePage.scale + ');');
-  page.attr('style', 'transform:scale(' + (basePage.scale*manualscale) + ');left:' + newLeftPos + 'px;top:' + (69*basePage.scale) + 'px;');
+  controlcontent.attr('style', 'position:relative; top:0px;width:1600px;height:69px; z-index:2;zoom:' + basePage.scale + ';background-color:#333333;');
+  notifycontainer.attr('style', 'position:fixed; left: 0px; top:' + (72*basePage.scale) + 'px; height:40px;width:100%;background-color:transparent;z-index:1; pointer-events: none;transition: all 300ms ease-in-out !important; display:flex; justify-content:center;');
+  notifycontent.attr('style', 'position:relative; top:0px;width:1600px;height:0px; z-index:2;zoom:' + basePage.scale + ';background-color:transparent;pointer-events: none;');
+  // The map content uses CSS `zoom` (not transform:scale) so the browser
+  // re-rasterizes desk labels at the final size and fonts stay crisp. `zoom`
+  // also scales left/top offsets, so divide them by the zoom factor.
+  var contentZoom = basePage.scale*manualscale;
+  page.attr('style', 'zoom:' + contentZoom + ';left:' + (newLeftPos/contentZoom) + 'px;top:' + ((69*basePage.scale)/contentZoom) + 'px;');
   buttonsleft.attr('style', 'position:fixed; left: 10px; bottom: '+ (25*basePage.scale) + 'px; height:80px;background: transparent; transform:scale(' + basePage.scale + ');transform-origin:0% 100%;z-index:5;');
   buttonsright.attr('style', 'position:fixed; right: 10px; bottom: ' + (25*basePage.scale) + 'px; height:auto;width:80px;background: transparent; transform:scale(' + basePage.scale +');transform-origin:100% 100%;');
   
-  datepicker.attr('style', 'position:fixed;left:50%;bottom:0px;width:180px;height:175px;margin-left:-105px;padding:15px 15px 10px 15px;background-color:#333;border-radius:10px 10px 0px 0px;display:none;transform:scale(' + basePage.scale + ');transform-origin:50% 100%;z-index:0;');
-  clock.attr('style', 'position:fixed;bottom:0px;width: 180px;left: 50%;margin-left: -100px;text-align:center;background-color: #333;border-radius: 10px 10px 0px 0px;padding: 10px;cursor: pointer;transform:scale(' + basePage.scale + ');transform-origin:50% 100%;z-index:1;');
+  datepicker.attr('style', 'position:relative;width:180px;height:175px;padding:15px 15px 10px 15px;background-color:#333;border-radius:10px 10px 0px 0px;display:none;zoom:' + basePage.scale + ';z-index:0;pointer-events:auto;');
+  clock.attr('style', 'position:relative;width:180px;text-align:center;background-color:#333;border-radius:10px 10px 0px 0px;padding:10px;cursor:pointer;zoom:' + basePage.scale + ';z-index:1;pointer-events:auto;');
   $('.clock').hover(function(){
     $(this).css({ "background-color": "#555" });
   }, function(){

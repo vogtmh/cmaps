@@ -38,8 +38,8 @@
 
 <!-- HEADER -->
 <div class="control_background" style="width:100%; height: 69px; position: fixed; top: 0px; left: 0px;background: #333333; z-index:1; transform:scaleY({{.Autozoom}})"> </div>
-<div id="controlpanel" class="control_container" style="position:fixed; left: 0px; top: 0px; height:69px;width:100%;background-color:#333333;opacity:1.0;z-index:1;transform:scale({{.Autozoom}});transform-origin:50% 0%;">
-<div class="control_content" id="control_content" style="position: absolute; left:50%; margin-left:-{{.HalfWidth}}px; top:0px;width:{{.TargetScreenWidth}}px;height:69px; z-index:2;transform-origin:50% 0%;background-color:#333333">
+<div id="controlpanel" class="control_container" style="position:fixed; left: 0px; top: 0px; height:{{.TopHeader}}px;width:100%;background-color:#333333;opacity:1.0;z-index:1;display:flex;justify-content:center;align-items:flex-start;">
+<div class="control_content" id="control_content" style="position: relative; top:0px;width:{{.TargetScreenWidth}}px;height:69px; z-index:2;zoom:{{.Autozoom}};background-color:#333333">
 
   <!-- Logo -->
   <div class="headeritem" id="logocontrol" style="width:200px; background: transparent;">
@@ -141,14 +141,14 @@
 </div>
 
 <!-- Notification area -->
-<div id="notifypanel" class="notify_container" style="position:fixed; left: 0px; top: {{.Top72}}px; height:0px;width:100%;background-color:transparent;z-index:1;transform:scale({{.Autozoom}});transform-origin:50% 0%;pointer-events: none;">
-  <div id="notifycontent" class="notify_content" style="position: absolute; left:50%; margin-left:-{{.HalfWidth}}px; top:0px;width:{{.TargetScreenWidth}}px;height:0px; z-index:2;transform-origin:50% 0%;background-color:transparent;pointer-events: none;">
+<div id="notifypanel" class="notify_container" style="position:fixed; left: 0px; top: {{.Top72}}px; height:0px;width:100%;background-color:transparent;z-index:1;display:flex;justify-content:center;pointer-events: none;">
+  <div id="notifycontent" class="notify_content" style="position: relative; top:0px;width:{{.TargetScreenWidth}}px;height:0px; z-index:2;zoom:{{.Autozoom}};background-color:transparent;pointer-events: none;">
     <span style="position:relative; width:454px;height:0px;display:inline;float:left;line-height: 40px;">&nbsp;</span>
   </div>
 </div>
 
 <!-- Content -->
-<div id="content" class="page_content" style="transform:scale({{.ContentScale}});left:{{.LeftPos}}px;top:{{.TopHeader}}px;">
+<div id="content" class="page_content" style="zoom:{{.ContentScale}};left:{{.ContentLeft}}px;top:{{.ContentTop}}px;">
   {{if .IsOverview}}
   <div id="overviewmap" style="text-align:center;position:absolute;width:{{.TargetScreenWidth}}px;">
     <img src="maps/{{.Map}}.png" style="opacity:0.7;position:absolute; top:20px; left:0px; width: {{.TargetScreenWidth}}px;{{if .Printmode}} -webkit-filter: invert(1);filter: invert(1);{{end}}" alt="" onclick="hideMapplate();" />
@@ -298,8 +298,8 @@
 
 <!-- Announcement sidebar -->
 <script>announceValue = {{.AnnounceCookie}}</script>
-<div class="datepicker" id="theDate"></div>
-<div class="clock" id="theTime" onclick="toggleDatepicker()"></div>
+<div id="datepicker_wrap" style="position:fixed;left:0px;bottom:0px;width:100%;display:flex;justify-content:center;align-items:flex-end;z-index:0;pointer-events:none;"><div class="datepicker" id="theDate" style="zoom:{{.Autozoom}};pointer-events:auto;"></div></div>
+<div id="clock_wrap" style="position:fixed;left:0px;bottom:0px;width:100%;display:flex;justify-content:center;align-items:flex-end;z-index:1;pointer-events:none;"><div class="clock" id="theTime" onclick="toggleDatepicker()" style="zoom:{{.Autozoom}};pointer-events:auto;"></div></div>
 <div id="announcementbar" class="announcementbar" style="position: fixed;background:#333333;right:0px;top:0px;width:590px;height:100%;opacity:0.95;display:none;">
   <div class="announcementbar_margin" style="height:{{.TopHeader}}px;width:100%;margin-bottom:5px;background:none;"></div>
   <div id="announcementbar_body" class="announcementbar_body" style="height:92%; overflow-y: scroll;width:610px;font-size:20px;"></div>

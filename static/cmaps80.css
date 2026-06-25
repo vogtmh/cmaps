@@ -21,11 +21,8 @@
 }
 
 .clock {
-    position:fixed; 
-    bottom:0px; 
+    position:relative; 
     width: 180px;
-    left: 50%;
-    margin-left: -100px; 
     text-align:center;
     background-color: #333;
     border-radius: 10px 10px 0px 0px;
@@ -39,12 +36,9 @@
 }
 
 .datepicker {
-    position:fixed;
-    left:50%;
-    bottom:0px;
+    position:relative;
     width:180px;
     height:175px;
-    margin-left:-100px;
     padding:15px 15px 10px 15px;
     background-color:#333;
     border-radius:10px 10px 0px 0px;
@@ -752,9 +746,10 @@ canvas {
   -ms-transform-origin: top left;
   -webkit-transform-origin: top left;
   transform-origin: top left;
-  -webkit-transition: all 500ms ease-in-out !important;
-  transition: all 300ms ease-in-out !important;
+  -webkit-transition: left 500ms ease-in-out, top 500ms ease-in-out !important;
+  transition: left 300ms ease-in-out, top 300ms ease-in-out !important;
   position: absolute;
+  z-index: 0;
 }
 
 a {color: white;text-decoration: none;}

@@ -421,18 +421,16 @@ function showDesknumbers() {
         p.appendChild(newElement);
         //newElement.innerHTML = output;
         $('#desknumber' + desk.id).css('position','absolute');
-        $('#desknumber' + desk.id).css('left',(desk.x-(20*itemscale)) + 'px');
+        $('#desknumber' + desk.id).css('left',(desk.x-(20*itemscale*itemscale)) + 'px');
         $('#desknumber' + desk.id).css('top',(desk.y-(10*itemscale)) + 'px');
-        $('#desknumber' + desk.id).css('width',(40*itemscale)+'px');
-        $('#desknumber' + desk.id).css('height',(20*itemscale)+'px');
+        $('#desknumber' + desk.id).css('width',(40*itemscale*itemscale)+'px');
+        $('#desknumber' + desk.id).css('height',(20*itemscale*itemscale)+'px');
         $('#desknumber' + desk.id).css('text-align','center');
-        $('#desknumber' + desk.id).css('font-size','8px');
+        $('#desknumber' + desk.id).css('font-size',(8*itemscale)+'px');
         $('#desknumber' + desk.id).css('color',textcolor);
-        $('#desknumber' + desk.id).css('line-height',lineheight+'px');
+        $('#desknumber' + desk.id).css('line-height',(lineheight*itemscale)+'px');
         $('#desknumber' + desk.id).css('background-color','transparent');
         $('#desknumber' + desk.id).css('z-index','9');
-        $('#desknumber' + desk.id).css('transform','scale('+itemscale+')');
-        $('#desknumber' + desk.id).css('transform-origin','50% 0%');
       }
     });
 }
@@ -482,18 +480,16 @@ function showNames() {
         p.appendChild(newElement);
         //newElement.innerHTML = output;
         $('#name' + desk.id).css('position','absolute');
-        $('#name' + desk.id).css('left',(desk.x-(20*itemscale)) + 'px');
+        $('#name' + desk.id).css('left',(desk.x-(20*itemscale*itemscale)) + 'px');
         $('#name' + desk.id).css('top',divtop + 'px');
-        $('#name' + desk.id).css('width',(40*itemscale)+'px');
-        $('#name' + desk.id).css('height',(20*itemscale)+'px');
+        $('#name' + desk.id).css('width',(40*itemscale*itemscale)+'px');
+        $('#name' + desk.id).css('height',(20*itemscale*itemscale)+'px');
         $('#name' + desk.id).css('text-align','center');
-        $('#name' + desk.id).css('font-size','8px');
+        $('#name' + desk.id).css('font-size',(8*itemscale)+'px');
         $('#name' + desk.id).css('color',textcolor);
-        $('#name' + desk.id).css('line-height',lineheight+'px');
+        $('#name' + desk.id).css('line-height',(lineheight*itemscale)+'px');
         $('#name' + desk.id).css('background-color','transparent');
         $('#name' + desk.id).css('z-index','9');
-        $('#name' + desk.id).css('transform','scale('+itemscale+')');
-        $('#name' + desk.id).css('transform-origin','50% 0%');
       }
     });
 }
@@ -1746,7 +1742,7 @@ function updateDesks(forceRefresh) {
             case "floor": 
               if (typeof token !== 'undefined') {
                 outputdesks+='<div id="' + counter.id + '" class="' + deskClass + '" style="position:absolute;left:' 
-                        + (counter.x-(halfsize*itemscale)) + 'px;top:' + (counter.y-(halfsize*itemscale)) + 'px;border-radius:50%;transform:scale(' + itemscale + ');transform-origin: 0% 0%;"'
+                        + (counter.x/itemscale-halfsize) + 'px;top:' + (counter.y/itemscale-halfsize) + 'px;border-radius:50%;zoom:' + itemscale + ';"'
                         + 'onmouseover=showNameplate("' + counter.id + '","' + deskType + '"); onmouseup=showSticky("' + counter.id + '","' + deskType + '"); onmouseout=hideNameplate(1);>'
                         + '<div id="caption' + counter.id + '" class="caption">' + nameplate_caption + '</div></div>';
               }
@@ -1757,7 +1753,7 @@ function updateDesks(forceRefresh) {
               break;
             case "meeting":
               outputdesks+='<div id="' + counter.id + '" class="' + deskClass + '" style="position:absolute;left:' 
-                            + (counter.x-(halfsize*itemscale)) + 'px;top:' + (counter.y-(halfsize*itemscale)) + 'px;border-radius:50%;transform:scale(' + itemscale + ');transform-origin: 0% 0%;"'
+                            + (counter.x/itemscale-halfsize) + 'px;top:' + (counter.y/itemscale-halfsize) + 'px;border-radius:50%;zoom:' + itemscale + ';"'
                             + '>'
                             + '<div id="caption' + counter.id + '" class="caption">' + nameplate_caption + '</div>'
                             + '<div id="meeting' + counter.id + '" class="meeting_indicator" style="position:absolute; left:0px; top:25px;display:none;"'
@@ -1767,7 +1763,7 @@ function updateDesks(forceRefresh) {
               break;
             default: 
                 outputdesks+='<div id="' + counter.id + '" class="' + deskClass + '" style="position:absolute;left:' 
-                            + (counter.x-(halfsize*itemscale)) + 'px;top:' + (counter.y-(halfsize*itemscale)) + 'px;border-radius:50%;transform:scale(' + itemscale + ');transform-origin: 0% 0%;"'
+                            + (counter.x/itemscale-halfsize) + 'px;top:' + (counter.y/itemscale-halfsize) + 'px;border-radius:50%;zoom:' + itemscale + ';"'
                             + '>'
                             + '<div id="caption' + counter.id + '" class="caption">' + nameplate_caption + '</div></div>';
                 break;
