@@ -176,7 +176,11 @@ func (app *App) handleAdminPost(w http.ResponseWriter, r *http.Request, sess Ses
 			if err != nil {
 				return "Error: Robin location id must be a number."
 			}
-			_ = app.db.PutRobinSpace(RobinSpace{Spacename: strings.ToLower(sn), Spaceid: id})
+			_ = app.db.PutRobinSpace(RobinSpace{
+				Spacename: strings.ToLower(sn),
+				Spaceid:   id,
+				Mapname:   strings.ToLower(strings.TrimSpace(r.FormValue("robinMapname"))),
+			})
 			_ = app.db.AuditLog("LDAP", sess.Username, "Robin space created ("+sn+")")
 			return "Robin space added."
 		}

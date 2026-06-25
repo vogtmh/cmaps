@@ -165,10 +165,23 @@ type VIP struct {
 	Description string `json:"description"`
 }
 
-// RobinSpace mirrors a row of config_robinspaces.
+// RobinSpace mirrors a row of config_robinspaces. Spacename is the unique Robin
+// location label (also the bucket key); Mapname is the CompanyMaps map the rooms
+// are shown on. When Mapname is empty it falls back to Spacename, so multiple
+// Robin locations (e.g. goeppingenMain + goeppingenAux) can feed one map.
 type RobinSpace struct {
 	Spacename string `json:"spacename"`
 	Spaceid   int    `json:"spaceid"`
+	Mapname   string `json:"mapname,omitempty"`
+}
+
+// MapName returns the CompanyMaps map a Robin space feeds, defaulting to the
+// space name when no explicit map is configured.
+func (s RobinSpace) MapName() string {
+	if s.Mapname != "" {
+		return s.Mapname
+	}
+	return s.Spacename
 }
 
 // MeetingStatus mirrors a row of the meetingstatus cache table.

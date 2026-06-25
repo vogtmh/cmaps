@@ -223,9 +223,11 @@
 
   <h2 style="margin:30px 0 0 20px;">Meeting rooms (Robin)</h2>
   <p style="margin-left:20px;max-width:760px;">
-    Meeting-room availability is polled from Robin. Configure the access token and map each
-    CompanyMaps map to its Robin <b>location id</b>. Meeting desks on a map are matched to Robin
-    rooms by name.
+    Meeting-room availability is polled from Robin. Configure the access token, then map each Robin
+    <b>location id</b> to a CompanyMaps map. The <b>map name</b> is optional — leave it blank to use the
+    space name, or set it so several Robin locations feed one map (e.g. point both
+    <i>goeppingenMain</i> and <i>goeppingenAux</i> at the <i>goeppingen</i> map). Meeting desks on a map
+    are matched to Robin rooms by name.
   </p>
   {{if gt .PermLdap 1}}
   <form action="?tab=ldap" method="post" style="margin-left:20px;">
@@ -247,12 +249,12 @@
 
   <table style="margin-left:20px;margin-top:16px;">
     <tr style="font-weight:bold;">
-      <td width="300">Map name</td><td width="200">Robin location id</td><td width="100">&nbsp;</td>
+      <td width="220">Space name</td><td width="220">Map name</td><td width="160">Robin location id</td><td width="100">&nbsp;</td>
     </tr>
     <tr><td>&nbsp;</td></tr>
     {{range .RobinSpaces}}
     <tr>
-      <td>{{.Spacename}}</td><td>{{.Spaceid}}</td>
+      <td>{{.Spacename}}</td><td>{{.MapName}}</td><td>{{.Spaceid}}</td>
       <td>
         {{if gt $.PermLdap 1}}
         <form action="?tab=ldap" method="post" style="display:inline">
@@ -269,8 +271,9 @@
     <form action="?tab=ldap" method="post">
       <tr>
         <input type="hidden" name="tab" value="ldap">
-        <td><input type="text" name="robinSpacename" style="width:290px;" placeholder="Map name (e.g. germany)"></td>
-        <td><input type="text" name="robinSpaceid" style="width:190px;" placeholder="Robin location id"></td>
+        <td><input type="text" name="robinSpacename" style="width:210px;" placeholder="Space name (e.g. goeppingenMain)"></td>
+        <td><input type="text" name="robinMapname" style="width:210px;" placeholder="Map name (optional)"></td>
+        <td><input type="text" name="robinSpaceid" style="width:150px;" placeholder="Robin location id"></td>
         <td><input type="submit" value="Add"></td>
       </tr>
     </form>

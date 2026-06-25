@@ -71,15 +71,15 @@ type robinEvents struct {
 	} `json:"data"`
 }
 
-// refreshRobin re-polls Robin for a single map (RobinSpace.Spacename == map). An
-// empty mapName refreshes every configured space.
+// refreshRobin re-polls Robin for a single map. An empty mapName refreshes every
+// configured space. Multiple spaces may map to the same CompanyMaps map.
 func (app *App) refreshRobin(mapName string) {
 	spaces, _ := app.db.ListRobinSpaces()
 	for _, s := range spaces {
-		if mapName != "" && s.Spacename != mapName {
+		if mapName != "" && s.MapName() != mapName {
 			continue
 		}
-		if err := app.pollRobinLocation(s.Spaceid, s.Spacename); err != nil {
+		if err := app.pollRobinLocation(s.Spaceid, s.MapName()); err != nil {
 			log.Printf("robin poll %s: %v", s.Spacename, err)
 		}
 	}
@@ -223,7 +223,11 @@ func (app *App) RunRobinSyncVerbose() []string {
 	totalRooms := 0
 	for _, s := range spaces {
 		add("")
-		add("== Space \"%s\" (location id %d) ==", s.Spacename, s.Spaceid)
+		if s.MapName() != s.Spacename {
+			add("== Space \"%s\" (location id %d) -> map \"%s\" ==", s.Spacename, s.Spaceid, s.MapName())
+		} else {
+			add("== Space \"%s\" (location id %d) ==", s.Spacename, s.Spaceid)
+		}
 		var list robinSpaceList
 		if err := app.robinGet(fmt.Sprintf("/locations/%d/spaces?page=1&per_page=200", s.Spaceid), &list); err != nil {
 			add("  ERROR fetching rooms for location %d: %v", s.Spaceid, err)
@@ -231,7 +235,7 @@ func (app *App) RunRobinSyncVerbose() []string {
 		}
 		add("  Robin returned %d room(s) for this location.", len(list.Data))
 		for _, room := range list.Data {
-			logs = append(logs, app.pollRobinRoomVerbose(room.ID, room.Name, s.Spacename)...)
+			logs = append(logs, app.pollRobinRoomVerbose(room.ID, room.Name, s.MapName())...)
 			totalRooms++
 		}
 	}
