@@ -357,6 +357,10 @@ func (db *DB) SetSetting(name, value string) error {
 	return putJSON(db, bucketSettings, []byte(name), value)
 }
 
+func (db *DB) DeleteSetting(name string) error {
+	return deleteKey(db, bucketSettings, []byte(name))
+}
+
 func (db *DB) AllSettings() (map[string]string, error) {
 	out := map[string]string{}
 	err := db.bolt.View(func(tx *bolt.Tx) error {

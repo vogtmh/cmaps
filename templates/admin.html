@@ -147,9 +147,9 @@
   <br/>
   <h2 style="margin-left:20px">Configured base variables</h2><br />
   <table style="margin-left: 20px">
-    <tr style="font-weight:bold"><td width="270">Variable</td><td width="300">Value</td></tr>
+    <tr style="font-weight:bold"><td width="270">Variable</td><td width="300">Value</td>{{if gt .PermConfig 1}}<td width="80">&nbsp;</td>{{end}}</tr>
     <tr><td>&nbsp;</td><td>&nbsp;</td></tr>
-    {{range .GeneralVars}}<tr><td>{{.Variable}}</td><td>{{.Value}}</td></tr>{{end}}
+    {{range .GeneralVars}}<tr><td>{{.Variable}}</td><td>{{.Value}}</td>{{if gt $.PermConfig 1}}<td><form action="?tab=config" method="post" style="margin:0;" onsubmit="return confirm('Delete base variable &quot;{{.Variable}}&quot;? This cannot be undone.');"><input type="hidden" name="tab" value="config"><input type="hidden" name="deleteSetting" value="{{.Variable}}"><button type="submit" class="sync-btn sync-btn-sm sync-btn-danger">Delete</button></form></td>{{end}}</tr>{{end}}
   </table>
   <br/>
   <h2 style="margin-left:20px">Configured VIP desks</h2><br />

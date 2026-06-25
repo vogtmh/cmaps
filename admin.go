@@ -355,6 +355,11 @@ func (app *App) handleAdminPost(w http.ResponseWriter, r *http.Request, sess Ses
 		if app.permLevel(sess, "config") < 2 {
 			return ""
 		}
+		if del := strings.TrimSpace(r.FormValue("deleteSetting")); del != "" {
+			_ = app.db.DeleteSetting(del)
+			_ = app.db.AuditLog("Settings", sess.Username, "Base variable deleted ("+del+")")
+			return "Variable removed."
+		}
 		return app.saveLogosFromForm(r, sess)
 	}
 	return ""
