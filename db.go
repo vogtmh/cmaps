@@ -14,25 +14,25 @@ import (
 // boltDB buckets, replacing the MySQL tables of the PHP app. Per-map desk tables
 // (desks_<map>) are collapsed into a single "desks" bucket keyed by "<map>:<id>".
 var (
-	bucketSettings   = []byte("settings")        // config_general (variable -> value)
-	bucketMaps       = []byte("maplist")         // config_maplist (key = mapname)
-	bucketDesks      = []byte("desks")           // desks_<map> (key = "<map>:<id>")
-	bucketLdap       = []byte("ldapmirror")      // ldap-mirror (key = userid/ipphone)
-	bucketBookings   = []byte("bookings")        // bookings (key = seq)
-	bucketTeams      = []byte("teams")           // config_teams (key = teamname)
-	bucketRoles      = []byte("roles")           // config_roles (key = id)
-	bucketUsers      = []byte("users")           // config_mapadmins + local users (key = username)
-	bucketChangelog  = []byte("changelog")       // ldap_changelog (key = seq)
-	bucketStats      = []byte("stats")           // stats (key = YYYY-MM-DD)
-	bucketTracking   = []byte("tracking")        // unique daily visitor tracking (key = date:user)
-	bucketVips       = []byte("vips")            // config_vips (key = seq)
-	bucketDepts      = []byte("departments")     // config_department_list (key = seq)
-	bucketRobin      = []byte("robinspaces")     // config_robinspaces (key = spacename)
-	bucketMeeting    = []byte("meetingstatus")   // meetingstatus (key = "<map>:<room>")
-	bucketWhitelist  = []byte("healthwhitelist") // health_whitelist (key = seq)
-	bucketLdapSrc    = []byte("ldapsources")     // config_ldap (key = id)
-	bucketAudit      = []byte("auditlog")        // auditlog (key = seq)
-	bucketMeta       = []byte("meta")            // app meta (wizard state, etc.)
+	bucketSettings  = []byte("settings")        // config_general (variable -> value)
+	bucketMaps      = []byte("maplist")         // config_maplist (key = mapname)
+	bucketDesks     = []byte("desks")           // desks_<map> (key = "<map>:<id>")
+	bucketLdap      = []byte("ldapmirror")      // ldap-mirror (key = userid/ipphone)
+	bucketBookings  = []byte("bookings")        // bookings (key = seq)
+	bucketTeams     = []byte("teams")           // config_teams (key = teamname)
+	bucketRoles     = []byte("roles")           // config_roles (key = id)
+	bucketUsers     = []byte("users")           // config_mapadmins + local users (key = username)
+	bucketChangelog = []byte("changelog")       // ldap_changelog (key = seq)
+	bucketStats     = []byte("stats")           // stats (key = YYYY-MM-DD)
+	bucketTracking  = []byte("tracking")        // unique daily visitor tracking (key = date:user)
+	bucketVips      = []byte("vips")            // config_vips (key = seq)
+	bucketDepts     = []byte("departments")     // config_department_list (key = seq)
+	bucketRobin     = []byte("robinspaces")     // config_robinspaces (key = spacename)
+	bucketMeeting   = []byte("meetingstatus")   // meetingstatus (key = "<map>:<room>")
+	bucketWhitelist = []byte("healthwhitelist") // health_whitelist (key = seq)
+	bucketLdapSrc   = []byte("ldapsources")     // config_ldap (key = id)
+	bucketAudit     = []byte("auditlog")        // auditlog (key = seq)
+	bucketMeta      = []byte("meta")            // app meta (wizard state, etc.)
 )
 
 var allBuckets = [][]byte{
@@ -621,6 +621,10 @@ func (db *DB) ListRobinSpaces() ([]RobinSpace, error) {
 
 func (db *DB) PutRobinSpace(s RobinSpace) error {
 	return putJSON(db, bucketRobin, []byte(s.Spacename), s)
+}
+
+func (db *DB) DeleteRobinSpace(name string) error {
+	return deleteKey(db, bucketRobin, []byte(name))
 }
 
 // --- Meeting status ---

@@ -66,6 +66,9 @@ type adminData struct {
 	LogoRegular  string
 	LogoHover    string
 	LdapSources  []LdapSource
+	RobinSpaces  []RobinSpace
+	RobinOrg     string
+	RobinSet     bool
 	Maps         []mapRow
 	DeskMaps     []string
 	Mapadmins    []adminUserRow
@@ -153,6 +156,29 @@ func (app *App) handleAdminPost(w http.ResponseWriter, r *http.Request, sess Ses
 	case "ldap":
 		if app.permLevel(sess, "ldap") < 2 {
 			return ""
+		}
+		// Robin / meeting-room management lives on the LDAP tab.
+		if name := r.FormValue("deleteRobinSpace"); name != "" {
+			_ = app.db.DeleteRobinSpace(name)
+			_ = app.db.AuditLog("LDAP", sess.Username, "Robin space removed ("+name+")")
+			return "Robin space removed."
+		}
+		if r.FormValue("saveRobin") != "" {
+			if tok := strings.TrimSpace(r.FormValue("robintoken")); tok != "" {
+				_ = app.db.SetSetting("robintoken", tok)
+			}
+			_ = app.db.SetSetting("robinOrganisation", strings.TrimSpace(r.FormValue("robinOrganisation")))
+			_ = app.db.AuditLog("LDAP", sess.Username, "Robin credentials updated")
+			return "Robin settings saved."
+		}
+		if sn := strings.TrimSpace(r.FormValue("robinSpacename")); sn != "" {
+			id, err := strconv.Atoi(strings.TrimSpace(r.FormValue("robinSpaceid")))
+			if err != nil {
+				return "Error: Robin location id must be a number."
+			}
+			_ = app.db.PutRobinSpace(RobinSpace{Spacename: strings.ToLower(sn), Spaceid: id})
+			_ = app.db.AuditLog("LDAP", sess.Username, "Robin space created ("+sn+")")
+			return "Robin space added."
 		}
 		if id := r.FormValue("deleteLdapID"); id != "" {
 			if n, err := strconv.Atoi(id); err == nil {
@@ -399,6 +425,10 @@ func (app *App) buildAdminData(r *http.Request, sess Session, tab, msg string) a
 
 	case "ldap":
 		d.LdapSources, _ = app.db.ListLdapSources()
+		d.RobinSpaces, _ = app.db.ListRobinSpaces()
+		sort.Slice(d.RobinSpaces, func(i, j int) bool { return d.RobinSpaces[i].Spacename < d.RobinSpaces[j].Spacename })
+		d.RobinOrg = app.db.GetSetting("robinOrganisation")
+		d.RobinSet = app.db.GetSetting("robintoken") != ""
 
 	case "maps":
 		maps, _ := app.db.ListMaps()
@@ -549,6 +579,18 @@ func (app *App) handleRestLdapDebug(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, app.SyncDebug())
+}
+
+// handleRestRobinTest runs a full Robin meeting sync and returns the step-by-step
+// log so the admin panel can show exactly what happened during the sync.
+func (app *App) handleRestRobinTest(w http.ResponseWriter, r *http.Request) {
+	sess, ok := app.currentSession(r)
+	if !ok || app.permLevel(sess, "ldap") < 1 {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	_ = app.db.AuditLog("LDAP", sess.Username, "Robin meeting sync test run")
+	writeJSON(w, map[string]interface{}{"log": app.RunRobinSyncVerbose()})
 }
 
 // orDefaultStr returns v trimmed, or def when empty.

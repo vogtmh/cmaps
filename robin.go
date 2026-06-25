@@ -114,38 +114,48 @@ func (app *App) pollRobinRoom(roomID int, roomName, mapName string) error {
 		return err
 	}
 
-	now := time.Now()
-	var nowTitle, nowStart, nowEnd, nowTz string
-	var nextTitle, nextStart, nextEnd, nextTz string
+	ev := roomEventWindows(events)
+	deskid := app.findMeetingDeskID(mapName, roomName)
 
+	return app.db.PutMeetingStatus(MeetingStatus{
+		Map: mapName, Room: roomName, Availability: state.Data.Availability,
+		NowTitle: ev.nowTitle, NowStart: ev.nowStart, NowEnd: ev.nowEnd, NowTz: ev.nowTz,
+		NextTitle: ev.nextTitle, NextStart: ev.nextStart, NextEnd: ev.nextEnd, NextTz: ev.nextTz,
+		Deskid: deskid,
+	})
+}
+
+// roomWindows holds the formatted current/next event details for a room.
+type roomWindows struct {
+	nowTitle, nowStart, nowEnd, nowTz     string
+	nextTitle, nextStart, nextEnd, nextTz string
+}
+
+// roomEventWindows derives the current and next event windows from a Robin
+// events response.
+func roomEventWindows(events robinEvents) roomWindows {
+	now := time.Now()
+	var w roomWindows
 	for _, e := range events.Data {
 		start, err1 := time.Parse(time.RFC3339, e.Start.DateTime)
 		end, err2 := time.Parse(time.RFC3339, e.End.DateTime)
 		if err1 != nil || err2 != nil {
 			continue
 		}
-		if start.Before(now) && now.Before(end) && nowStart == "" {
-			nowStart = start.Format("3:04 PM")
-			nowEnd = end.Format("3:04 PM")
-			nowTz = e.End.TimeZone
-			nowTitle = clampTitle(e.Title, "In use")
+		if start.Before(now) && now.Before(end) && w.nowStart == "" {
+			w.nowStart = start.Format("3:04 PM")
+			w.nowEnd = end.Format("3:04 PM")
+			w.nowTz = e.End.TimeZone
+			w.nowTitle = clampTitle(e.Title, "In use")
 		}
-		if start.After(now) && nextStart == "" {
-			nextStart = start.Format("3:04 PM")
-			nextEnd = end.Format("3:04 PM")
-			nextTz = e.End.TimeZone
-			nextTitle = clampTitle(e.Title, "Booked for")
+		if start.After(now) && w.nextStart == "" {
+			w.nextStart = start.Format("3:04 PM")
+			w.nextEnd = end.Format("3:04 PM")
+			w.nextTz = e.End.TimeZone
+			w.nextTitle = clampTitle(e.Title, "Booked for")
 		}
 	}
-
-	deskid := app.findMeetingDeskID(mapName, roomName)
-
-	return app.db.PutMeetingStatus(MeetingStatus{
-		Map: mapName, Room: roomName, Availability: state.Data.Availability,
-		NowTitle: nowTitle, NowStart: nowStart, NowEnd: nowEnd, NowTz: nowTz,
-		NextTitle: nextTitle, NextStart: nextStart, NextEnd: nextEnd, NextTz: nextTz,
-		Deskid: deskid,
-	})
+	return w
 }
 
 // findMeetingDeskID returns the desk ID of the meeting desk named roomName on a
@@ -183,4 +193,100 @@ func (app *App) StartRobinScheduler(interval time.Duration) {
 			app.refreshRobin("")
 		}
 	}()
+}
+
+// RunRobinSyncVerbose performs a full Robin meeting sync while collecting a
+// human-readable log of every step. It is used by the admin "Test meeting sync"
+// button so an operator can see exactly what happens (and why nothing shows up).
+func (app *App) RunRobinSyncVerbose() []string {
+	var logs []string
+	add := func(format string, args ...interface{}) {
+		logs = append(logs, fmt.Sprintf(format, args...))
+	}
+
+	if app.db.GetSetting("robintoken") == "" {
+		add("ERROR: Robin access token is not configured. Enter it above and save first.")
+		return logs
+	}
+	add("Robin access token is configured.")
+	if org := app.db.GetSetting("robinOrganisation"); org != "" {
+		add("Robin organisation: %s", org)
+	}
+
+	spaces, _ := app.db.ListRobinSpaces()
+	add("Configured spaces (map name -> Robin location id): %d", len(spaces))
+	if len(spaces) == 0 {
+		add("No spaces configured. Add at least one mapping below before rooms can sync.")
+		return logs
+	}
+
+	totalRooms := 0
+	for _, s := range spaces {
+		add("")
+		add("== Space \"%s\" (location id %d) ==", s.Spacename, s.Spaceid)
+		var list robinSpaceList
+		if err := app.robinGet(fmt.Sprintf("/locations/%d/spaces?page=1&per_page=200", s.Spaceid), &list); err != nil {
+			add("  ERROR fetching rooms for location %d: %v", s.Spaceid, err)
+			continue
+		}
+		add("  Robin returned %d room(s) for this location.", len(list.Data))
+		for _, room := range list.Data {
+			logs = append(logs, app.pollRobinRoomVerbose(room.ID, room.Name, s.Spacename)...)
+			totalRooms++
+		}
+	}
+	add("")
+	add("Done. Processed %d room(s) across %d space(s). Cache updated.", totalRooms, len(spaces))
+	return logs
+}
+
+// pollRobinRoomVerbose caches a single room's status and returns a log of what
+// happened, mirroring pollRobinRoom but with diagnostics for the admin modal.
+func (app *App) pollRobinRoomVerbose(roomID int, roomName, mapName string) []string {
+	var logs []string
+	add := func(format string, args ...interface{}) {
+		logs = append(logs, "  "+fmt.Sprintf(format, args...))
+	}
+
+	var state robinState
+	if err := app.robinGet(fmt.Sprintf("/spaces/%d/state", roomID), &state); err != nil {
+		add("Room \"%s\" (#%d): ERROR fetching state: %v", roomName, roomID, err)
+		return logs
+	}
+	add("Room \"%s\" (#%d): availability=%s", roomName, roomID, state.Data.Availability)
+
+	after := time.Now().UTC().Add(-24 * time.Hour).Format("2006-01-02T15:04:05Z")
+	before := time.Now().UTC().Add(144 * time.Hour).Format("2006-01-02T15:04:05Z")
+	var events robinEvents
+	if err := app.robinGet(fmt.Sprintf("/spaces/%d/events?after=%s&before=%s&page=1&per_page=200", roomID, after, before), &events); err != nil {
+		add("    ERROR fetching events: %v", err)
+		return logs
+	}
+
+	ev := roomEventWindows(events)
+	if ev.nowStart != "" {
+		add("    now: %s (%s - %s)", ev.nowTitle, ev.nowStart, ev.nowEnd)
+	} else {
+		add("    now: free")
+	}
+	if ev.nextStart != "" {
+		add("    next: %s (%s - %s)", ev.nextTitle, ev.nextStart, ev.nextEnd)
+	}
+
+	deskid := app.findMeetingDeskID(mapName, roomName)
+	if deskid == "" {
+		add("    no meeting desk named \"%s\" on map \"%s\" — status cached but not shown on the map.", roomName, mapName)
+	} else {
+		add("    matched meeting desk id %s on map \"%s\".", deskid, mapName)
+	}
+
+	if err := app.db.PutMeetingStatus(MeetingStatus{
+		Map: mapName, Room: roomName, Availability: state.Data.Availability,
+		NowTitle: ev.nowTitle, NowStart: ev.nowStart, NowEnd: ev.nowEnd, NowTz: ev.nowTz,
+		NextTitle: ev.nextTitle, NextStart: ev.nextStart, NextEnd: ev.nextEnd, NextTz: ev.nextTz,
+		Deskid: deskid,
+	}); err != nil {
+		add("    ERROR caching status: %v", err)
+	}
+	return logs
 }

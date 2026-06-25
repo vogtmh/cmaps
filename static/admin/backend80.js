@@ -249,6 +249,25 @@ function esc(s) {
     .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
+function showRobinTest() {
+  var body = document.getElementById('robinDebugBody');
+  body.textContent = 'Running meeting sync...';
+  document.getElementById('robinDebugOverlay').style.display = 'block';
+  $.ajax({
+    url: '../rest/robin/test',
+    async: true,
+    type: 'get',
+    dataType: 'JSON',
+    success: function(d) {
+      var lines = (d && d.log) || [];
+      body.textContent = lines.length ? lines.join('\n') : 'No output returned.';
+    },
+    error: function() {
+      body.textContent = 'Failed to run meeting sync (forbidden or server error).';
+    }
+  })
+}
+
 function renderLdapDebug(d) {
   if (!d || !d.when) {
     return '<p>No sync has run yet since the server started. Click "Sync now" on a source first.</p>';

@@ -221,6 +221,74 @@
     </div>
   </div>
 
+  <h2 style="margin:30px 0 0 20px;">Meeting rooms (Robin)</h2>
+  <p style="margin-left:20px;max-width:760px;">
+    Meeting-room availability is polled from Robin. Configure the access token and map each
+    CompanyMaps map to its Robin <b>location id</b>. Meeting desks on a map are matched to Robin
+    rooms by name.
+  </p>
+  {{if gt .PermLdap 1}}
+  <form action="?tab=ldap" method="post" style="margin-left:20px;">
+    <input type="hidden" name="tab" value="ldap">
+    <input type="hidden" name="saveRobin" value="1">
+    <table>
+      <tr>
+        <td width="200">Access token</td>
+        <td><input type="password" name="robintoken" style="width:300px;" placeholder="{{if .RobinSet}}(configured — leave blank to keep){{else}}Robin access token{{end}}"></td>
+      </tr>
+      <tr>
+        <td>Organisation id</td>
+        <td><input type="text" name="robinOrganisation" style="width:300px;" value="{{.RobinOrg}}" placeholder="Robin organisation id (optional)"></td>
+      </tr>
+      <tr><td>&nbsp;</td><td><input type="submit" value="Save Robin settings"></td></tr>
+    </table>
+  </form>
+  {{end}}
+
+  <table style="margin-left:20px;margin-top:16px;">
+    <tr style="font-weight:bold;">
+      <td width="300">Map name</td><td width="200">Robin location id</td><td width="100">&nbsp;</td>
+    </tr>
+    <tr><td>&nbsp;</td></tr>
+    {{range .RobinSpaces}}
+    <tr>
+      <td>{{.Spacename}}</td><td>{{.Spaceid}}</td>
+      <td>
+        {{if gt $.PermLdap 1}}
+        <form action="?tab=ldap" method="post" style="display:inline">
+          <input type="hidden" name="tab" value="ldap">
+          <input type="hidden" name="deleteRobinSpace" value="{{.Spacename}}">
+          <input type="submit" value="Delete">
+        </form>
+        {{end}}
+      </td>
+    </tr>
+    {{end}}
+    {{if gt .PermLdap 1}}
+    <tr><td>&nbsp;</td></tr>
+    <form action="?tab=ldap" method="post">
+      <tr>
+        <input type="hidden" name="tab" value="ldap">
+        <td><input type="text" name="robinSpacename" style="width:290px;" placeholder="Map name (e.g. germany)"></td>
+        <td><input type="text" name="robinSpaceid" style="width:190px;" placeholder="Robin location id"></td>
+        <td><input type="submit" value="Add"></td>
+      </tr>
+    </form>
+    {{end}}
+  </table>
+  <div style="margin:20px;">
+    <input type="button" value="Test meeting sync" onClick="showRobinTest()">
+  </div>
+  <div id="robinDebugOverlay" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:1000;">
+    <div style="background:#fff;max-width:820px;margin:60px auto;padding:20px;border-radius:6px;max-height:80%;overflow:auto;">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <h2 style="margin:0;">Meeting sync log</h2>
+        <input type="button" value="Close" onClick="document.getElementById('robinDebugOverlay').style.display='none'">
+      </div>
+      <pre id="robinDebugBody" style="margin-top:15px;font-family:monospace;font-size:13px;white-space:pre-wrap;color:#000;"></pre>
+    </div>
+  </div>
+
 {{else if eq .ActiveTab "maps"}}
   <table style="margin-left:20px;">
     <tr style="font-weight:bold;">
