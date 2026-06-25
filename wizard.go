@@ -154,8 +154,8 @@ func (app *App) handleSetupRobin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.FormValue("skip") != "1" {
-		_ = app.db.SetSetting("robintoken", r.FormValue("robintoken"))
-		_ = app.db.SetSetting("robinOrganisation", r.FormValue("robinorg"))
+		_ = app.db.SetRobinSetting("robintoken", r.FormValue("robintoken"))
+		_ = app.db.SetRobinSetting("robinOrganisation", r.FormValue("robinorg"))
 	}
 	_ = app.db.SetMeta("migrate_step", "done")
 	http.Redirect(w, r, "/setup?status="+urlMsg("Robin configuration saved. Setup is almost complete."), http.StatusSeeOther)

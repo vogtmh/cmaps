@@ -202,9 +202,9 @@ func (app *App) handleAdminPost(w http.ResponseWriter, r *http.Request, sess Ses
 		}
 		if r.FormValue("saveRobin") != "" {
 			if tok := strings.TrimSpace(r.FormValue("robintoken")); tok != "" {
-				_ = app.db.SetSetting("robintoken", tok)
+				_ = app.db.SetRobinSetting("robintoken", tok)
 			}
-			_ = app.db.SetSetting("robinOrganisation", strings.TrimSpace(r.FormValue("robinOrganisation")))
+			_ = app.db.SetRobinSetting("robinOrganisation", strings.TrimSpace(r.FormValue("robinOrganisation")))
 			_ = app.db.AuditLog("LDAP", sess.Username, "Robin credentials updated")
 			return "Robin settings saved."
 		}
@@ -467,10 +467,7 @@ func (app *App) buildAdminData(r *http.Request, sess Session, tab, msg string) a
 	if zoom < 10 || zoom > 100 {
 		zoom = 100
 	}
-	targetWidth, _ := strconv.Atoi(app.settingOr("targetScreenWidth", "1600"))
-	if targetWidth == 0 {
-		targetWidth = 1600
-	}
+	targetWidth := 1600
 
 	d := adminData{
 		AppTitle:          app.appTitle(),
@@ -515,8 +512,8 @@ func (app *App) buildAdminData(r *http.Request, sess Session, tab, msg string) a
 		d.LdapSources, _ = app.db.ListLdapSources()
 		d.RobinSpaces, _ = app.db.ListRobinSpaces()
 		sort.Slice(d.RobinSpaces, func(i, j int) bool { return d.RobinSpaces[i].Spacename < d.RobinSpaces[j].Spacename })
-		d.RobinOrg = app.db.GetSetting("robinOrganisation")
-		d.RobinSet = app.db.GetSetting("robintoken") != ""
+		d.RobinOrg = app.db.GetRobinSetting("robinOrganisation")
+		d.RobinSet = app.db.GetRobinSetting("robintoken") != ""
 		// Build the map dropdown: published maps plus any value currently in use
 		// (so every row's selection stays selectable even if it isn't a real map yet).
 		mapSet := map[string]bool{}

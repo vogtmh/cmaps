@@ -29,6 +29,7 @@ var (
 	bucketVips      = []byte("vips")            // config_vips (key = seq)
 	bucketDepts     = []byte("departments")     // config_department_list (key = seq)
 	bucketRobin     = []byte("robinspaces")     // config_robinspaces (key = spacename)
+	bucketRobinCfg  = []byte("robinconfig")     // robin org/token/last-sync (key = name)
 	bucketMeeting   = []byte("meetingstatus")   // meetingstatus (key = "<map>:<room>")
 	bucketWhitelist = []byte("healthwhitelist") // health_whitelist (key = seq)
 	bucketLdapSrc   = []byte("ldapsources")     // config_ldap (key = id)
@@ -40,7 +41,7 @@ var allBuckets = [][]byte{
 	bucketSettings, bucketMaps, bucketDesks, bucketLdap, bucketBookings, bucketTeams,
 	bucketRoles, bucketUsers, bucketChangelog, bucketStats, bucketTracking, bucketVips,
 	bucketDepts, bucketRobin, bucketMeeting, bucketWhitelist, bucketLdapSrc, bucketAudit,
-	bucketMeta, bucketDirectory,
+	bucketMeta, bucketDirectory, bucketRobinCfg,
 }
 
 type DB struct {
@@ -275,7 +276,23 @@ func openDB(path string) (*DB, error) {
 	if err != nil {
 		loc = time.Local
 	}
-	return &DB{bolt: bdb, loc: loc}, nil
+	db := &DB{bolt: bdb, loc: loc}
+	db.migrateRobinConfig()
+	return db, nil
+}
+
+// migrateRobinConfig moves the Robin org/token/last-sync values out of the
+// general settings bucket (where older installs stored them) into the dedicated
+// robinconfig bucket, so they no longer clutter the "base variables" list.
+func (db *DB) migrateRobinConfig() {
+	for _, name := range []string{"robintoken", "robinOrganisation", "robinLastSync"} {
+		v, found, _ := getJSON[string](db, bucketSettings, []byte(name))
+		if !found {
+			continue
+		}
+		_ = putJSON(db, bucketRobinCfg, []byte(name), v)
+		_ = deleteKey(db, bucketSettings, []byte(name))
+	}
 }
 
 func (db *DB) Close() error { return db.bolt.Close() }
@@ -359,6 +376,17 @@ func (db *DB) SetSetting(name, value string) error {
 
 func (db *DB) DeleteSetting(name string) error {
 	return deleteKey(db, bucketSettings, []byte(name))
+}
+
+// --- Robin configuration (org, token, last-sync) ---
+
+func (db *DB) GetRobinSetting(name string) string {
+	v, _, _ := getJSON[string](db, bucketRobinCfg, []byte(name))
+	return v
+}
+
+func (db *DB) SetRobinSetting(name, value string) error {
+	return putJSON(db, bucketRobinCfg, []byte(name), value)
 }
 
 func (db *DB) AllSettings() (map[string]string, error) {

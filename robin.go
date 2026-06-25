@@ -16,7 +16,7 @@ const robinAPIBase = "https://api.robinpowered.com/v1.0"
 
 // robinClient performs an authenticated GET against the Robin API.
 func (app *App) robinGet(path string, out interface{}) error {
-	token := app.db.GetSetting("robintoken")
+	token := app.db.GetRobinSetting("robintoken")
 	if token == "" {
 		return fmt.Errorf("robin token not configured")
 	}
@@ -190,7 +190,7 @@ func (app *App) StartRobinScheduler(interval time.Duration) {
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
 		for range ticker.C {
-			if app.db.GetSetting("robintoken") == "" {
+			if app.db.GetRobinSetting("robintoken") == "" {
 				continue
 			}
 			// A scheduled run also records the last-sync time and per-room match
@@ -209,12 +209,12 @@ func (app *App) RunRobinSyncVerbose() []string {
 		logs = append(logs, fmt.Sprintf(format, args...))
 	}
 
-	if app.db.GetSetting("robintoken") == "" {
+	if app.db.GetRobinSetting("robintoken") == "" {
 		add("ERROR: Robin access token is not configured. Enter it above and save first.")
 		return logs
 	}
 	add("Robin access token is configured.")
-	if org := app.db.GetSetting("robinOrganisation"); org != "" {
+	if org := app.db.GetRobinSetting("robinOrganisation"); org != "" {
 		add("Robin organisation: %s", org)
 	}
 
@@ -346,9 +346,9 @@ func (app *App) RunRobinSyncStructured() RobinSyncResult {
 func (app *App) runRobinSyncStructured(prog *syncProgress) RobinSyncResult {
 	res := RobinSyncResult{
 		Time: time.Now().Format("2006-01-02 15:04:05"),
-		Org:  app.db.GetSetting("robinOrganisation"),
+		Org:  app.db.GetRobinSetting("robinOrganisation"),
 	}
-	if app.db.GetSetting("robintoken") == "" {
+	if app.db.GetRobinSetting("robintoken") == "" {
 		res.Note = "Robin access token is not configured."
 		if prog != nil {
 			prog.logf("Robin access token is not configured.")
@@ -472,13 +472,13 @@ func (app *App) pollRobinRoomStructured(roomID int, roomName, mapName string) Ro
 // saveRobinSyncResult persists the most recent structured sync result as JSON.
 func (app *App) saveRobinSyncResult(res RobinSyncResult) {
 	if b, err := json.Marshal(res); err == nil {
-		_ = app.db.SetSetting("robinLastSync", string(b))
+		_ = app.db.SetRobinSetting("robinLastSync", string(b))
 	}
 }
 
 // LastRobinSyncResult returns the most recently persisted sync result, if any.
 func (app *App) LastRobinSyncResult() (RobinSyncResult, bool) {
-	js := app.db.GetSetting("robinLastSync")
+	js := app.db.GetRobinSetting("robinLastSync")
 	if js == "" {
 		return RobinSyncResult{}, false
 	}

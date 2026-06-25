@@ -17,15 +17,13 @@ func (app *App) seedDemoData() error {
 
 	// 1. Default settings (config_general equivalents).
 	settings := map[string]string{
-		"apptitle":          "CompanyMaps",
-		"logo_regular":      "/static/images/cmaps-regular.png",
-		"logo_hover":        "/static/images/cmaps-hover.png",
-		"map_default":       "overview",
-		"targetScreenWidth": "1600",
-		"domain":            "demo",
-		"avatarType":        "jpg",
-		"teamsContact":      "",
-		"teamsChannel":      "",
+		"apptitle":     "CompanyMaps",
+		"logo_regular": "/static/images/cmaps-regular.png",
+		"logo_hover":   "/static/images/cmaps-hover.png",
+		"domain":       "demo",
+		"avatarType":   "jpg",
+		"teamsContact": "",
+		"teamsChannel": "",
 	}
 	for k, v := range settings {
 		if err := db.SetSetting(k, v); err != nil {

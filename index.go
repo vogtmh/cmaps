@@ -86,7 +86,7 @@ type indexData struct {
 func (app *App) renderIndex(w http.ResponseWriter, r *http.Request, sess Session, loggedIn bool) {
 	q := r.URL.Query()
 
-	mapDefault := app.settingOr("map_default", "overview")
+	mapDefault := "overview"
 	mapName := q.Get("map")
 	if mapName == "" {
 		if c, err := r.Cookie("map"); err == nil {
@@ -150,10 +150,7 @@ func (app *App) renderIndex(w http.ResponseWriter, r *http.Request, sess Session
 	http.SetCookie(w, &http.Cookie{Name: "zoom", Value: strconv.Itoa(zoom), Path: "/", Expires: time.Now().AddDate(5, 0, 0)})
 	leftPos := cookieInt(r, "LeftPos", 0)
 
-	targetWidth, _ := strconv.Atoi(app.settingOr("targetScreenWidth", "1600"))
-	if targetWidth == 0 {
-		targetWidth = 1600
-	}
+	targetWidth := 1600
 
 	// Floor buttons for non-overview maps.
 	var floors []floorButton

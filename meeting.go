@@ -11,7 +11,7 @@ func (app *App) handleRestMeeting(w http.ResponseWriter, r *http.Request) {
 	mapName := r.URL.Query().Get("map")
 	useCache := r.URL.Query().Get("usecache")
 
-	if useCache == "" && app.db.GetSetting("robintoken") != "" {
+	if useCache == "" && app.db.GetRobinSetting("robintoken") != "" {
 		app.refreshRobin(mapName)
 	}
 
