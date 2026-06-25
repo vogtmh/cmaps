@@ -691,7 +691,7 @@
 }
 
 #avatarbutton {
-    position:fixed; 
+    position:absolute; 
     left: 20px; 
     bottom: 20px; 
     width:80px; 
@@ -704,7 +704,7 @@
 }
 
 .avatarbutton_username {
-    position:fixed; 
+    position:absolute; 
     left:60px; 
     bottom: 20px; 
     width:auto; 

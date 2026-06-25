@@ -41,6 +41,7 @@ $(function(){
   var notifycontainer = $('.notify_container');
   var notifycontent = $('.notify_content');
   var loginicon = $('.loginicon');
+  var buttonsleftanchor = $('.buttons_left_anchor');
   var buttonsleft = $('.buttons_left');
   var buttonsright = $('.buttons_right');
   var datepicker = $('.datepicker');
@@ -115,7 +116,8 @@ $(function(){
   // also scales left/top offsets, so divide them by the zoom factor.
   var contentZoom = basePage.scale*manualscale;
   page.attr('style', 'zoom:' + contentZoom + ';left:' + (newLeftPos/contentZoom) + 'px;top:' + ((69*basePage.scale)/contentZoom) + 'px;');
-  buttonsleft.attr('style', 'position:fixed; left: 10px; bottom: '+ (25*basePage.scale) + 'px; height:80px;background: transparent; transform:scale(' + basePage.scale + ');transform-origin:0% 100%;z-index:5;');
+  buttonsleftanchor.attr('style', 'position:fixed; left: 10px; bottom: '+ (25*basePage.scale) + 'px; z-index:5;');
+  buttonsleft.attr('style', 'position:relative; height:80px;background: transparent; zoom:' + basePage.scale + ';');
   buttonsright.attr('style', 'position:fixed; right: 10px; bottom: ' + (25*basePage.scale) + 'px; height:auto;width:80px;background: transparent; transform:scale(' + basePage.scale +');transform-origin:100% 100%;');
   
   datepicker.attr('style', 'position:relative;width:180px;height:175px;padding:15px 15px 10px 15px;background-color:#333;border-radius:10px 10px 0px 0px;display:none;zoom:' + basePage.scale + ';z-index:0;pointer-events:auto;');

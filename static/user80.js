@@ -2293,7 +2293,7 @@ $(function() {
     e.preventDefault();
     $.ajax({
       type: 'POST',
-      url: 'rest/avatar/index.php',
+      url: 'rest/avatar',
       data: new FormData(this),
       contentType: false,
       cache: false,
@@ -2306,11 +2306,8 @@ $(function() {
       },
       success: function(data){
         $('#uploadForm')[0].reset();
-        //$('#uploadStatus').html('<span style="color:#28A74B;">Avatar uploaded.<span>');
-        //$('#avatarbutton').html(data);
-        $('body').append('<div id="image_resize" style="position:fixed;bottom:10px;left:10px;width:750px;height:700px;background-color:rgb(51, 51, 51);border-radius:40px;z-index:2000;padding:10px;"></div>');    
-        $('#image_resize').html(data);
-        
+        // The Go backend auto-crops to a square and returns JSON; just refresh the thumbnail.
+        $('#avatarbutton img').attr('src', 'avatarcache/' + data.userid + '.jpg?time=' + Date.now());
       }
     });
   });
@@ -2336,7 +2333,7 @@ $(function() {
     e.preventDefault();
     $.ajax({
       type: 'POST',
-      url: 'rest/avatar/index.php',
+      url: 'rest/avatar',
       data: new FormData(this),
       contentType: false,
       cache: false,
@@ -2350,7 +2347,7 @@ $(function() {
       success: function(data){
         $('#uploadForm')[0].reset();
         //$('#uploadStatus').html('<span style="color:#28A74B;">Avatar has been deleted.<span>');
-        $('#avatarbutton').html(data);
+        $('#avatarbutton img').attr('src', 'images/noavatar.png?time=' + Date.now());
       }
     });
   });
