@@ -611,6 +611,26 @@ function hideDirectoryResults() {
   if (box) box.style.display = 'none';
 }
 
+// Re-match existing admins to full names from the cached AD directory. Useful
+// for accounts created before the directory cache existed.
+function matchAdminNames() {
+  var btn = document.getElementById('matchNamesBtn');
+  var status = document.getElementById('matchNamesStatus');
+  if (btn) { btn.disabled = true; btn.textContent = 'Matching\u2026'; }
+  if (status) { status.style.display = 'block'; status.textContent = 'Checking directory\u2026'; }
+  fetch('../rest/directory/match', { method: 'POST', credentials: 'same-origin' })
+    .then(function (r) { return r.json(); })
+    .then(function (res) {
+      if (status) status.textContent = res.message || 'Done.';
+      if (btn) { btn.disabled = false; btn.textContent = 'Match names from directory'; }
+      if (res.updated > 0) setTimeout(function () { location.reload(); }, 1200);
+    })
+    .catch(function () {
+      if (status) status.textContent = 'Matching failed.';
+      if (btn) { btn.disabled = false; btn.textContent = 'Match names from directory'; }
+    });
+}
+
 function showCharts(interval, divname) {
 
   // Check if canvas already exists or create one

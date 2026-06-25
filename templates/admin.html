@@ -601,7 +601,11 @@
       <div class="sync-card-head">
         <h2 class="sync-card-title">Administrators</h2>
         <span class="sync-badge sync-badge-accent">{{len .Mapadmins}} user(s)</span>
+        {{if gt .PermUsers 1}}
+        <button type="button" class="sync-btn sync-btn-sm" id="matchNamesBtn" onclick="matchAdminNames()" style="margin-left:auto;">Match names from directory</button>
+        {{end}}
       </div>
+      {{if gt .PermUsers 1}}<div id="matchNamesStatus" class="sync-status-text" style="display:none;margin-bottom:12px;"></div>{{end}}
       {{if .Mapadmins}}
       <table class="sync-table">
         <thead>

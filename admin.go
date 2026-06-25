@@ -747,6 +747,34 @@ func (app *App) handleRestDirectorySearch(w http.ResponseWriter, r *http.Request
 	writeJSON(w, out)
 }
 
+// handleRestDirectoryMatch re-resolves the full name (and mail) of every
+// existing admin against the cached AD directory. This is useful for accounts
+// that were created before the directory cache existed, so their names get
+// populated without waiting for the next scheduled sync.
+func (app *App) handleRestDirectoryMatch(w http.ResponseWriter, r *http.Request) {
+	sess, ok := app.currentSession(r)
+	if !ok || app.permLevel(sess, "users") < 2 {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	dir, _ := app.db.ListDirectory()
+	if len(dir) == 0 {
+		writeJSON(w, map[string]interface{}{
+			"matched": 0, "updated": 0, "directory": 0,
+			"message": "The directory cache is empty. Run an LDAP sync first.",
+		})
+		return
+	}
+	matched, updated := app.refreshAdminNames(dir)
+	_ = app.db.AuditLog("Users", sess.Username, fmt.Sprintf("Matched names from directory (%d matched, %d updated)", matched, updated))
+	writeJSON(w, map[string]interface{}{
+		"matched":   matched,
+		"updated":   updated,
+		"directory": len(dir),
+		"message":   fmt.Sprintf("%d user(s) matched, %d name(s) updated.", matched, updated),
+	})
+}
+
 // resolveDirectoryEntry maps an entered value (samaccountname, DOMAIN\sam, or a
 // display name) to a directory user. It returns false when nothing matches, in
 // which case the caller keeps the raw input (e.g. a manual local username).

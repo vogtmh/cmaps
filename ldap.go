@@ -172,9 +172,9 @@ func (app *App) runADSync(prog *syncProgress) (int, error) {
 // freshly fetched directory, so the Users tab shows live names even if the
 // directory is later cleared. Usernames are matched on samaccountname after
 // stripping any DOMAIN\ prefix.
-func (app *App) refreshAdminNames(dir []DirectoryUser) {
+func (app *App) refreshAdminNames(dir []DirectoryUser) (matched, updated int) {
 	if len(dir) == 0 {
-		return
+		return 0, 0
 	}
 	byID := make(map[string]DirectoryUser, len(dir))
 	for _, d := range dir {
@@ -182,7 +182,7 @@ func (app *App) refreshAdminNames(dir []DirectoryUser) {
 	}
 	users, err := app.db.ListUsers()
 	if err != nil {
-		return
+		return 0, 0
 	}
 	for _, u := range users {
 		sam := u.Username
@@ -193,6 +193,7 @@ func (app *App) refreshAdminNames(dir []DirectoryUser) {
 		if !ok {
 			continue
 		}
+		matched++
 		name := d.DisplayName()
 		if name != "" && name != u.Fullname {
 			u.Fullname = name
@@ -200,8 +201,10 @@ func (app *App) refreshAdminNames(dir []DirectoryUser) {
 				u.Mail = d.Mail
 			}
 			_ = app.db.PutUser(u)
+			updated++
 		}
 	}
+	return matched, updated
 }
 
 // setSyncDebug stores the most recent sync diagnostics (concurrency-safe).
