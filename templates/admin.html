@@ -102,7 +102,7 @@
 </script>
 
 <!-- Content -->
-<div id="content" class="page_content" style="position:absolute; top:{{.TopHeader}}px; left:{{.LeftPos}}px; width:{{.TargetScreenWidth}}px; transform:scale({{.ContentScale}});"> <br />
+<div id="content" class="page_content" style="position:absolute; top:{{.ContentTop}}px; left:{{.ContentLeft}}px; width:{{.TargetScreenWidth}}px; zoom:{{.ContentScale}};"> <br />
 
 {{if .Message}}<div style="margin-left:20px; padding:8px; background:rgba(0,120,0,0.6); border-radius:5px; width:600px;">{{.Message}}</div><br />{{end}}
 

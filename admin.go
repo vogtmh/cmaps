@@ -47,6 +47,8 @@ type adminData struct {
 	Autozoom          int
 	Zoom              int
 	ContentScale      string
+	ContentLeft       string // LeftPos / ContentScale (for the zoom-based layout)
+	ContentTop        string // TopHeader / ContentScale (for the zoom-based layout)
 	LeftPos           int
 	TopHeader         int
 
@@ -549,15 +551,29 @@ func (app *App) buildAdminData(r *http.Request, sess Session, tab, msg string) a
 	}
 	targetWidth := 1600
 
+	// Content scale + zoom-based positioning, mirroring the index page: the admin
+	// body is shown with CSS `zoom` (instead of transform:scale) so Chart.js and
+	// other pointer-driven widgets map correctly (a CSS transform on an ancestor
+	// breaks Chart.js hit-testing). Because `zoom` also scales an element's
+	// left/top offsets, we pre-divide them here.
+	leftPos := cookieInt(r, "LeftPos", 0)
+	topHeader := 69 * autozoom
+	contentScale := float64(zoom) / 100 * float64(autozoom)
+	if contentScale <= 0 {
+		contentScale = 1
+	}
+
 	d := adminData{
 		AppTitle:          app.appTitle(),
 		TargetScreenWidth: targetWidth,
 		HalfWidth:         targetWidth / 2,
 		Autozoom:          autozoom,
 		Zoom:              zoom,
-		ContentScale:      strconv.FormatFloat(float64(zoom)/100*float64(autozoom), 'f', -1, 64),
-		LeftPos:           cookieInt(r, "LeftPos", 0),
-		TopHeader:         69 * autozoom,
+		ContentScale:      strconv.FormatFloat(contentScale, 'f', -1, 64),
+		ContentLeft:       strconv.FormatFloat(float64(leftPos)/contentScale, 'f', -1, 64),
+		ContentTop:        strconv.FormatFloat(float64(topHeader)/contentScale, 'f', -1, 64),
+		LeftPos:           leftPos,
+		TopHeader:         topHeader,
 		ActiveTab:         tab,
 		Username:          sess.Username,
 		IsEditor:          app.permLevel(sess, "desks") > 1,
