@@ -101,6 +101,9 @@ type LdapUser struct {
 	Description     string `json:"description"`
 	Department      string `json:"department"`
 	Mobile          string `json:"mobile"`
+	// Aliases are additional SMTP addresses (from AD proxyAddresses) that also
+	// resolve to this person, e.g. a legacy "spaeth@" before "first.last@".
+	Aliases []string `json:"aliases,omitempty"`
 }
 
 // DirectoryUser is a single AD account from the full directory snapshot (every
@@ -117,6 +120,8 @@ type DirectoryUser struct {
 	Title      string `json:"title"`
 	Phone      string `json:"phone"`
 	Mobile     string `json:"mobile"`
+	// Aliases are additional SMTP addresses (AD proxyAddresses) besides Mail.
+	Aliases []string `json:"aliases,omitempty"`
 }
 
 // DisplayName returns "Givenname Surname", falling back to the samaccountname.

@@ -952,7 +952,11 @@ func (app *App) resolveOccupant(email string, userID int, emailUser map[string]L
 			occ.Title = u.Description
 			occ.Mobile = u.Mobile
 			occ.Userid = u.Userid
-			occ.Source = "LDAP mirror (email match)"
+			if strings.EqualFold(email, u.Mail) {
+				occ.Source = "LDAP mirror (email match)"
+			} else {
+				occ.Source = "LDAP mirror (alias match → " + u.Mail + ")"
+			}
 			return occ
 		}
 	}
@@ -1082,12 +1086,21 @@ func (app *App) collectRobinOccupancy(prog *syncProgress, capture func(name stri
 		return statuses, res
 	}
 
-	// LDAP mirror for resolving reservee emails → display names.
+	// LDAP mirror for resolving reservee emails → display names. The primary
+	// mail and any AD proxyAddresses aliases (e.g. a legacy "spaeth@" before
+	// "first.last@") both map to the same person.
 	ldap, _ := app.db.ListLdap()
 	emailUser := make(map[string]LdapUser)
 	for _, u := range ldap {
 		if u.Mail != "" {
 			emailUser[strings.ToLower(u.Mail)] = u
+		}
+		for _, a := range u.Aliases {
+			if a != "" {
+				if _, taken := emailUser[a]; !taken {
+					emailUser[a] = u
+				}
+			}
 		}
 	}
 

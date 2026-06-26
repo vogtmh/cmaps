@@ -14,6 +14,7 @@ import (
 var ldapSyncAttrs = []string{
 	"givenname", "sn", "telephonenumber", "mail",
 	"physicaldeliveryofficename", "samaccountname", "title", "department", "mobile",
+	"proxyAddresses",
 }
 
 // SourceDebug records diagnostics for one AD source during a sync run so the
@@ -317,10 +318,33 @@ func (app *App) fetchSourceDirectory(src LdapSource) ([]DirectoryUser, SourceDeb
 				Title:      title,
 				Phone:      e.GetEqualFoldAttributeValue("telephonenumber"),
 				Mobile:     e.GetEqualFoldAttributeValue("mobile"),
+				Aliases:    extractProxyAliases(e.GetEqualFoldAttributeValues("proxyAddresses"), e.GetEqualFoldAttributeValue("mail")),
 			})
 		}
 	}
 	return out, dbg, nil
+}
+
+// extractProxyAliases parses AD proxyAddresses ("SMTP:primary@x", "smtp:alias@x")
+// into a lowercased list of SMTP addresses other than the primary mail. Non-SMTP
+// schemes (sip:, x500:, etc.) and the primary address itself are dropped.
+func extractProxyAliases(proxies []string, primaryMail string) []string {
+	primary := strings.ToLower(strings.TrimSpace(primaryMail))
+	seen := map[string]bool{}
+	var out []string
+	for _, p := range proxies {
+		p = strings.TrimSpace(p)
+		if len(p) < 5 || !strings.EqualFold(p[:5], "smtp:") {
+			continue
+		}
+		addr := strings.ToLower(strings.TrimSpace(p[5:]))
+		if addr == "" || addr == primary || seen[addr] {
+			continue
+		}
+		seen[addr] = true
+		out = append(out, addr)
+	}
+	return out
 }
 
 // deriveMirrorUsers applies the office/name/mail rules locally to a directory
@@ -351,6 +375,7 @@ func deriveMirrorUsers(dir []DirectoryUser) []LdapUser {
 			Description:     d.Title,
 			Department:      d.Department,
 			Mobile:          d.Mobile,
+			Aliases:         d.Aliases,
 		}
 
 		office = strings.ReplaceAll(office, " ", "")
