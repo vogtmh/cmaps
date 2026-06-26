@@ -1904,24 +1904,31 @@ function detectMobile() {
 }
 
 var announceLive;
-// using the changes API to update the announcementbar
-function updateChangeTracker() {    
+var changesData = [];
+
+// Fill the announcement sidebar with the most recent changes and keep the header
+// glow indicator in sync. The full list (24-month-capped server-side) can be
+// browsed via the full-screen modal (openChangesModal), reached from the button
+// at the top of the sidebar.
+function updateChangeTracker() {
   $.ajax({
     url: 'rest/changes/?maxresults=20',
-    async: true, 
+    async: true,
     type: 'get',
     dataType: 'JSON',
     success: function(result){
-        var outputstring = '';
-        
-        outputstring    +='<a href="'+teamsChannel+'" target="_blank"><div class="announceplate" style="height:60px; background-color: #999900;">'
-                          +'<div class="announcetextbox" style="height:40px;width:430px;left:10px;top:10px;">'
-                          +'<div class="announcetext" style="width:410px;text-align:center;">Join our Teams channel for live notifications</div></div></div></a>';
-        
+        // The "Browse all changes" button lives inside the scrolling body so it
+        // inherits the same scaleX/scaleY autozoom transforms as the change
+        // plates (the body is the only counter-scaled element).
+        var outputstring = '<div class="announceplate announceplate-action" style="height:60px;background-color:#0a66c2;cursor:pointer;" onclick="openChangesModal()">'
+                          +'<div class="announcetextbox" style="height:60px;width:530px;left:10px;top:0px;">'
+                          +'<div class="announcetext" style="width:530px;text-align:center;">'
+                          +'<img src="images/maximize.png" style="height:22px;vertical-align:middle;margin-right:10px;" alt="" />Browse all changes'
+                          +'</div></div></div>';
         for (var i = 0; i < result.changes.length; i++) {
           var counter = result.changes[i];
           if (counter.type=='Title') {
-            outputstring+='<a href="'+root+'?findme='+counter.fullname+'">'
+            outputstring+='<a href="'+root+'?findme='+encodeURIComponent(counter.fullname)+'">'
                           +'<div class="announceplate">'
                           +'<div class="announceavatar" style="background-image: url(avatarcache/'+ counter.avatar + '.jpg), url(images/noavatar.png);"></div>'
                           +'<div class="announcetextbox">'
@@ -1935,7 +1942,7 @@ function updateChangeTracker() {
                           +'</a>';
           }
           if (counter.type=='Employee') {
-            outputstring+='<a href="'+root+'?findme='+counter.fullname+'">'
+            outputstring+='<a href="'+root+'?findme='+encodeURIComponent(counter.fullname)+'">'
                           +'<div class="announceplate">'
                           +'<div class="announceavatar" style="background-image: url(avatarcache/'+ counter.avatar + '.jpg), url(images/noavatar.png);"></div>'
                           +'<div class="announcetextbox">'
@@ -1944,10 +1951,9 @@ function updateChangeTracker() {
                           +'</div></div>'
                           +'<div class="announcedate" style="background-color:#393a3c;">' + counter.timestamp + '</div>'
                           +'<div class="announcetype" style="background-color:#00CC00;">New</div>'
-                          +'</div>';
+                          +'</div>'
                           +'</a>';
           }
-          
         }
         announceLive = (result.changes && result.changes.length > 0) ? result.changes[0].id : 0;
         $("#announcementbar_body").html(outputstring);
@@ -1958,8 +1964,124 @@ function updateChangeTracker() {
         else {
           document.getElementById("announce_img").src = "images/announce.png";
         }
-    }    
+    }
   });
+}
+
+// buildChangeRow creates a single change list entry as a DOM node. User-supplied
+// fields (from the LDAP mirror) are inserted via textContent to stay XSS-safe.
+function buildChangeRow(c) {
+  var a = document.createElement('a');
+  a.className = 'changerow';
+  a.href = root + '?findme=' + encodeURIComponent(c.fullname || '');
+
+  var av = document.createElement('div');
+  av.className = 'changerow-avatar';
+  av.style.backgroundImage = 'url(avatarcache/' + (c.avatar || '') + '.jpg), url(images/noavatar.png)';
+  a.appendChild(av);
+
+  var main = document.createElement('div');
+  main.className = 'changerow-main';
+  var name = document.createElement('div');
+  name.className = 'changerow-name';
+  name.textContent = c.fullname || '';
+  main.appendChild(name);
+  var val = document.createElement('div');
+  val.className = 'changerow-value';
+  val.textContent = c.newvalue || '';
+  main.appendChild(val);
+  if (c.type === 'Title' && c.oldvalue) {
+    var old = document.createElement('div');
+    old.className = 'changerow-old';
+    old.textContent = c.oldvalue;
+    main.appendChild(old);
+  }
+  a.appendChild(main);
+
+  var meta = document.createElement('div');
+  meta.className = 'changerow-meta';
+  var date = document.createElement('div');
+  date.className = 'changerow-date';
+  date.textContent = c.timestamp || '';
+  meta.appendChild(date);
+  var type = document.createElement('span');
+  if (c.type === 'Title') {
+    type.className = 'changerow-type changerow-type-title';
+    type.textContent = 'Title';
+  }
+  else {
+    type.className = 'changerow-type changerow-type-new';
+    type.textContent = 'New';
+  }
+  meta.appendChild(type);
+  a.appendChild(meta);
+
+  return a;
+}
+
+// renderChanges (re)builds the modal list from changesData, applying the search
+// box filter.
+function renderChanges() {
+  var list = document.getElementById('changesList');
+  if (!list) { return; }
+  list.innerHTML = '';
+  var q = ((document.getElementById('changesSearch') || {}).value || '').trim().toLowerCase();
+  var shown = 0;
+  for (var i = 0; i < changesData.length; i++) {
+    var c = changesData[i];
+    if (q) {
+      var hay = ((c.fullname || '') + ' ' + (c.newvalue || '') + ' ' + (c.oldvalue || '') + ' ' + (c.type || '')).toLowerCase();
+      if (hay.indexOf(q) === -1) { continue; }
+    }
+    list.appendChild(buildChangeRow(c));
+    shown++;
+  }
+  if (shown === 0) {
+    var empty = document.createElement('div');
+    empty.className = 'changes-empty';
+    empty.textContent = changesData.length ? 'No changes match your search.' : 'No changes in the last 24 months.';
+    list.appendChild(empty);
+  }
+}
+
+function filterChanges() {
+  renderChanges();
+}
+
+// openChangesModal loads the full (server-side 24-month-capped) change list and
+// shows it in the full-screen modal, then clears the header "new changes" glow.
+function openChangesModal() {
+  var modal = document.getElementById('changesModal');
+  if (!modal) { return; }
+  $("#addressbook").hide();
+  $("#settingspanel").hide();
+  var search = document.getElementById('changesSearch');
+  if (search) { search.value = ''; }
+  var list = document.getElementById('changesList');
+  if (list) { list.innerHTML = '<div class="changes-empty">Loading\u2026</div>'; }
+  modal.style.display = 'flex';
+  $.ajax({
+    url: 'rest/changes/',
+    async: true,
+    type: 'get',
+    dataType: 'JSON',
+    success: function(result){
+      changesData = (result && result.changes) ? result.changes : [];
+      renderChanges();
+    },
+    error: function(){
+      if (list) { list.innerHTML = '<div class="changes-empty">Could not load changes.</div>'; }
+    }
+  });
+  // Mark the current newest change as seen and stop the icon glowing.
+  document.cookie = "announcecookie=" + announceLive + '; expires=Fri, 31 Dec 9999 23:59:59 GMT; SameSite=Lax';
+  announceValue = announceLive;
+  document.getElementById("announce_img").src = "images/announce.png";
+}
+
+function closeChangesModal() {
+  var modal = document.getElementById('changesModal');
+  if (modal) { modal.style.display = 'none'; }
 }
 
 function getPrinterStatus() {
@@ -2167,6 +2289,13 @@ $(function() {
     document.cookie = "announcecookie=" + announceValue+'; expires=Fri, 31 Dec 9999 23:59:59 GMT; SameSite=Lax';
     announceValue = announceLive;
     document.getElementById("announce_img").src = "images/announce.png";
+  });
+  // Dismiss the changes modal on backdrop click or Esc.
+  $("#changesModal").click(function(e) {
+    if (e.target === this) { closeChangesModal(); }
+  });
+  $(document).on("keydown", function(e) {
+    if (e.key === "Escape") { closeChangesModal(); }
   });
 
   // File upload via Ajax

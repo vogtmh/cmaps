@@ -79,7 +79,6 @@ type indexData struct {
 	LogoRegular     string
 	LogoHover       string
 	TeamsContact    string
-	TeamsChannel    string
 	Domain          string
 	Region          string
 	TzOffset        string
@@ -306,7 +305,6 @@ func (app *App) renderIndex(w http.ResponseWriter, r *http.Request, sess Session
 		LogoRegular:     app.settingOr("logo_regular", "/static/images/cmaps-regular.png"),
 		LogoHover:       app.settingOr("logo_hover", "/static/images/cmaps-hover.png"),
 		TeamsContact:    app.db.GetSetting("teamsContact"),
-		TeamsChannel:    app.db.GetSetting("teamsChannel"),
 		Domain:          app.db.GetSetting("domain"),
 		Region:          region,
 		TzOffset:        tzOffset,

@@ -23,7 +23,6 @@ func (app *App) seedDemoData() error {
 		"domain":       "demo",
 		"avatarType":   "jpg",
 		"teamsContact": "",
-		"teamsChannel": "",
 	}
 	for k, v := range settings {
 		if err := db.SetSetting(k, v); err != nil {

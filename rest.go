@@ -132,16 +132,24 @@ func (app *App) handleRestAuditlog(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleRestChanges serves /rest/changes?maxresults= (Title/Employee only).
+// A hard 24-month cap is always applied: per GDPR we never expose personnel
+// change history older than two years, regardless of the requested limit.
 func (app *App) handleRestChanges(w http.ResponseWriter, r *http.Request) {
 	maxResults := atoiDefault(r.URL.Query().Get("maxresults"), 0)
 
 	entries, _ := app.db.ListChangelog(0) // newest first
+	cutoff := time.Now().AddDate(-2, 0, 0)
 	out := struct {
 		Changes []map[string]interface{} `json:"changes"`
 	}{Changes: []map[string]interface{}{}}
 
 	for i, e := range entries {
 		if e.Type != "Title" && e.Type != "Employee" {
+			continue
+		}
+		// GDPR hard cap: skip anything older than 24 months.
+		ts := time.Date(e.Year, time.Month(e.Month), e.Day, e.Hour, e.Minute, 0, 0, cutoff.Location())
+		if ts.Before(cutoff) {
 			continue
 		}
 		out.Changes = append(out.Changes, map[string]interface{}{

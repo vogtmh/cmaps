@@ -177,7 +177,6 @@
     var logo_hover = "{{.LogoHover}}";
     var setting_usermode = "{{.UserMode}}";
     var teamsContact = "{{.TeamsContact}}";
-    var teamsChannel = "{{.TeamsChannel}}";
     var domain = "{{.Domain}}";
     {{if .LoggedIn}}username = "{{.Username}}";{{end}}
     {{if .IsEditor}}token = {{.Token}}; username = "{{.Username}}"; console.log("Token: " + token);{{end}}
@@ -305,13 +304,24 @@
   <div class="adressbook_margin" style="height:{{.TopHeader}}px;width:100%;margin-bottom:5px;background:none;"></div>
 </div>
 
-<!-- Announcement sidebar -->
+<!-- Recent changes sidebar + full-screen modal -->
 <script>announceValue = {{.AnnounceCookie}}</script>
 <div id="datepicker_wrap" style="position:fixed;left:0px;bottom:0px;width:100%;display:flex;justify-content:center;align-items:flex-end;z-index:0;pointer-events:none;"><div class="datepicker" id="theDate" style="zoom:{{.Autozoom}};pointer-events:auto;"></div></div>
 <div id="clock_wrap" style="position:fixed;left:0px;bottom:0px;width:100%;display:flex;justify-content:center;align-items:flex-end;z-index:1;pointer-events:none;"><div class="clock" id="theTime" onclick="toggleDatepicker()" style="zoom:{{.Autozoom}};pointer-events:auto;"></div></div>
 <div id="announcementbar" class="announcementbar" style="position: fixed;background:#333333;right:0px;top:0px;width:590px;height:100%;opacity:0.95;display:none;">
   <div class="announcementbar_margin" style="height:{{.TopHeader}}px;width:100%;margin-bottom:5px;background:none;"></div>
   <div id="announcementbar_body" class="announcementbar_body" style="height:92%; overflow-y: scroll;width:610px;font-size:20px;"></div>
+</div>
+<div id="changesModal" class="changes-modal" style="display:none;">
+  <div class="changes-modal-inner">
+    <div class="changes-modal-head">
+      <h2 class="changes-modal-title">Recent changes</h2>
+      <input type="text" id="changesSearch" class="changes-search" placeholder="Search name or title&hellip;" oninput="filterChanges()" autocomplete="off" />
+      <button type="button" class="changes-close" onclick="closeChangesModal()" aria-label="Close">&times;</button>
+    </div>
+    <div id="changesList" class="changes-list"></div>
+    <div class="changes-modal-foot">Showing personnel changes from the last 24 months.</div>
+  </div>
 </div>
 
 {{if .Findme}}<script> teamlabel = "{{.Teamlabel}}"; searchtext = "{{.Findme}}"</script>{{end}}
