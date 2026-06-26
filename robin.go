@@ -134,15 +134,49 @@ type roomWindows struct {
 	nextTitle, nextStart, nextEnd, nextTz string
 }
 
+// parseRobinTime parses a Robin event timestamp. The PHP version relied on
+// strtotime(), which accepts a wide range of formats. Robin's date_time fields
+// may come with a timezone offset, with a trailing Z, with fractional seconds,
+// or as a naive local datetime (the timezone is carried separately in the
+// time_zone field). time.Parse(time.RFC3339, …) is strict and rejects several
+// of these, which left the current/next windows empty even though the room
+// availability still resolved. Try the common layouts in turn, mirroring the
+// lenient behaviour PHP had.
+func parseRobinTime(s string) (time.Time, bool) {
+	layouts := []string{
+		time.RFC3339Nano,
+		time.RFC3339,
+		"2006-01-02T15:04:05.999999999Z07:00",
+		"2006-01-02T15:04:05Z07:00",
+		"2006-01-02T15:04:05.999999999", // naive, with fractional seconds
+		"2006-01-02T15:04:05",           // naive
+		"2006-01-02 15:04:05",
+	}
+	for _, l := range layouts {
+		// Naive layouts (no zone token) are interpreted in the local timezone,
+		// matching strtotime()'s handling of offset-less timestamps.
+		if !strings.ContainsAny(l, "Z7") {
+			if t, err := time.ParseInLocation(l, s, time.Local); err == nil {
+				return t, true
+			}
+			continue
+		}
+		if t, err := time.Parse(l, s); err == nil {
+			return t, true
+		}
+	}
+	return time.Time{}, false
+}
+
 // roomEventWindows derives the current and next event windows from a Robin
 // events response.
 func roomEventWindows(events robinEvents) roomWindows {
 	now := time.Now()
 	var w roomWindows
 	for _, e := range events.Data {
-		start, err1 := time.Parse(time.RFC3339, e.Start.DateTime)
-		end, err2 := time.Parse(time.RFC3339, e.End.DateTime)
-		if err1 != nil || err2 != nil {
+		start, ok1 := parseRobinTime(e.Start.DateTime)
+		end, ok2 := parseRobinTime(e.End.DateTime)
+		if !ok1 || !ok2 {
 			continue
 		}
 		if start.Before(now) && now.Before(end) && w.nowStart == "" {
