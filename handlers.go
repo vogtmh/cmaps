@@ -6,7 +6,9 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"os"
 	"path"
+	"path/filepath"
 	"strings"
 	"time"
 )
@@ -175,6 +177,27 @@ func (app *App) serveStaticAsset(w http.ResponseWriter, r *http.Request) {
 	// cached. JS/CSS are versioned with ?v= so deploys still bust the cache.
 	w.Header().Set("Cache-Control", "public, max-age=86400")
 	http.ServeContent(w, r, info.Name(), info.ModTime(), rs)
+}
+
+// serveAvatar serves a cached employee avatar from the data directory. Many
+// employees have no avatar file; instead of returning a 404 (which the browser
+// logs as a console error for every missing picture) we redirect to a single
+// shared placeholder URL. That URL's bytes are cached once and reused for every
+// missing avatar, avoiding hundreds of duplicate cache entries.
+func (app *App) serveAvatar(w http.ResponseWriter, r *http.Request) {
+	name := strings.TrimPrefix(path.Clean(r.URL.Path), "/avatarcache/")
+	w.Header().Set("Cache-Control", "public, max-age=86400")
+	if name != "" && !strings.HasPrefix(name, "..") && !strings.ContainsAny(name, "/\\") {
+		if f, err := os.Open(filepath.Join(app.cfg.dataPath("avatarcache"), name)); err == nil {
+			defer f.Close()
+			if info, err := f.Stat(); err == nil && !info.IsDir() {
+				http.ServeContent(w, r, info.Name(), info.ModTime(), f)
+				return
+			}
+		}
+	}
+	// Missing → point everyone at the same cached placeholder.
+	http.Redirect(w, r, "/static/images/noavatar.png?v="+assetVersion, http.StatusFound)
 }
 
 // handleChanges renders the avatar/LDAP change-overview page (legacy changes.php).

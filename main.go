@@ -128,7 +128,7 @@ func (app *App) routes(mux *http.ServeMux) {
 
 	// User data served from the data directory (maps, avatar cache).
 	mux.Handle("/maps/", cacheControl(24*time.Hour, http.StripPrefix("/maps/", http.FileServer(http.Dir(app.cfg.dataPath("maps"))))))
-	mux.Handle("/avatarcache/", cacheControl(24*time.Hour, http.StripPrefix("/avatarcache/", http.FileServer(http.Dir(app.cfg.dataPath("avatarcache"))))))
+	mux.HandleFunc("/avatarcache/", app.serveAvatar)
 	mux.Handle("/logos/", cacheControl(24*time.Hour, http.StripPrefix("/logos/", http.FileServer(http.Dir(app.cfg.dataPath("logos"))))))
 
 	// First-run setup wizard.
