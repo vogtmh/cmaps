@@ -1263,7 +1263,7 @@ func isStripSeparator(r rune) bool {
 // desk number exactly but with extra text on one side (and a separator at the
 // boundary). Seats that already match after the current strip config, and
 // patterns already configured, are skipped. Read-only: no API writes.
-func (app *App) collectRobinStripSuggestions() ([]robinStripSuggestion, error) {
+func (app *App) collectRobinStripSuggestions(prog *syncProgress) ([]robinStripSuggestion, error) {
 	if app.db.GetRobinSetting("robintoken") == "" {
 		return nil, fmt.Errorf("Robin access token is not configured")
 	}
@@ -1280,6 +1280,10 @@ func (app *App) collectRobinStripSuggestions() ([]robinStripSuggestion, error) {
 
 	spaces, _ := app.db.ListRobinSpaces()
 	sort.Slice(spaces, func(i, j int) bool { return spaces[i].Spacename < spaces[j].Spacename })
+	if prog != nil {
+		prog.setTotal(len(spaces))
+		prog.setStage("Scanning locations…")
+	}
 
 	deskByMap := map[string]map[string]Desk{}
 	deskLookup := func(mapName string) map[string]Desk {
@@ -1307,6 +1311,9 @@ func (app *App) collectRobinStripSuggestions() ([]robinStripSuggestion, error) {
 	}
 
 	for _, s := range spaces {
+		if prog != nil {
+			prog.step("Scanning " + s.Spacename + "…")
+		}
 		desks := deskLookup(s.MapName())
 		if len(desks) == 0 {
 			continue

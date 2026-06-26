@@ -695,23 +695,43 @@ function scanRobinStrip() {
   var btn = document.getElementById('robinSuggestBtn');
   var box = document.getElementById('robinSuggestResult');
   if (btn) { btn.disabled = true; btn.textContent = 'Scanning\u2026'; }
-  if (box) box.innerHTML = '<div class="sync-empty">Scanning Robin seats\u2026</div>';
+  if (box) box.innerHTML = '';
   $.ajax({
-    url: '../rest/robin/suggestions', type: 'GET', dataType: 'JSON',
-    success: function (res) { renderRobinStripSuggestions(res); },
-    error: function () { if (box) box.innerHTML = '<div class="sync-empty">Scan failed.</div>'; },
-    complete: function () { if (btn) { btn.disabled = false; btn.textContent = 'Scan for suggestions'; } }
+    url: '../rest/robin/suggestions', type: 'POST', dataType: 'JSON',
+    complete: function () { pollRobinStrip(); }
   });
 }
 
-function renderRobinStripSuggestions(res) {
+function pollRobinStrip() {
+  var timer = setInterval(function () {
+    $.ajax({
+      url: '../rest/robin/suggestions/progress', type: 'GET', dataType: 'JSON',
+      success: function (snap) {
+        renderSyncProgress('robinSuggest', snap);
+        if (!snap.running && snap.done) {
+          clearInterval(timer);
+          var fill = document.getElementById('robinSuggestProgFill');
+          if (fill) {
+            fill.classList.remove('indeterminate');
+            fill.style.width = '100%';
+            if (snap.error) fill.style.background = 'var(--sy-danger)';
+          }
+          var stage = document.getElementById('robinSuggestProgStage');
+          if (stage) stage.textContent = snap.error ? ('Error: ' + snap.error) : (snap.summary || 'Done');
+          var btn = document.getElementById('robinSuggestBtn');
+          if (btn) { btn.disabled = false; btn.textContent = 'Scan for suggestions'; }
+          if (!snap.error) renderRobinStripSuggestions(snap.suggestions || []);
+        }
+      },
+      error: function () { clearInterval(timer); }
+    });
+  }, 800);
+}
+
+function renderRobinStripSuggestions(list) {
   var box = document.getElementById('robinSuggestResult');
   if (!box) return;
-  if (res && res.error) {
-    box.innerHTML = '<div class="sync-empty">' + esc(res.error) + '</div>';
-    return;
-  }
-  var list = (res && res.suggestions) || [];
+  list = list || [];
   if (!list.length) {
     box.innerHTML = '<div class="sync-empty">No partial matches found. Every Robin seat already matches a desk (or no extra prefix/suffix was detected).</div>';
     return;
@@ -746,6 +766,7 @@ function addRobinStrip(btn, type, pattern) {
         var row = btn.closest('.robin-suggest-row');
         if (row) { row.classList.add('robin-suggest-done'); }
         btn.textContent = res.already ? 'Already set' : 'Added';
+        applyStripToForm(type, pattern);
       } else {
         btn.disabled = false; btn.textContent = 'Add';
         alert((res && res.error) ? res.error : 'Could not add pattern.');
@@ -753,6 +774,25 @@ function addRobinStrip(btn, type, pattern) {
     },
     error: function () { btn.disabled = false; btn.textContent = 'Add'; alert('Could not add pattern.'); }
   });
+}
+
+// applyStripToForm mirrors a saved strip pattern into the "Robin options" form so
+// the prefix/suffix list reflects the change without a page reload.
+function applyStripToForm(type, pattern) {
+  var listName = (type === 'prefix') ? 'robinStripPrefixList' : 'robinStripSuffixList';
+  var enName = (type === 'prefix') ? 'robinStripPrefixEnabled' : 'robinStripSuffixEnabled';
+  var ta = document.querySelector('textarea[name="' + listName + '"]');
+  if (ta) {
+    var lines = ta.value.split('\n').filter(function (l) { return l.trim() !== ''; });
+    var exists = false;
+    for (var i = 0; i < lines.length; i++) { if (lines[i] === pattern) { exists = true; break; } }
+    if (!exists) {
+      lines.push(pattern);
+      ta.value = lines.join('\n');
+    }
+  }
+  var cb = document.querySelector('input[name="' + enName + '"]');
+  if (cb) cb.checked = true;
 }
 
 // Escape a string for safe use inside a double-quoted HTML attribute.

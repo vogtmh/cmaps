@@ -29,6 +29,13 @@ type App struct {
 	// tab can show a live progress bar + log.
 	robinDeskProg syncProgress
 
+	// robinSuggestProg tracks the background strip-pattern suggestion scan so the
+	// admin Sync tab can show a live progress bar. robinSuggestResult holds the
+	// suggestions from the most recent completed scan.
+	robinSuggestProg   syncProgress
+	robinSuggestMu     sync.Mutex
+	robinSuggestResult []robinStripSuggestion
+
 	// robinDump caches the most recent desk-data diagnostic bundle so the admin
 	// "Download JSON bundle" button can export exactly what the last run captured
 	// without re-hitting the Robin API.

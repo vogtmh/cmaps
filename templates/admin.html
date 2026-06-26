@@ -535,6 +535,10 @@
         <button type="button" class="sync-btn sync-btn-primary" id="robinSuggestBtn" onClick="scanRobinStrip()">Scan for suggestions</button>
       </div>
       <p class="sync-card-hint">Scans Robin seat names that fully contain a CompanyMaps desk number but have extra text on one side. Click <b>Add</b> to save the suggested strip pattern so the desk matches.</p>
+      <div class="sync-progress" id="robinSuggestProgress">
+        <div class="sync-progress-head"><span id="robinSuggestProgStage">Working…</span><span id="robinSuggestProgCount"></span></div>
+        <div class="sync-progress-track"><div class="sync-progress-fill" id="robinSuggestProgFill"></div></div>
+      </div>
       <div id="robinSuggestResult"></div>
     </div>
     {{end}}

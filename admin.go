@@ -1254,21 +1254,54 @@ func (app *App) handleRestRobinDeskDump(w http.ResponseWriter, r *http.Request) 
 	_, _ = w.Write(buf.Bytes())
 }
 
-// handleRestRobinSuggestions scans every mapped Robin location's seats and
-// returns proposed strip prefixes/suffixes that would make a near-miss seat name
-// match a CompanyMaps desk number. Read-only.
+// handleRestRobinSuggestions starts a read-only background scan of every mapped
+// Robin location's seats, proposing strip prefixes/suffixes that would make a
+// near-miss seat name match a CompanyMaps desk number. The admin Sync tab polls
+// handleRestRobinSuggestionsProgress for a live progress bar and the results.
 func (app *App) handleRestRobinSuggestions(w http.ResponseWriter, r *http.Request) {
 	sess, ok := app.currentSession(r)
 	if !ok || app.permLevel(sess, "ldap") < 1 {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}
-	suggestions, err := app.collectRobinStripSuggestions()
-	if err != nil {
-		writeJSON(w, map[string]interface{}{"error": err.Error()})
+	if !app.robinSuggestProg.start(0, "Starting…") {
+		writeJSON(w, map[string]interface{}{"started": false, "running": true})
 		return
 	}
-	writeJSON(w, map[string]interface{}{"suggestions": suggestions})
+	go func() {
+		defer func() {
+			if rec := recover(); rec != nil {
+				app.robinSuggestProg.finish("", fmt.Sprintf("scan crashed: %v", rec))
+			}
+		}()
+		suggestions, err := app.collectRobinStripSuggestions(&app.robinSuggestProg)
+		if err != nil {
+			app.robinSuggestProg.finish("", err.Error())
+			return
+		}
+		app.robinSuggestMu.Lock()
+		app.robinSuggestResult = suggestions
+		app.robinSuggestMu.Unlock()
+		app.robinSuggestProg.finish(fmt.Sprintf("%d suggestion(s) found.", len(suggestions)), "")
+	}()
+	writeJSON(w, map[string]interface{}{"started": true})
+}
+
+// handleRestRobinSuggestionsProgress returns the current strip-suggestion scan
+// progress. Once the scan is done it also includes the suggestions list.
+func (app *App) handleRestRobinSuggestionsProgress(w http.ResponseWriter, r *http.Request) {
+	sess, ok := app.currentSession(r)
+	if !ok || app.permLevel(sess, "ldap") < 1 {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	snap := app.robinSuggestProg.snapshot()
+	if done, _ := snap["done"].(bool); done {
+		app.robinSuggestMu.Lock()
+		snap["suggestions"] = app.robinSuggestResult
+		app.robinSuggestMu.Unlock()
+	}
+	writeJSON(w, snap)
 }
 
 // handleRestRobinStripAdd appends a single strip prefix/suffix pattern to the
