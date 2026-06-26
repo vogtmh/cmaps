@@ -148,6 +148,9 @@ func parseRobinTime(s string) (time.Time, bool) {
 		time.RFC3339,
 		"2006-01-02T15:04:05.999999999Z07:00",
 		"2006-01-02T15:04:05Z07:00",
+		// Robin returns colon-less numeric offsets, e.g. "+1200" / "+0930".
+		"2006-01-02T15:04:05.999999999Z0700",
+		"2006-01-02T15:04:05Z0700",
 		"2006-01-02T15:04:05.999999999", // naive, with fractional seconds
 		"2006-01-02T15:04:05",           // naive
 		"2006-01-02 15:04:05",
