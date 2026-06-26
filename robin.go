@@ -930,16 +930,17 @@ type robinOccupant struct {
 	Phone  string
 	Title  string
 	Mobile string
-	Userid string // LDAP userid (for the avatar); empty when resolved via Robin
+	Userid string // LDAP userid (for the avatar)
 	UserID int    // Robin reservee user id (for diagnostics)
 	Source string // how Name was resolved (for diagnostics)
 }
 
-// resolveOccupant resolves a Robin reservee to a display identity. The local
-// LDAP mirror is the primary source (richest data + avatar); the Robin user API
-// is a cached fallback for people not in the mirror. When capture is non-nil
-// (diagnostic mode) a live Robin /users lookup also captures its raw reply.
-func (app *App) resolveOccupant(email string, userID int, emailUser map[string]LdapUser, capture func(name string, raw []byte)) robinOccupant {
+// resolveOccupant resolves a Robin reservee to a display identity from the local
+// LDAP mirror (matching the reservee's primary mail or any AD proxyAddresses
+// alias). Robin's /users API is not used: it is forbidden for our access token,
+// so it can never resolve a name. When no AD match is found the raw email is
+// kept as the display name.
+func (app *App) resolveOccupant(email string, userID int, emailUser map[string]LdapUser) robinOccupant {
 	occ := robinOccupant{Mail: email, UserID: userID}
 	if email != "" {
 		if u, ok := emailUser[strings.ToLower(email)]; ok {
@@ -960,85 +961,14 @@ func (app *App) resolveOccupant(email string, userID int, emailUser map[string]L
 			return occ
 		}
 	}
-	if userID > 0 {
-		name, source, raw, ok := app.robinUserName(userID, email)
-		if source == "robin-api" && capture != nil && len(raw) > 0 {
-			capture(fmt.Sprintf("users/user_%d.json", userID), raw)
-		}
-		if ok && name != "" {
-			occ.Name = name
-			switch source {
-			case "robin-cache":
-				occ.Source = "Robin API (cached)"
-			default:
-				occ.Source = "Robin API (live lookup)"
-			}
-		}
-	}
-	if occ.Name == "" {
-		if email != "" {
-			occ.Name = email
-			occ.Source = "fallback (raw email — no match)"
-		} else if userID > 0 {
-			occ.Name = fmt.Sprintf("user #%d", userID)
-			occ.Source = "fallback (user id — no match)"
-		}
+	if email != "" {
+		occ.Name = email
+		occ.Source = "fallback (raw email — no AD match)"
+	} else if userID > 0 {
+		occ.Name = fmt.Sprintf("user #%d", userID)
+		occ.Source = "fallback (user id — no AD match)"
 	}
 	return occ
-}
-
-// robinUserName returns the display name for a Robin user id, using the local
-// cache when fresh and falling back to a live Robin lookup. The cache is keyed
-// by user id (stable in Robin); the stored email is a sanity check — when a new
-// reservation reports a different email for the same id the entry is refreshed.
-// It also reports how the name was resolved ("robin-cache" | "robin-api") and,
-// for a live lookup, the raw /users reply (for diagnostics).
-func (app *App) robinUserName(userID int, email string) (name, source string, raw []byte, ok bool) {
-	lc := strings.ToLower(strings.TrimSpace(email))
-	if cached, found := app.db.GetRobinUser(userID); found {
-		if lc == "" || strings.ToLower(cached.Email) == lc {
-			return cached.Name, "robin-cache", nil, true
-		}
-	}
-	fetchedName, fetchedEmail, raw, fok := app.robinFetchUser(userID)
-	if !fok {
-		return "", "robin-api", raw, false
-	}
-	storeEmail := fetchedEmail
-	if storeEmail == "" {
-		storeEmail = email
-	}
-	_ = app.db.PutRobinUser(RobinUser{
-		UserID: userID, Email: storeEmail, Name: fetchedName,
-		FetchedAt: time.Now().Format("2006-01-02 15:04:05"),
-	})
-	return fetchedName, "robin-api", raw, true
-}
-
-// robinUserResp is the (tolerant) shape of a Robin /users/{id} response.
-type robinUserResp struct {
-	Data struct {
-		Name         string `json:"name"`
-		Email        string `json:"email"`
-		PrimaryEmail string `json:"primary_email"`
-	} `json:"data"`
-}
-
-// robinFetchUser performs a live Robin user lookup, returning the raw reply too.
-func (app *App) robinFetchUser(userID int) (name, email string, raw []byte, ok bool) {
-	raw, _, err := app.robinGetRaw(fmt.Sprintf("/users/%d", userID))
-	if err != nil {
-		return "", "", raw, false
-	}
-	var resp robinUserResp
-	if json.Unmarshal(raw, &resp) != nil {
-		return "", "", raw, false
-	}
-	em := resp.Data.Email
-	if em == "" {
-		em = resp.Data.PrimaryEmail
-	}
-	return strings.TrimSpace(resp.Data.Name), em, raw, strings.TrimSpace(resp.Data.Name) != ""
 }
 
 // collectRobinOccupancy walks all configured locations and returns the matched
@@ -1223,7 +1153,7 @@ func (app *App) collectRobinOccupancy(prog *syncProgress, capture func(name stri
 				res.OccupiedNow++
 
 				nm := seatName[rv.SeatID]
-				occ := app.resolveOccupant(rv.Reservee.Email, rv.Reservee.UserID, emailUser, cap)
+				occ := app.resolveOccupant(rv.Reservee.Email, rv.Reservee.UserID, emailUser)
 				who := occ.Name
 				if occ.Name != "" && occ.Mail != "" && !strings.EqualFold(occ.Name, occ.Mail) {
 					who = occ.Name + " <" + occ.Mail + ">"
