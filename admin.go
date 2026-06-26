@@ -237,7 +237,7 @@ func (app *App) handleAdminPost(w http.ResponseWriter, r *http.Request, sess Ses
 		if r.FormValue("saveRobinOptions") != "" {
 			mode := strings.TrimSpace(r.FormValue("robinDeskMode"))
 			switch mode {
-			case "all", "unused":
+			case "sync", "all", "unused":
 			default:
 				mode = "off"
 			}
