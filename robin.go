@@ -357,6 +357,11 @@ type RobinSyncRoom struct {
 	NowTitle     string `json:"now_title"`
 	NextTitle    string `json:"next_title"`
 	Err          string `json:"err"`
+	// Diagnostics: number of events Robin returned for this room and the raw
+	// datetime of the first event (plus whether it parsed). Used to debug why
+	// the meeting nameplate windows can come back empty.
+	EventsCount   int    `json:"events_count"`
+	FirstEventRaw string `json:"first_event_raw"`
 }
 
 // RobinSyncLocation groups the rooms returned for one configured Robin location.
@@ -468,6 +473,15 @@ func (app *App) runRobinSyncStructured(prog *syncProgress) RobinSyncResult {
 				default:
 					prog.logf("    – %s: no matching desk (%s)", room.Name, r.Availability)
 				}
+				// Diagnostics: surface the event count and the first event's raw
+				// datetime format so we can tell whether events are pulled and
+				// whether they parse. Only log when there are events to keep the
+				// output readable.
+				if r.EventsCount > 0 {
+					prog.logf("        events=%d %s", r.EventsCount, r.FirstEventRaw)
+				} else if r.Err == "" {
+					prog.logf("        events=0")
+				}
 				prog.step("")
 			}
 		}
@@ -500,6 +514,13 @@ func (app *App) pollRobinRoomStructured(roomID int, roomName, mapName string) Ro
 	ev := roomEventWindows(events)
 	r.NowTitle = ev.nowTitle
 	r.NextTitle = ev.nextTitle
+	r.EventsCount = len(events.Data)
+	if len(events.Data) > 0 {
+		e0 := events.Data[0]
+		_, ok := parseRobinTime(e0.Start.DateTime)
+		r.FirstEventRaw = fmt.Sprintf("title=%q start=%q end=%q tz=%q parsed=%v",
+			e0.Title, e0.Start.DateTime, e0.End.DateTime, e0.End.TimeZone, ok)
+	}
 
 	deskid := app.findMeetingDeskID(mapName, roomName)
 	r.Deskid = deskid
