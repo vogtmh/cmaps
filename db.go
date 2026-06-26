@@ -102,6 +102,11 @@ type LdapUser struct {
 	// Aliases are additional SMTP addresses (from AD proxyAddresses) that also
 	// resolve to this person, e.g. a legacy "spaeth@" before "first.last@".
 	Aliases []string `json:"aliases,omitempty"`
+	// HasAvatar is set during the hourly LDAP sync (and on manual upload/delete)
+	// to whether avatarcache/<userid>.jpg exists, so the client can point at a
+	// single shared placeholder for users without one instead of requesting a
+	// unique missing image per person.
+	HasAvatar bool `json:"hasavatar"`
 }
 
 // DirectoryUser is a single AD account from the full directory snapshot (every
@@ -634,6 +639,39 @@ func (db *DB) ReplaceLdap(users []LdapUser) error {
 			}
 		}
 		return nil
+	})
+}
+
+// SetLdapAvatar updates the stored HasAvatar flag for one mirrored user (keyed
+// by userid). Called after a manual avatar upload/delete so the change is
+// reflected immediately without waiting for the next hourly sync. A no-op if the
+// user is not in the mirror or the flag is already set as requested.
+func (db *DB) SetLdapAvatar(userid string, has bool) error {
+	if userid == "" {
+		return nil
+	}
+	return db.bolt.Update(func(tx *bolt.Tx) error {
+		b := tx.Bucket(bucketLdap)
+		if b == nil {
+			return nil
+		}
+		data := b.Get([]byte(userid))
+		if data == nil {
+			return nil
+		}
+		var u LdapUser
+		if err := json.Unmarshal(data, &u); err != nil {
+			return err
+		}
+		if u.HasAvatar == has {
+			return nil
+		}
+		u.HasAvatar = has
+		nd, err := json.Marshal(u)
+		if err != nil {
+			return err
+		}
+		return b.Put([]byte(userid), nd)
 	})
 }
 

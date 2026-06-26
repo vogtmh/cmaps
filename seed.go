@@ -310,6 +310,7 @@ func (app *App) seatEmployees(slots []string, region string, startSeq int) ([]Ld
 				Description:     p.Title,
 				Department:      p.Dept,
 				Mobile:          p.Mobile,
+				HasAvatar:       true,
 			})
 		}
 	}

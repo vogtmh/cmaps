@@ -396,6 +396,17 @@ img.src = url;
 return img.height != 0;
 }
 
+// avatarUrl returns the avatar image URL for a desk occupant. When the server
+// reports no cached avatar (hasavatar !== true), everyone resolves to the same
+// shared placeholder URL, which the browser downloads/caches exactly once
+// instead of requesting a unique (missing) image per person.
+function avatarUrl(avtr, hasavatar) {
+  if (hasavatar !== true || !avtr) {
+    return 'images/noavatar.png';
+  }
+  return 'avatarcache/' + avtr + '.jpg';
+}
+
 function getCookie(cname) {
   var name = cname + "=";
   var decodedCookie = decodeURIComponent(document.cookie);
@@ -521,8 +532,8 @@ function showNameplate (deskid, desktype) {
         break;
       case "meeting":
         var caption = attr.empl;
-        // Real avatar if one exists, else the server redirects to meeting.png.
-        avatar = 'avatarcache/' + attr.avtr + '.jpg?fb=' + desktype;
+        // Meeting rooms always use their type icon (no per-room avatar lookup).
+        avatar = 'images/' + desktype + '.png';
         
         var avatarcolor = $('#' + attr.id).css('background-color')
         roomstatus = meetingstatus.filter(element => element.deskid == attr.id);
@@ -590,13 +601,13 @@ function showNameplate (deskid, desktype) {
         break;
       case "occupied":
         var caption = attr.empl;
-        var avatar = 'avatarcache/' + attr.avtr + '.jpg';
+        var avatar = avatarUrl(attr.avtr, attr.hasavatar);
         var avatarcolor = $('#' + attr.id).css('background-color');
         content = attr.title + '<br />'+ attr.mail + '<br />'+ attr.phone + '<br />' + attr.mobil + '<br />'
         break;
       case "occupiedldap":
         var caption = attr.fname + ' ' + attr.lname;
-        var avatar = 'avatarcache/' + attr.avtr + '.jpg';
+        var avatar = avatarUrl(attr.avtr, attr.hasavatar);
         var avatarcolor = $('#' + attr.id).css('background-color');
         content = attr.title + '<br />'+ attr.mail + '<br />'+ attr.phone + '<br />' + attr.mobil + '<br />'
         break;
@@ -912,8 +923,8 @@ function showSticky (deskid, desktype, caption) {
       case "meeting":
         var caption = attr.empl;
         var copylink = attr.empl;
-        // Real avatar if one exists, else the server redirects to meeting.png.
-        var avatar = 'avatarcache/' + attr.avtr + '.jpg?fb=' + desktype;
+        // Meeting rooms always use their type icon (no per-room avatar lookup).
+        var avatar = 'images/' + desktype + '.png';
         roomstatus = meetingstatus.filter(element => element.deskid == attr.id);
         var nowcolor = 'transparent';
         var nowtext = ''; var nexttext = '';
@@ -985,21 +996,21 @@ function showSticky (deskid, desktype, caption) {
       case "occupied":
         var caption = attr.empl;
         var copylink = attr.empl;
-        var avatar = 'avatarcache/' + attr.avtr + '.jpg';
+        var avatar = avatarUrl(attr.avtr, attr.hasavatar);
         var avatarcolor = $('#' + attr.id).css('background-color');
         content = attr.title + '<br />'+ attr.mail + '<br />'+ attr.phone + '<br />' + attr.mobil + '<br />'
         break;
       case "occupiedldap":
         var caption = attr.fname + ' ' + attr.lname;
         var copylink = attr.fname + ' ' + attr.lname;
-        var avatar = 'avatarcache/' + attr.avtr + '.jpg';
+        var avatar = avatarUrl(attr.avtr, attr.hasavatar);
         var avatarcolor = $('#' + attr.id).css('background-color');
         content = attr.title + '<br />'+ attr.mail + '<br />'+ attr.phone + '<br />' + attr.mobil + '<br />'
         break;
       case "shareddesk":
         var caption = attr.fname + ' ' + attr.lname;
         var copylink = attr.dsk;
-        var avatar = 'avatarcache/' + attr.avtr + '.jpg';
+        var avatar = avatarUrl(attr.avtr, attr.hasavatar);
         var avatarcolor = $('#' + attr.id).css('background-color');
         var multiresult = result_old.desks.filter(element => element.id == attr.id);
         content += '<div style="width:105px;height:100%;float:left;">';
@@ -1474,7 +1485,8 @@ function searchLocaldesks() {
               empl: localdesk.empl,
               title: localdesk.title,
               desktype: localdesk.desktype,
-              avtr: localdesk.avtr
+              avtr: localdesk.avtr,
+              hasavatar: localdesk.hasavatar
             });
           }
           // show labels if no teamsearch has been triggered
@@ -1634,7 +1646,7 @@ function buildSidebarLocalRow(r) {
 
   var img = document.createElement('img');
   img.className = 'searchsidebar_avatar';
-  img.src = 'avatarcache/' + r.avtr + '.jpg';
+  img.src = avatarUrl(r.avtr, r.hasavatar);
   img.onerror = function () { this.onerror = null; this.src = 'images/noavatar.png'; };
   row.appendChild(img);
 

@@ -4,6 +4,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"log"
+	"os"
 	"strings"
 	"time"
 
@@ -155,6 +156,13 @@ func (app *App) runADSync(prog *syncProgress) (int, error) {
 
 	if err := app.db.ReplaceDirectory(allDir); err != nil {
 		log.Printf("AD sync: writing directory: %v", err)
+	}
+	// Flag which mirrored users have a cached avatar on disk so the client can
+	// point everyone without one at a single shared placeholder instead of
+	// requesting a unique (missing) image per person.
+	avatars := app.avatarFileSet()
+	for i := range combined {
+		combined[i].HasAvatar = avatars[strings.ToLower(combined[i].Userid)]
 	}
 	if err := app.db.ReplaceLdap(combined); err != nil {
 		return len(combined), fmt.Errorf("writing mirror: %w", err)
@@ -345,6 +353,27 @@ func extractProxyAliases(proxies []string, primaryMail string) []string {
 		out = append(out, addr)
 	}
 	return out
+}
+
+// avatarFileSet returns the set of userids (lowercased) that currently have a
+// cached avatar image on disk. Used during sync to persist a per-user
+// "has avatar" flag.
+func (app *App) avatarFileSet() map[string]bool {
+	set := map[string]bool{}
+	entries, err := os.ReadDir(app.cfg.dataPath("avatarcache"))
+	if err != nil {
+		return set
+	}
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		name := e.Name()
+		if len(name) > 4 && strings.EqualFold(name[len(name)-4:], ".jpg") {
+			set[strings.ToLower(name[:len(name)-4])] = true
+		}
+	}
+	return set
 }
 
 // deriveMirrorUsers applies the office/name/mail rules locally to a directory

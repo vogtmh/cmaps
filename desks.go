@@ -28,6 +28,10 @@ type deskItem struct {
 	Parsed   string    `json:"parsed"`
 	Booked   string    `json:"booked"`
 	Robin    string    `json:"robin,omitempty"`
+	// HasAvatar tells the client whether a cached avatar image exists for this
+	// desk's occupant. When false the client uses a single shared placeholder URL
+	// (downloaded once) instead of requesting a unique missing image per person.
+	HasAvatar bool      `json:"hasavatar"`
 	Bookdata *bookData `json:"bookdata,omitempty"`
 }
 
@@ -95,6 +99,15 @@ func (app *App) buildMapDesks(mapName, date, search string, vips []VIP, bookings
 		}
 	}
 
+	// Per-user avatar availability (from the DB flag set during sync) so desks
+	// for people without a cached avatar can point at a single shared placeholder.
+	avatarByUser := map[string]bool{}
+	for _, u := range ldap {
+		if u.HasAvatar {
+			avatarByUser[strings.ToLower(u.Userid)] = true
+		}
+	}
+
 	for _, d := range desks {
 		// Booking lookup for this desk on the given date.
 		var booked string = "0"
@@ -148,7 +161,7 @@ func (app *App) buildMapDesks(mapName, date, search string, vips []VIP, bookings
 					Map: mapName, ID: d.ID, Desktype: "occupied", X: d.X, Y: d.Y,
 					Dsk: d.Desknumber, Empl: rs.Name, Avtr: avtr, Dept: d.Department,
 					Phone: rs.Phone, Mail: rs.Mail, Title: rs.Title, Mobil: rs.Mobile,
-					Booked: booked, Robin: "1",
+					Booked: booked, Robin: "1", HasAvatar: avatarByUser[strings.ToLower(rs.Userid)],
 				}
 				app.appendIfMatch(&items, item, search, rs.Name)
 				continue
@@ -170,7 +183,7 @@ func (app *App) buildMapDesks(mapName, date, search string, vips []VIP, bookings
 				item := deskItem{
 					Map: mapName, ID: d.ID, Desktype: "addesk", X: d.X, Y: d.Y,
 					Dsk: d.Desknumber, Empl: d.Employee, Avtr: d.Avatar, Dept: d.Department,
-					Booked: booked,
+					Booked: booked, HasAvatar: true,
 				}
 				app.appendIfMatch(&items, item, search, "")
 				continue
@@ -187,6 +200,7 @@ func (app *App) buildMapDesks(mapName, date, search string, vips []VIP, bookings
 					Dsk: d.Desknumber, Empl: d.Employee, Avtr: u.Userid, Dept: d.Department,
 					Fname: u.Givenname, Lname: u.Surname, Phone: u.Telephonenumber, Mail: u.Mail,
 					Title: u.Description, Mobil: u.Mobile, Color: color, Parsed: parsed, Booked: booked,
+					HasAvatar: u.HasAvatar,
 				}
 				app.appendIfMatch(&items, item, search, fullname)
 			}
@@ -197,7 +211,7 @@ func (app *App) buildMapDesks(mapName, date, search string, vips []VIP, bookings
 		item := deskItem{
 			Map: mapName, ID: d.ID, Desktype: d.Desktype, X: d.X, Y: d.Y,
 			Dsk: d.Desknumber, Empl: d.Employee, Avtr: d.Avatar, Dept: d.Department,
-			Booked: booked, Bookdata: bd,
+			Booked: booked, Bookdata: bd, HasAvatar: true,
 		}
 		searchName := ""
 		if bd != nil {

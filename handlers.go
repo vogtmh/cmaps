@@ -184,11 +184,6 @@ func (app *App) serveStaticAsset(w http.ResponseWriter, r *http.Request) {
 // logs as a console error for every missing picture) we redirect to a single
 // shared placeholder URL. That URL's bytes are cached once and reused for every
 // missing avatar, avoiding hundreds of duplicate cache entries.
-//
-// An optional ?fb=<name> query selects a different fallback image
-// (/static/images/<name>.png) for callers that want a type-specific placeholder
-// (e.g. meeting rooms falling back to meeting.png). The name is restricted to a
-// safe character set to prevent open-redirect/path abuse.
 func (app *App) serveAvatar(w http.ResponseWriter, r *http.Request) {
 	name := strings.TrimPrefix(path.Clean(r.URL.Path), "/avatarcache/")
 	w.Header().Set("Cache-Control", "public, max-age=86400")
@@ -201,28 +196,8 @@ func (app *App) serveAvatar(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	// Missing → redirect to a shared, cacheable placeholder. Default is the
-	// generic "no avatar" image; ?fb= picks a type-specific one if it is a known
-	// safe name.
-	fallback := "noavatar"
-	if fb := r.URL.Query().Get("fb"); isSafeFallbackName(fb) {
-		fallback = fb
-	}
-	http.Redirect(w, r, "/static/images/"+fallback+".png?v="+assetVersion, http.StatusFound)
-}
-
-// isSafeFallbackName reports whether s is a simple, safe image basename
-// (letters, digits, underscore or hyphen) usable in the placeholder redirect.
-func isSafeFallbackName(s string) bool {
-	if s == "" || len(s) > 32 {
-		return false
-	}
-	for _, c := range s {
-		if !(c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c == '_' || c == '-') {
-			return false
-		}
-	}
-	return true
+	// Missing → point everyone at the same cached placeholder.
+	http.Redirect(w, r, "/static/images/noavatar.png?v="+assetVersion, http.StatusFound)
 }
 
 // handleChanges renders the avatar/LDAP change-overview page (legacy changes.php).

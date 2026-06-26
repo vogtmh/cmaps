@@ -46,6 +46,7 @@ func (app *App) handleRestAvatar(w http.ResponseWriter, r *http.Request) {
 	switch mode {
 	case "delete":
 		_ = os.Remove(target)
+		_ = app.db.SetLdapAvatar(userid, false)
 		_ = app.db.AuditLog("Avatar", sess.Username, "Avatar deleted for "+userid)
 		writeJSON(w, map[string]string{"status": "ok", "message": "avatar deleted"})
 
@@ -82,6 +83,7 @@ func (app *App) handleRestAvatar(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "encode failed", http.StatusInternalServerError)
 			return
 		}
+		_ = app.db.SetLdapAvatar(userid, true)
 		_ = app.db.AuditLog("Avatar", sess.Username, "Avatar uploaded for "+userid)
 		writeJSON(w, map[string]string{"status": "ok", "message": "avatar updated", "userid": userid})
 
