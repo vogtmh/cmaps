@@ -236,6 +236,10 @@ func (app *App) handleSAMLLogin(w http.ResponseWriter, r *http.Request) {
 	q.Set("SAMLRequest", encoded)
 	if debugMode {
 		q.Set("RelayState", "debug:"+requestID)
+	} else if next := safeNextPath(r.URL.Query().Get("next")); next != "/" {
+		// Carry the originally requested page through the IdP round-trip so the
+		// ACS handler can return the user there after a successful login.
+		q.Set("RelayState", next)
 	}
 	redirectURL.RawQuery = q.Encode()
 	http.Redirect(w, r, redirectURL.String(), http.StatusFound)
@@ -278,8 +282,12 @@ h2{color:#2ecc71;margin:0 0 16px}p{color:#666;margin:0 0 24px}a{color:#0a66c2}</
 	rawResponse := r.FormValue("SAMLResponse")
 	relayState := r.FormValue("RelayState")
 	debugRequestID := ""
+	returnPath := "/"
 	if strings.HasPrefix(relayState, "debug:") {
 		debugRequestID = strings.TrimPrefix(relayState, "debug:")
+	} else {
+		// A non-debug RelayState carries the page the user originally requested.
+		returnPath = safeNextPath(relayState)
 	}
 
 	if rawResponse == "" {
@@ -512,7 +520,7 @@ h2{color:#2ecc71;margin:0 0 16px}p{color:#666;margin:0 0 24px}a{color:#0a66c2}</
 	log.Printf("SAML ACS: successful login for %s (%s)", username, fullname)
 
 	app.setSessionCookie(w, token)
-	http.Redirect(w, r, "/", http.StatusFound)
+	http.Redirect(w, r, returnPath, http.StatusFound)
 }
 
 // --- SAML settings / status / debug REST endpoints (admin only) ---

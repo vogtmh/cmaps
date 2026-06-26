@@ -5,6 +5,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/url"
 	"path"
 	"strings"
 	"time"
@@ -87,7 +88,7 @@ func (app *App) handleIndex(w http.ResponseWriter, r *http.Request) {
 	// (to the setup wizard, added in Phase 2). Everyone else sees the login page.
 	if !app.db.IsConfigured() {
 		if !ok {
-			app.renderLogin(w, "")
+			app.renderLogin(w, "", "/")
 			return
 		}
 		http.Redirect(w, r, "/setup", http.StatusSeeOther)
@@ -148,10 +149,11 @@ func (app *App) handleChanges(w http.ResponseWriter, r *http.Request) {
 // handleLogin renders the login form (GET) and authenticates local users (POST).
 func (app *App) handleLogin(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodGet {
-		app.renderLogin(w, "")
+		app.renderLogin(w, "", safeNextPath(r.URL.Query().Get("next")))
 		return
 	}
 
+	next := safeNextPath(r.FormValue("next"))
 	username := strings.TrimSpace(r.FormValue("username"))
 	password := r.FormValue("password")
 
@@ -159,7 +161,7 @@ func (app *App) handleLogin(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		time.Sleep(2 * time.Second) // throttle brute force, matching the PHP delay
 		app.db.AuditLog("login", username, "failed local login from "+clientIP(r))
-		app.renderLogin(w, "Invalid username or password.")
+		app.renderLogin(w, "Invalid username or password.", next)
 		return
 	}
 
@@ -170,7 +172,7 @@ func (app *App) handleLogin(w http.ResponseWriter, r *http.Request) {
 	}
 	app.setSessionCookie(w, token)
 	app.db.AuditLog("login", sess.Username, "local login from "+clientIP(r))
-	http.Redirect(w, r, "/", http.StatusSeeOther)
+	http.Redirect(w, r, next, http.StatusSeeOther)
 }
 
 // authenticateLocal validates the admin password from config.json or a local user
@@ -269,10 +271,31 @@ func (app *App) render(w http.ResponseWriter, name string, data interface{}) {
 	}
 }
 
-func (app *App) renderLogin(w http.ResponseWriter, errMsg string) {
+func (app *App) renderLogin(w http.ResponseWriter, errMsg, next string) {
+	next = safeNextPath(next)
+	samlLoginURL := "/auth/saml/login"
+	if next != "/" {
+		samlLoginURL += "?next=" + url.QueryEscape(next)
+	}
 	app.render(w, "login.html", map[string]interface{}{
-		"AppTitle":    app.appTitle(),
-		"SAMLEnabled": app.cfg.SAML.Enabled,
-		"Error":       errMsg,
+		"AppTitle":     app.appTitle(),
+		"SAMLEnabled":  app.cfg.SAML.Enabled,
+		"Error":        errMsg,
+		"Next":         next,
+		"SAMLLoginURL": samlLoginURL,
 	})
+}
+
+// safeNextPath returns a post-login redirect target that is guaranteed to be a
+// local path, defending against open-redirect abuse via the "next" parameter. It
+// only accepts paths that start with a single "/" (not "//", which browsers treat
+// as a protocol-relative absolute URL) and contain no control characters.
+func safeNextPath(next string) string {
+	if next == "" || !strings.HasPrefix(next, "/") || strings.HasPrefix(next, "//") {
+		return "/"
+	}
+	if strings.ContainsAny(next, "\\\r\n\t") {
+		return "/"
+	}
+	return next
 }

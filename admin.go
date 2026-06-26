@@ -9,6 +9,7 @@ import (
 	"io/fs"
 	"mime/multipart"
 	"net/http"
+	"net/url"
 	"os"
 	"sort"
 	"strconv"
@@ -110,7 +111,14 @@ func (app *App) handleAdmin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	sess, ok := app.currentSession(r)
-	if !ok || app.permLevel(sess, "adminpanel") < 1 {
+	if !ok {
+		// Not logged in (e.g. the session was lost on a server restart): send the
+		// user to the login page and remember where they were headed so they land
+		// back on the admin panel afterwards instead of the map.
+		http.Redirect(w, r, "/login?next="+url.QueryEscape(r.URL.RequestURI()), http.StatusSeeOther)
+		return
+	}
+	if app.permLevel(sess, "adminpanel") < 1 {
 		http.Redirect(w, r, "/", http.StatusSeeOther)
 		return
 	}

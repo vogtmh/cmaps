@@ -25,12 +25,13 @@
     <h1>{{.AppTitle}}</h1>
     <p class="sub">CompanyMaps 9</p>
     <form method="POST" action="/login">
+      <input type="hidden" name="next" value="{{.Next}}" />
       <input class="login_field" type="text" name="username" placeholder="Username" autofocus autocomplete="username" />
       <input class="login_field" type="password" name="password" placeholder="Password" autocomplete="current-password" />
       <button class="login_btn" type="submit">Sign in</button>
     </form>
     {{if .SAMLEnabled}}
-    <button class="login_btn login_btn_sso" onclick="window.location.href='/auth/saml/login'">Sign in with SSO</button>
+    <button class="login_btn login_btn_sso" onclick="window.location.href='{{.SAMLLoginURL}}'">Sign in with SSO</button>
     {{end}}
     <div class="login_err">{{.Error}}</div>
     <div class="login_hint">Local admin: use the password from config.json{{if .SAMLEnabled}}, or sign in with SSO{{end}}.</div>
