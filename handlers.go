@@ -149,7 +149,20 @@ func (app *App) handleChanges(w http.ResponseWriter, r *http.Request) {
 // handleLogin renders the login form (GET) and authenticates local users (POST).
 func (app *App) handleLogin(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodGet {
-		app.renderLogin(w, "", safeNextPath(r.URL.Query().Get("next")))
+		next := safeNextPath(r.URL.Query().Get("next"))
+		// SAML-only (no local password fallback): skip the login form entirely and
+		// initiate SSO straight away, carrying the return path through. The local
+		// form remains reachable via ?local=1 as an escape hatch (e.g. to use the
+		// config.json admin password if SSO is misconfigured).
+		if app.cfg.SAML.Enabled && !app.cfg.SAML.AllowLocalPasswordFallback && r.URL.Query().Get("local") != "1" {
+			samlURL := "/auth/saml/login"
+			if next != "/" {
+				samlURL += "?next=" + url.QueryEscape(next)
+			}
+			http.Redirect(w, r, samlURL, http.StatusSeeOther)
+			return
+		}
+		app.renderLogin(w, "", next)
 		return
 	}
 
