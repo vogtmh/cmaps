@@ -481,7 +481,7 @@
               <div style="padding:12px 14px; color:#f08070;">{{.Err}}</div>
             {{else if .Rooms}}
               <table class="sync-table">
-                <thead><tr><th>Room</th><th>Availability</th><th>Match</th><th>Now / Next</th></tr></thead>
+                <thead><tr><th>Room</th><th>Availability</th><th>Match</th><th>Now</th><th>Next</th></tr></thead>
                 <tbody>
                 {{range .Rooms}}
                   <tr>
@@ -493,7 +493,8 @@
                       {{else}}<span class="sync-avail unknown"><span class="dot"></span>unknown</span>{{end}}
                     </td>
                     <td class="sync-col-match">{{if .Matched}}<span class="sync-badge sync-badge-ok">desk {{.Deskid}}</span>{{else}}<span class="sync-badge sync-badge-warn">no desk</span>{{end}}</td>
-                    <td>{{if .NowTitle}}{{.NowTitle}}{{else if .NextTitle}}next: {{.NextTitle}}{{else}}&mdash;{{end}}</td>
+                    <td class="sync-col-meet">{{if .NowTitle}}<span class="sync-meet-title">{{.NowTitle}}</span>{{if .NowStart}}<span class="sync-meet-time">{{.NowStart}} &ndash; {{.NowEnd}}</span>{{end}}{{else}}&mdash;{{end}}</td>
+                    <td class="sync-col-meet">{{if .NextTitle}}<span class="sync-meet-title">{{.NextTitle}}</span>{{if .NextStart}}<span class="sync-meet-time">{{.NextStart}} &ndash; {{.NextEnd}}</span>{{end}}{{else}}&mdash;{{end}}</td>
                   </tr>
                 {{end}}
                 </tbody>

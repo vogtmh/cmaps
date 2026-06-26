@@ -353,7 +353,11 @@ type RobinSyncRoom struct {
 	Matched      bool   `json:"matched"`
 	Deskid       string `json:"deskid"`
 	NowTitle     string `json:"now_title"`
+	NowStart     string `json:"now_start"`
+	NowEnd       string `json:"now_end"`
 	NextTitle    string `json:"next_title"`
+	NextStart    string `json:"next_start"`
+	NextEnd      string `json:"next_end"`
 	Err          string `json:"err"`
 }
 
@@ -529,7 +533,11 @@ func (app *App) pollRobinRoomStructured(roomID int, roomName, mapName string) Ro
 
 	ev := roomEventWindows(events)
 	r.NowTitle = ev.nowTitle
+	r.NowStart = ev.nowStart
+	r.NowEnd = ev.nowEnd
 	r.NextTitle = ev.nextTitle
+	r.NextStart = ev.nextStart
+	r.NextEnd = ev.nextEnd
 
 	deskid := app.findMeetingDeskID(mapName, roomName)
 	r.Deskid = deskid
