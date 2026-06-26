@@ -125,6 +125,20 @@ func (app *App) buildMapDesks(mapName, date, search string, vips []VIP, bookings
 				}
 				show = !hasUser && booked == "0"
 			}
+			// If Robin reports the very same person who is already the AD-mirrored
+			// occupant of this desk, the overlay would be redundant — leave the
+			// native addesk untouched. A different Robin occupant still overrides.
+			if show && d.Desktype == "addesk" {
+				for _, u := range ldap {
+					if u.Office != d.Desknumber {
+						continue
+					}
+					if sameRobinPerson(rs, u) {
+						show = false
+						break
+					}
+				}
+			}
 			if show {
 				avtr := rs.Userid
 				if avtr == "" {
@@ -192,6 +206,30 @@ func (app *App) buildMapDesks(mapName, date, search string, vips []VIP, bookings
 		app.appendIfMatch(&items, item, search, searchName)
 	}
 	return items
+}
+
+// sameRobinPerson reports whether the Robin desk occupant is the same individual
+// as an AD-mirrored user, comparing the LDAP userid first and then the primary
+// mail or any of its aliases (case-insensitively).
+func sameRobinPerson(rs RobinDeskStatus, u LdapUser) bool {
+	if id := strings.ToLower(strings.TrimSpace(rs.Userid)); id != "" {
+		if id == strings.ToLower(strings.TrimSpace(u.Userid)) {
+			return true
+		}
+	}
+	mail := strings.ToLower(strings.TrimSpace(rs.Mail))
+	if mail == "" {
+		return false
+	}
+	if mail == strings.ToLower(strings.TrimSpace(u.Mail)) {
+		return true
+	}
+	for _, a := range u.Aliases {
+		if mail == strings.ToLower(strings.TrimSpace(a)) {
+			return true
+		}
+	}
+	return false
 }
 
 // appendIfMatch appends item unless a search filter is set and none of its
