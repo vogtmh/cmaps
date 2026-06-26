@@ -1905,6 +1905,14 @@ function detectMobile() {
 
 var announceLive;
 var changesData = [];
+// Lazy-loading state for the full-screen changes modal.
+var changesPageSize = 50;   // rows fetched per request
+var changesOffset = 0;      // server offset of the next page
+var changesHasMore = true;  // whether the server has more rows to send
+var changesLoading = false; // a page request is currently in flight
+var changesQuery = '';      // active server-side search term
+var changesReqToken = 0;    // guards against stale/out-of-order responses
+var changesSearchTimer = null; // debounce timer for the search box
 
 // Fill the announcement sidebar with the most recent changes and keep the header
 // glow indicator in sync. The full list (24-month-capped server-side) can be
@@ -2019,37 +2027,88 @@ function buildChangeRow(c) {
   return a;
 }
 
-// renderChanges (re)builds the modal list from changesData, applying the search
-// box filter.
+// renderChanges (re)builds the modal list from changesData. Rows are loaded
+// page-by-page from the server (see loadMoreChanges), so this just renders what
+// has been fetched so far plus the loading/empty footer state.
 function renderChanges() {
   var list = document.getElementById('changesList');
   if (!list) { return; }
   list.innerHTML = '';
-  var q = ((document.getElementById('changesSearch') || {}).value || '').trim().toLowerCase();
-  var shown = 0;
   for (var i = 0; i < changesData.length; i++) {
-    var c = changesData[i];
-    if (q) {
-      var hay = ((c.fullname || '') + ' ' + (c.newvalue || '') + ' ' + (c.oldvalue || '') + ' ' + (c.type || '')).toLowerCase();
-      if (hay.indexOf(q) === -1) { continue; }
-    }
-    list.appendChild(buildChangeRow(c));
-    shown++;
+    list.appendChild(buildChangeRow(changesData[i]));
   }
-  if (shown === 0) {
-    var empty = document.createElement('div');
-    empty.className = 'changes-empty';
-    empty.textContent = changesData.length ? 'No changes match your search.' : 'No changes in the last 24 months.';
-    list.appendChild(empty);
+  var status = document.createElement('div');
+  status.id = 'changesStatus';
+  status.className = 'changes-empty';
+  if (changesLoading) {
+    status.textContent = 'Loading\u2026';
   }
+  else if (changesData.length === 0) {
+    status.textContent = changesQuery ? 'No changes match your search.' : 'No changes in the last 24 months.';
+  }
+  else if (!changesHasMore) {
+    status.textContent = 'End of list.';
+  }
+  list.appendChild(status);
 }
 
-function filterChanges() {
+// loadMoreChanges fetches the next page of changes from the server and appends
+// it to changesData. Guarded so only one request runs at a time.
+function loadMoreChanges() {
+  if (changesLoading || !changesHasMore) { return; }
+  changesLoading = true;
+  var reqToken = ++changesReqToken;
   renderChanges();
+  $.ajax({
+    url: 'rest/changes/?limit=' + changesPageSize + '&offset=' + changesOffset + '&q=' + encodeURIComponent(changesQuery),
+    async: true,
+    type: 'get',
+    dataType: 'JSON',
+    success: function(result){
+      // Ignore stale responses from a superseded search.
+      if (reqToken !== changesReqToken) { return; }
+      var page = (result && result.changes) ? result.changes : [];
+      changesData = changesData.concat(page);
+      changesOffset += page.length;
+      changesHasMore = !!(result && result.hasMore);
+      changesLoading = false;
+      renderChanges();
+    },
+    error: function(){
+      if (reqToken !== changesReqToken) { return; }
+      changesLoading = false;
+      changesHasMore = false;
+      var list = document.getElementById('changesList');
+      if (list && changesData.length === 0) {
+        list.innerHTML = '<div class="changes-empty">Could not load changes.</div>';
+      }
+    }
+  });
 }
 
-// openChangesModal loads the full (server-side 24-month-capped) change list and
-// shows it in the full-screen modal, then clears the header "new changes" glow.
+// resetChangesList clears the loaded data and starts loading from the top for
+// the current search query.
+function resetChangesList() {
+  changesData = [];
+  changesOffset = 0;
+  changesHasMore = true;
+  changesLoading = false;
+  changesReqToken++;
+  renderChanges();
+  loadMoreChanges();
+}
+
+// filterChanges re-runs the search server-side (debounced) so it covers the
+// whole 24-month data set, not just the pages loaded so far.
+function filterChanges() {
+  var search = document.getElementById('changesSearch');
+  changesQuery = search ? search.value.trim() : '';
+  if (changesSearchTimer) { clearTimeout(changesSearchTimer); }
+  changesSearchTimer = setTimeout(resetChangesList, 250);
+}
+
+// openChangesModal shows the full-screen modal and lazy-loads the change list
+// (server-side 24-month-capped) page by page, then clears the header glow.
 function openChangesModal() {
   var modal = document.getElementById('changesModal');
   if (!modal) { return; }
@@ -2057,22 +2116,9 @@ function openChangesModal() {
   $("#settingspanel").hide();
   var search = document.getElementById('changesSearch');
   if (search) { search.value = ''; }
-  var list = document.getElementById('changesList');
-  if (list) { list.innerHTML = '<div class="changes-empty">Loading\u2026</div>'; }
+  changesQuery = '';
   modal.style.display = 'flex';
-  $.ajax({
-    url: 'rest/changes/',
-    async: true,
-    type: 'get',
-    dataType: 'JSON',
-    success: function(result){
-      changesData = (result && result.changes) ? result.changes : [];
-      renderChanges();
-    },
-    error: function(){
-      if (list) { list.innerHTML = '<div class="changes-empty">Could not load changes.</div>'; }
-    }
-  });
+  resetChangesList();
   // Mark the current newest change as seen and stop the icon glowing.
   document.cookie = "announcecookie=" + announceLive + '; expires=Fri, 31 Dec 9999 23:59:59 GMT; SameSite=Lax';
   announceValue = announceLive;
@@ -2293,6 +2339,12 @@ $(function() {
   // Dismiss the changes modal on backdrop click or Esc.
   $("#changesModal").click(function(e) {
     if (e.target === this) { closeChangesModal(); }
+  });
+  // Infinite scroll: load the next page as the user nears the bottom.
+  $("#changesList").on("scroll", function() {
+    if (this.scrollTop + this.clientHeight >= this.scrollHeight - 200) {
+      loadMoreChanges();
+    }
   });
   $(document).on("keydown", function(e) {
     if (e.key === "Escape") { closeChangesModal(); }

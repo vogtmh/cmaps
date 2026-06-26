@@ -131,18 +131,36 @@ func (app *App) handleRestAuditlog(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]interface{}{"entries": items, "hasMore": hasMore})
 }
 
-// handleRestChanges serves /rest/changes?maxresults= (Title/Employee only).
+// handleRestChanges serves /rest/changes (Title/Employee only). It supports two
+// paging styles:
+//   - legacy ?maxresults=N  : the sidebar fetches the N most recent changes.
+//   - ?offset=O&limit=L&q=  : the full-screen modal lazy-loads pages of L rows,
+//     optionally filtered by a server-side search term q.
+//
 // A hard 24-month cap is always applied: per GDPR we never expose personnel
-// change history older than two years, regardless of the requested limit.
+// change history older than two years, regardless of the requested window. The
+// response includes "hasMore" so the client knows whether to keep loading.
 func (app *App) handleRestChanges(w http.ResponseWriter, r *http.Request) {
-	maxResults := atoiDefault(r.URL.Query().Get("maxresults"), 0)
+	q := r.URL.Query()
+	offset := atoiDefault(q.Get("offset"), 0)
+	if offset < 0 {
+		offset = 0
+	}
+	// limit defaults to maxresults for backward compatibility (0 = no limit).
+	limit := atoiDefault(q.Get("limit"), 0)
+	if limit == 0 {
+		limit = atoiDefault(q.Get("maxresults"), 0)
+	}
+	search := strings.ToLower(strings.TrimSpace(q.Get("q")))
 
 	entries, _ := app.db.ListChangelog(0) // newest first
 	cutoff := time.Now().AddDate(-2, 0, 0)
 	out := struct {
 		Changes []map[string]interface{} `json:"changes"`
+		HasMore bool                      `json:"hasMore"`
 	}{Changes: []map[string]interface{}{}}
 
+	matched := 0 // count of rows passing all filters (across the whole set)
 	for i, e := range entries {
 		if e.Type != "Title" && e.Type != "Employee" {
 			continue
@@ -151,6 +169,23 @@ func (app *App) handleRestChanges(w http.ResponseWriter, r *http.Request) {
 		ts := time.Date(e.Year, time.Month(e.Month), e.Day, e.Hour, e.Minute, 0, 0, cutoff.Location())
 		if ts.Before(cutoff) {
 			continue
+		}
+		if search != "" {
+			hay := strings.ToLower(e.Name + " " + e.Newvalue + " " + e.Oldvalue + " " + e.Type)
+			if !strings.Contains(hay, search) {
+				continue
+			}
+		}
+		// Window the matched rows by offset/limit.
+		if matched < offset {
+			matched++
+			continue
+		}
+		matched++
+		if limit > 0 && len(out.Changes) >= limit {
+			// There is at least one more matching row beyond this window.
+			out.HasMore = true
+			break
 		}
 		out.Changes = append(out.Changes, map[string]interface{}{
 			"fullname":  e.Name,
@@ -161,9 +196,6 @@ func (app *App) handleRestChanges(w http.ResponseWriter, r *http.Request) {
 			"timestamp": formatChangeTimestamp(e),
 			"id":        len(entries) - i, // stable descending id
 		})
-		if maxResults > 0 && len(out.Changes) >= maxResults {
-			break
-		}
 	}
 	writeJSON(w, out)
 }
