@@ -8,8 +8,14 @@ import (
 	"net/http"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 )
+
+// robinSyncWorkers is the number of rooms polled concurrently during a Robin
+// sync. Each room costs two Robin API calls, so polling them in parallel is the
+// single biggest speed-up for large organisations.
+const robinSyncWorkers = 8
 
 // Robin API base URL.
 const robinAPIBase = "https://api.robinpowered.com/v1.0"
@@ -309,17 +315,6 @@ func (app *App) pollRobinRoomVerbose(roomID int, roomName, mapName string) []str
 		return logs
 	}
 
-	// Diagnostics: report how many events Robin returned and the raw datetime
-	// format of the first one, so we can verify the events are actually pulled
-	// and parsed correctly.
-	add("    events returned: %d", len(events.Data))
-	if len(events.Data) > 0 {
-		e0 := events.Data[0]
-		_, ok := parseRobinTime(e0.Start.DateTime)
-		add("    first event: title=%q start=%q end=%q tz=%q parsed=%v",
-			e0.Title, e0.Start.DateTime, e0.End.DateTime, e0.End.TimeZone, ok)
-	}
-
 	ev := roomEventWindows(events)
 	if ev.nowStart != "" {
 		add("    now: %s (%s - %s)", ev.nowTitle, ev.nowStart, ev.nowEnd)
@@ -360,11 +355,6 @@ type RobinSyncRoom struct {
 	NowTitle     string `json:"now_title"`
 	NextTitle    string `json:"next_title"`
 	Err          string `json:"err"`
-	// Diagnostics: number of events Robin returned for this room and the raw
-	// datetime of the first event (plus whether it parsed). Used to debug why
-	// the meeting nameplate windows can come back empty.
-	EventsCount   int    `json:"events_count"`
-	FirstEventRaw string `json:"first_event_raw"`
 }
 
 // RobinSyncLocation groups the rooms returned for one configured Robin location.
@@ -454,38 +444,61 @@ func (app *App) runRobinSyncStructured(prog *syncProgress) RobinSyncResult {
 		prog.setStage("Polling rooms…")
 	}
 
-	// Phase 2: poll each room (the slow part: two API calls per room).
-	for _, w := range work {
-		loc := w.loc
-		for _, room := range w.rooms {
-			if prog != nil {
-				prog.setStage(fmt.Sprintf("Polling %s · %s", loc.Spacename, room.Name))
+	// Phase 2: poll each room (the slow part: two API calls per room). Rooms are
+	// independent, so a bounded worker pool polls several at once. Results are
+	// written into pre-sized slots keyed by (location, room) index so the final
+	// output keeps the same deterministic order as the sequential version.
+	type job struct {
+		li, ri int
+		room   robinSpaceEntry
+		mapnm  string
+	}
+	roomResults := make([][]RobinSyncRoom, len(work))
+	var jobs []job
+	for li := range work {
+		roomResults[li] = make([]RobinSyncRoom, len(work[li].rooms))
+		for ri, room := range work[li].rooms {
+			jobs = append(jobs, job{li: li, ri: ri, room: room, mapnm: work[li].loc.Mapname})
+		}
+	}
+
+	jobCh := make(chan job)
+	var wg sync.WaitGroup
+	for i := 0; i < robinSyncWorkers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for j := range jobCh {
+				r := app.pollRobinRoomStructured(j.room.ID, j.room.Name, j.mapnm)
+				roomResults[j.li][j.ri] = r
+				if prog != nil {
+					switch {
+					case r.Err != "":
+						prog.logf("    ✗ %s: %s", j.room.Name, r.Err)
+					case r.Matched:
+						prog.logf("    ✓ %s → desk %s (%s)", j.room.Name, r.Deskid, r.Availability)
+					default:
+						prog.logf("    – %s: no matching desk (%s)", j.room.Name, r.Availability)
+					}
+					prog.step("")
+				}
 			}
-			r := app.pollRobinRoomStructured(room.ID, room.Name, loc.Mapname)
+		}()
+	}
+	for _, j := range jobs {
+		jobCh <- j
+	}
+	close(jobCh)
+	wg.Wait()
+
+	// Assemble the per-location results in their original order.
+	for li := range work {
+		loc := work[li].loc
+		for _, r := range roomResults[li] {
 			loc.Rooms = append(loc.Rooms, r)
 			res.TotalRooms++
 			if r.Matched {
 				res.MatchedRooms++
-			}
-			if prog != nil {
-				switch {
-				case r.Err != "":
-					prog.logf("    ✗ %s: %s", room.Name, r.Err)
-				case r.Matched:
-					prog.logf("    ✓ %s → desk %s (%s)", room.Name, r.Deskid, r.Availability)
-				default:
-					prog.logf("    – %s: no matching desk (%s)", room.Name, r.Availability)
-				}
-				// Diagnostics: surface the event count and the first event's raw
-				// datetime format so we can tell whether events are pulled and
-				// whether they parse. Only log when there are events to keep the
-				// output readable.
-				if r.EventsCount > 0 {
-					prog.logf("        events=%d %s", r.EventsCount, r.FirstEventRaw)
-				} else if r.Err == "" {
-					prog.logf("        events=0")
-				}
-				prog.step("")
 			}
 		}
 		res.Locations = append(res.Locations, loc)
@@ -517,13 +530,6 @@ func (app *App) pollRobinRoomStructured(roomID int, roomName, mapName string) Ro
 	ev := roomEventWindows(events)
 	r.NowTitle = ev.nowTitle
 	r.NextTitle = ev.nextTitle
-	r.EventsCount = len(events.Data)
-	if len(events.Data) > 0 {
-		e0 := events.Data[0]
-		_, ok := parseRobinTime(e0.Start.DateTime)
-		r.FirstEventRaw = fmt.Sprintf("title=%q start=%q end=%q tz=%q parsed=%v",
-			e0.Title, e0.Start.DateTime, e0.End.DateTime, e0.End.TimeZone, ok)
-	}
 
 	deskid := app.findMeetingDeskID(mapName, roomName)
 	r.Deskid = deskid
