@@ -28,6 +28,7 @@
   <script src="tools/jquery3.js?v={{assetver}}"></script>
   <script src="tools/jquery-migrate-1.4.1.min.js?v={{assetver}}"></script>
   <script src="user80.js?v={{assetver}}"></script>
+  <script src="login80.js?v={{assetver}}"></script>
   <script src="tools/resize80.js?v={{assetver}}"></script>
   <script src="tools/underscore.js?v={{assetver}}"></script>
 </head>
@@ -191,6 +192,16 @@
     // Whether the SAML "Login via SSO" option should be offered on the login form.
     var saml_login_available = {{if and .SAMLEnabled (not .DisableSAML)}}1{{else}}0{{end}};
 
+    // Config for the unified login overlay (login80.js / cmapsLogin).
+    window.cmapsAuth = {
+      loggedIn:     {{if .LoggedIn}}true{{else}}false{{end}},
+      samlEnabled:  {{if and .SAMLEnabled (not .DisableSAML)}}true{{else}}false{{end}},
+      samlFallback: {{if .AllowLocalFallback}}true{{else}}false{{end}},
+      samlUrl:      "/auth/saml/login",
+      logoUrl:      "{{.LogoRegular}}",
+      loginPage:    false
+    };
+
     console.log("Timezone set to: " + region);
     var clockID;
     var d = new Date();
@@ -282,11 +293,7 @@
 <!-- Login icon -->
 {{if not .LoggedIn}}
 <div class="loginicon" id="loginicon" style="position:fixed; bottom:10px;left:10px; width:50px; z-index:3; transform:scale({{.Autozoom}});transform-origin:0% 100%;">
-  {{if and .SAMLEnabled (not .DisableSAML) (not .AllowLocalFallback)}}
-  <input type="image" src="images/login-user.png" alt="e" onclick="location.href='/auth/saml/login'" onmouseover='this.src="images/login-user_on.png"' onmouseout='this.src="images/login-user.png"' style="width:50px;">
-  {{else}}
-  <input type="image" src="images/login-user.png" alt="e" onClick="loginForm(true)" onmouseover='this.src="images/login-user_on.png"' onmouseout='this.src="images/login-user.png"'>
-  {{end}}
+  <input type="image" src="images/login-user.png" alt="e" onClick="cmapsLogin()" onmouseover='this.src="images/login-user_on.png"' onmouseout='this.src="images/login-user.png"' style="width:50px;">
 </div>
 {{end}}
 

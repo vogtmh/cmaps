@@ -102,71 +102,6 @@ function addStat () {
   });
 }
 
-function loginUser(mode) {
-  if (mode == 'admin') {
-    remoteurl = '../rest/account/index.php'
-  }
-  else {
-    remoteurl = 'rest/account/index.php'
-  }
-  $("#loginstatus").css("display","none");
-  $.ajax({
-    type: 'GET',
-    url: remoteurl,
-    data: $("#LoginForm").serialize(),
-    contentType: false,
-    cache: false,
-    //processData:false,
-    beforeSend: function(){
-      senddata = $("#Login").serialize();
-    },
-    error:function(){
-      console.log('error');
-    },
-    success: function(logindata){
-      var logstatus = logindata.status;
-      var logmessage = logindata.message;
-      if (logstatus == 'error') {
-        var color='#D82626'
-      }
-      else if (logstatus == 'ok') {
-        var color='#35842E'
-      }
-      $("#loginstatus").css("background-color",color);
-      $("#loginstatus").html(logmessage);
-      $("#loginstatus").css("display","").delay(1000).fadeOut("slow");
-      if (logstatus == 'ok') { location.reload(); }
-    }
-  });
-}
-
-function samlLogin(mode) {
-  if (mode == 'admin') {
-    remoteurl = '../rest/account/index.php'
-  }
-  else {
-    remoteurl = 'rest/account/index.php'
-  }
-  $.ajax({
-    type: 'GET',
-    url: remoteurl,
-    data: {mode:"samllogin"},
-    contentType: false,
-    cache: false,
-    //processData:false,
-    beforeSend: function(){
-    },
-    error:function(){
-      console.log('error');
-    },
-    success: function(logindata){
-      var logstatus = logindata.status;
-      var logmessage = logindata.message;
-      if (logstatus == 'ok') { location.reload(); }
-    }
-  });
-}
-
 function logoutUser(mode) {
   if (mode == 'admin') {
     remoteurl = '../rest/account/index.php'
@@ -208,70 +143,14 @@ function logoutUser(mode) {
   });
 }
 
-function loginForm (showform,mode) {
-    
-    switch (showform) {
-      case true:
-
-        var samlButton = '';
-        if (typeof saml_login_available !== 'undefined' && saml_login_available == 1) {
-          samlButton = `
-              <div style="clear:both; text-align:center; margin-top:18px; padding-top:14px; border-top:1px solid #555;">
-                <div style="margin-bottom:8px; opacity:0.7;">OR</div>
-                <input type="button" value="Login via SAML" style="width:92%; background-color:#0a66c2;" onClick="location.href='/auth/saml/login'">
-              </div>`;
-        }
-
-        var logindata =`
-          <div id="logindata" style="position:absolute; left:25%; top:25%; width:50%; height:50%;">
-            <form id="LoginForm" name="Login" method="post" autocomplete="off">
-              <input type="hidden" name="mode" value="login">
-              <div style="width:30%; float:left;display:inline;">Username</div>
-              <input type="text" name="user" value="" size="10" autofocus style="width:70%; float:left; display:inline;"><br />
-              <div style="width:30%; float:left;display:inline;">Password</div>
-              <input type="password" name="password" value="" size="10" style="width:70%; float:left; display:inline;"><br /><br />
-              <input type="submit" value="Login" style="width:45%; float: left;" formaction='javascript:loginUser("`+mode+`")'>
-            </form>
-            <input type="button" value="Cancel" style="width:45%; float:right; background-color:#f00;" onClick="loginForm(false)">
-            <div id="loginstatus" style="height:43px; border-top: 8px; width:100%;border-radius:4px;background-color:#00f;float:left;display:none;text-align:center;line-height:43px;"></div>`
-            + samlButton +
-          `</div>
-        `;
-        var newElement = document.createElement('div');
-        newElement.setAttribute('id', 'loginform');
-        newElement.innerHTML = logindata;
-        document.body.appendChild(newElement);
-        $('#loginform').css('position','fixed');
-        $('#loginform').css('left','0px');
-        $('#loginform').css('top','0px');
-        $('#loginform').css('width','100%');
-        $('#loginform').css('height','100%');
-        $('#loginform').css('background-color','#000');
-        $('#loginform').css('opacity','0.85');
-        $('#loginform').css('z-index','200');
-        $('#logindata').css('transform','scale(1.5)');
-        $('#logindata').css('transform-origin','50% 50%');
-
-        // Hide icon
-        var icon = '';
-        $("#loginicon").html(icon);
-        break;
-      
-      case false:
-        // Remove old sticky if exists
-        var element = document.getElementById('loginform');
-        if (element !== null) {
-          element.parentNode.removeChild(element);
-        }
-        // Output icon
-        var icon = '<input type="image" src="images/login-user.png" alt="e" onClick="loginForm(true)" onmouseover=this.src="images/login-user_on.png" onmouseout=this.src="images/login-user.png">';
-        $("#loginicon").html(icon);
-        updateCounter();
-        break;
-
-      default:
-        break;
-    }
+// Backwards-compatible shim: the login UI is now the unified overlay in
+// login80.js (cmapsLogin). loginForm(true) opens it, loginForm(false) closes it.
+function loginForm (showform) {
+  if (showform === false) {
+    if (typeof cmapsCloseLogin === 'function') { cmapsCloseLogin(); }
+    return;
+  }
+  if (typeof cmapsLogin === 'function') { cmapsLogin(); }
 }
 
 function showMapplate (mapname) {

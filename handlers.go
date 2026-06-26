@@ -333,6 +333,7 @@ func (app *App) renderLogin(w http.ResponseWriter, errMsg, next string) {
 		"Error":        errMsg,
 		"Next":         next,
 		"SAMLLoginURL": samlLoginURL,
+		"LogoRegular":  app.settingOr("logo_regular", "/static/images/cmaps-regular.png"),
 	})
 }
 

@@ -769,6 +769,55 @@ body {
     color:#ffffff;
 }
 
+/* ── Unified login overlay (login80.js cmapsLogin) ────────── */
+.cmaps-login-overlay {
+    position: fixed; inset: 0; z-index: 5000;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(0, 0, 0, 0.55);
+    -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+}
+.cmaps-login-card {
+    width: 340px; max-width: 90vw;
+    background: rgba(28, 28, 30, 0.92);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 14px; padding: 28px 26px;
+    box-shadow: 0 18px 56px rgba(0, 0, 0, 0.55);
+    color: #fff; font-family: Roboto, Arial, Helvetica, sans-serif;
+}
+.cmaps-login-card h1 { font-size: 1.35em; margin: 0 0 4px; font-weight: 600; }
+.cmaps-login-sub { color: #aaa; font-size: 0.85em; margin: 0 0 22px; }
+.cmaps-login-logo { display: block; max-width: 70%; max-height: 56px; margin: 4px auto 24px; }
+.cmaps-login-field {
+    width: 100%; padding: 11px 12px; margin: 7px 0; box-sizing: border-box;
+    border: 1px solid rgba(255, 255, 255, 0.18); border-radius: 8px;
+    background: rgba(255, 255, 255, 0.06); color: #fff; font-size: 1em;
+}
+.cmaps-login-field::placeholder { color: #8a8a8e; }
+.cmaps-login-field:focus { outline: none; border-color: #0a66c2; background: rgba(255, 255, 255, 0.1); }
+.cmaps-login-btn {
+    width: 100%; padding: 12px; margin-top: 14px; border: 0; border-radius: 8px;
+    background: #0a66c2; color: #fff; font-size: 1em; font-weight: 600; cursor: pointer;
+}
+.cmaps-login-btn:hover { background: #0959a8; }
+.cmaps-login-btn-sso { background: #2e7d32; margin-top: 10px; }
+.cmaps-login-btn-sso:hover { background: #276b2b; }
+.cmaps-login-or {
+    display: flex; align-items: center; text-align: center;
+    color: #888; font-size: 0.78em; text-transform: uppercase; letter-spacing: 0.08em;
+    margin: 16px 0 4px;
+}
+.cmaps-login-or::before, .cmaps-login-or::after {
+    content: ""; flex: 1; height: 1px; background: rgba(255, 255, 255, 0.14);
+}
+.cmaps-login-or span { padding: 0 12px; }
+.cmaps-login-err { color: #ff6b6b; font-size: 0.9em; margin: 10px 0 0; min-height: 1.1em; }
+.cmaps-login-cancel {
+    width: 100%; padding: 10px; margin-top: 10px; border: 0; border-radius: 8px;
+    background: transparent; color: #aaa; cursor: pointer; font-size: 0.9em;
+}
+.cmaps-login-cancel:hover { color: #fff; }
+
+
 .mapflag {
     position: absolute;
 	opacity: 0.7; 
