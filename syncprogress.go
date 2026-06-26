@@ -53,6 +53,17 @@ func (p *syncProgress) setTotal(total int) {
 	p.mu.Unlock()
 }
 
+// beginPhase resets the counter and starts a fresh determinate phase. Used when
+// a single job has multiple sequential stages (e.g. the Robin sync polls meeting
+// rooms, then desk reservations) so the progress bar restarts cleanly for each.
+func (p *syncProgress) beginPhase(total int, stage string) {
+	p.mu.Lock()
+	p.cur = 0
+	p.total = total
+	p.stage = stage
+	p.mu.Unlock()
+}
+
 // logf appends a timestamped line to the live log.
 func (p *syncProgress) logf(format string, a ...interface{}) {
 	line := time.Now().Format("15:04:05") + "  " + fmt.Sprintf(format, a...)

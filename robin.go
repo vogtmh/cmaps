@@ -275,7 +275,7 @@ func (app *App) StartRobinScheduler(interval time.Duration) {
 			app.RunRobinSyncStructured()
 			// Refresh the live desk-occupancy overlay cache (no-op unless the
 			// overlay is enabled). Kept separate from the meeting/booking data.
-			app.pollRobinDeskOccupancy()
+			app.pollRobinDeskOccupancy(nil)
 		}
 	}()
 }
@@ -1111,8 +1111,7 @@ func (app *App) collectRobinOccupancy(prog *syncProgress, capture func(name stri
 		work = append(work, locWork{s: s, dir: dir, spaces: list.Data})
 	}
 	if prog != nil {
-		prog.setTotal(totalSpaces)
-		prog.setStage("Polling spaces…")
+		prog.beginPhase(totalSpaces, "Polling spaces…")
 	}
 
 	for _, lw := range work {
@@ -1255,8 +1254,9 @@ func (app *App) runRobinDeskDump(prog *syncProgress) ([]string, []robinDumpFile,
 
 // pollRobinDeskOccupancy refreshes the live Robin seat-occupancy cache used by
 // the desk overlay. It is a no-op unless the overlay is enabled and a token is
-// configured. It never touches the meeting cache or the booking feature.
-func (app *App) pollRobinDeskOccupancy() {
+// configured. It never touches the meeting cache or the booking feature. When
+// prog is non-nil it reports determinate progress (one step per space).
+func (app *App) pollRobinDeskOccupancy(prog *syncProgress) {
 	mode := app.db.GetRobinSetting("robinDeskMode")
 	if mode == "" || mode == "off" {
 		return
@@ -1264,7 +1264,7 @@ func (app *App) pollRobinDeskOccupancy() {
 	if app.db.GetRobinSetting("robintoken") == "" {
 		return
 	}
-	statuses, _ := app.collectRobinOccupancy(nil, nil, nil)
+	statuses, _ := app.collectRobinOccupancy(prog, nil, nil)
 	if err := app.db.ReplaceRobinDeskStatus(statuses); err != nil {
 		log.Printf("robin desk occupancy: %v", err)
 		return

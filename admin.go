@@ -1148,7 +1148,7 @@ func (app *App) handleRestRobinSync(w http.ResponseWriter, r *http.Request) {
 		// "Show Robin desk reservations" mode is enabled), exactly like the
 		// 5-minute scheduler does, so one button syncs everything.
 		app.robinProg.setStage("Syncing desk reservations…")
-		app.pollRobinDeskOccupancy()
+		app.pollRobinDeskOccupancy(&app.robinProg)
 		if res.Note != "" {
 			app.robinProg.finish(res.Note, "")
 			return
