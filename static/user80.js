@@ -1471,6 +1471,11 @@ function searchLocaldesks() {
             if (sbname == '' && localdesk.booked == 1 && localdesk.bookdata) {
               sbname = localdesk.bookdata.name;
             }
+            // Robin-occupied desks carry the resolved person in empl (no
+            // fname/lname), same as the map nameplate — use it as the label.
+            if (sbname == '' && localdesk.empl) {
+              sbname = localdesk.empl;
+            }
             searchLocalResults.push({
               id: localdesk.id,
               name: sbname,
