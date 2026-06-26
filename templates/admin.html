@@ -497,7 +497,7 @@
       <div class="sync-card-head">
         <h2 class="sync-card-title">Robin options</h2>
       </div>
-      <form action="?tab=ldap" method="post">
+      <form action="?tab=ldap" method="post" onsubmit="return saveRobinOptions(this);">
         <input type="hidden" name="tab" value="ldap">
         <input type="hidden" name="saveRobinOptions" value="1">
         <div class="sync-field">
@@ -524,7 +524,7 @@
           </div>
           <textarea class="sync-input" name="robinStripSuffixList" rows="3" placeholder="One suffix per line (matched literally, e.g.  / GER)">{{.RobinStripSuffixList}}</textarea>
         </div>
-        <div class="sync-form-actions"><button type="submit" class="sync-btn sync-btn-primary">Save options</button></div>
+        <div class="sync-form-actions"><button type="submit" class="sync-btn sync-btn-primary">Save options</button><span id="robinOptionsSaved" class="sync-saved-note"></span></div>
       </form>
     </div>
     {{end}}

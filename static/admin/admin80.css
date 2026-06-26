@@ -194,6 +194,8 @@
 .sync-select option { background: var(--sy-surface); color: var(--sy-fg); }
 .sync-form-actions { display: flex; align-items: center; gap: 12px; margin-top: 16px; flex-wrap: wrap; }
 .sync-status-text { font-size: 13px; color: var(--sy-muted); }
+.sync-saved-note { font-size: 13px; color: var(--sy-ok); }
+.sync-saved-note.error { color: var(--sy-danger); }
 
 /* ── Toggle switch ───────────────────────────────────────── */
 .sync-toggle-row { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }

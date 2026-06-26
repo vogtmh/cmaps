@@ -810,6 +810,28 @@ function applyStripToForm(type, pattern) {
   if (cb) cb.checked = true;
 }
 
+// saveRobinOptions persists the Robin options form in place (no tab re-render),
+// since none of its fields drive a server-computed display. Returns false to
+// cancel the default submit and stop the generic #content form handler.
+function saveRobinOptions(form) {
+  var note = document.getElementById('robinOptionsSaved');
+  var btn = form.querySelector('button[type="submit"]');
+  if (btn) { btn.disabled = true; }
+  if (note) { note.textContent = ''; note.classList.remove('error'); }
+  $.ajax({
+    url: '?tab=ldap&sub=robin&partial=1', type: 'post',
+    data: new FormData(form), processData: false, contentType: false,
+    success: function () {
+      if (note) { note.textContent = 'Saved \u2713'; }
+    },
+    error: function () {
+      if (note) { note.textContent = 'Could not save'; note.classList.add('error'); }
+    },
+    complete: function () { if (btn) { btn.disabled = false; } }
+  });
+  return false;
+}
+
 // Escape a string for safe use inside a double-quoted HTML attribute.
 function escAttr(s) {
   return esc(s).replace(/"/g, '&quot;');
