@@ -547,9 +547,9 @@
             <td>{{.Country}}</td>
             <td>{{.Flagsize}}</td>
             <td>{{.Timezone}}</td>
-            <td>{{.AddressClean}}</td>
-            <td>{{.MapX}}</td>
-            <td>{{.MapY}}</td>
+            <td style="max-width:340px;white-space:normal;">{{.AddressClean}}</td>
+            <td style="white-space:nowrap;">{{.MapX}}</td>
+            <td style="white-space:nowrap;">{{.MapY}}</td>
             <td class="sync-col-avail">
               <span title="map image" style="color:{{if .HasFile}}#2ecc40{{else}}#ff4136{{end}}">&#9679;</span>
               <span title="database" style="color:{{if .HasDB}}#2ecc40{{else}}#ff4136{{end}}">&#9679;</span>
@@ -603,7 +603,7 @@
           <div class="sync-field"><label class="sync-label">Timezone</label><select class="sync-select" name="newMapTimezone">{{range .Timezones}}<option value="{{.}}"{{if eq . "Europe/Berlin"}} selected{{end}}>{{.}}</option>{{end}}</select></div>
           <div class="sync-field"><label class="sync-label">X</label><input class="sync-input" type="text" name="newMapX" value="0"></div>
           <div class="sync-field"><label class="sync-label">Y</label><input class="sync-input" type="text" name="newMapY" value="0"></div>
-          <div class="sync-field sync-field-wide"><label class="sync-label">Address</label><textarea class="sync-textarea" name="newMapAddress" placeholder="One line per row"></textarea></div>
+          <div class="sync-field sync-field-wide"><label class="sync-label">Address</label><textarea class="sync-textarea sync-textarea-text" name="newMapAddress" placeholder="One line per row"></textarea></div>
           <div class="sync-field sync-field-wide"><label class="sync-label">Map image</label><input class="sync-input" type="file" name="image" accept="image/*"></div>
         </div>
         <div class="sync-form-actions"><button type="submit" class="sync-btn sync-btn-primary">Create map</button></div>
@@ -631,7 +631,7 @@
           <div class="sync-field"><label class="sync-label">Timezone</label><select class="sync-select" name="editMapTimezone" id="editMapTimezone">{{range .Timezones}}<option value="{{.}}">{{.}}</option>{{end}}</select></div>
           <div class="sync-field"><label class="sync-label">X</label><input class="sync-input" type="text" name="editMapX" id="editMapX"></div>
           <div class="sync-field"><label class="sync-label">Y</label><input class="sync-input" type="text" name="editMapY" id="editMapY"></div>
-          <div class="sync-field sync-field-wide"><label class="sync-label">Address</label><textarea class="sync-textarea" name="editMapAddress" id="editMapAddress" placeholder="One line per row"></textarea></div>
+          <div class="sync-field sync-field-wide"><label class="sync-label">Address</label><textarea class="sync-textarea sync-textarea-text" name="editMapAddress" id="editMapAddress" placeholder="One line per row"></textarea></div>
           <div class="sync-field sync-field-wide"><label class="sync-label">Replace map image (optional)</label><input class="sync-input" type="file" name="editImage" accept="image/*"></div>
         </div>
         <div class="sync-form-actions"><button type="submit" class="sync-btn sync-btn-primary">Save changes</button></div>

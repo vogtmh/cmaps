@@ -183,6 +183,7 @@
 .sync-input::placeholder, .sync-textarea::placeholder { color: #777; }
 .sync-input:focus, .sync-select:focus, .sync-textarea:focus { border-color: var(--sy-accent); }
 .sync-textarea { resize: vertical; min-height: 110px; font-family: monospace; font-size: 12px; }
+.sync-textarea.sync-textarea-text { font-family: inherit; font-size: 13px; }
 .sync-select { cursor: pointer; }
 .sync-select option { background: var(--sy-surface); color: var(--sy-fg); }
 .sync-form-actions { display: flex; align-items: center; gap: 12px; margin-top: 16px; flex-wrap: wrap; }
