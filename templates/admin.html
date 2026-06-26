@@ -541,7 +541,7 @@
         <tbody>
         {{range .Maps}}
           <tr>
-            <td><code>{{.Mapname}}</code></td>
+            <td>{{.Mapname}}</td>
             <td>{{if .DisplayName}}{{.DisplayName}}{{else}}&mdash;{{end}}</td>
             <td>{{.Itemscale}}</td>
             <td>{{.Country}}</td>
@@ -583,6 +583,7 @@
   </div>
 
   {{if gt .PermMaps 1}}
+  <div class="sync-wrap">
   <!-- Add map modal -->
   <div id="addMapOverlay" class="sync-modal">
     <div class="sync-modal-box">
@@ -637,6 +638,7 @@
       </form>
     </div>
   </div>
+  </div>
 
   <script>
     function openAddMap() { document.getElementById('addMapOverlay').style.display = 'block'; }
@@ -688,7 +690,7 @@
         {{range .Mapadmins}}
           <tr>
             <td>{{.Name}}</td>
-            <td><code>{{.Username}}</code></td>
+            <td>{{.Username}}</td>
             <td>
               {{if gt $.PermUsers 1}}
               {{$curRole := .Role}}
