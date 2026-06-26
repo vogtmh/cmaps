@@ -114,6 +114,9 @@ func (app *App) routes(mux *http.ServeMux) {
 	mux.HandleFunc("/admin", app.handleAdmin)
 	mux.HandleFunc("/admin/", app.handleAdmin)
 
+	// Superadmin one-time audit-log re-import from legacy MySQL.
+	mux.HandleFunc("/admin/audit-reimport", app.handleAuditReimport)
+
 	// Change-overview page (legacy changes.php).
 	mux.HandleFunc("/changes", app.handleChanges)
 

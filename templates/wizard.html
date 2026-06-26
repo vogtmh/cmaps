@@ -131,7 +131,7 @@
       var countsEl = document.getElementById('importCounts');
       // Stage order used to estimate the progress-bar width.
       var stages = ['Starting', 'Connecting', 'Settings', 'Maps', 'Desks',
-        'Address book', 'Bookings', 'Change history', 'Statistics', 'Done'];
+        'Address book', 'Bookings', 'Change history', 'Statistics', 'Audit log', 'Done'];
       var poll;
 
       function renderCounts(res) {
@@ -139,7 +139,7 @@
         var labels = {
           maps: 'Maps', desks: 'Desks', ldap_users: 'Address book',
           bookings: 'Bookings', teams: 'Teams', changelog: 'Change history',
-          stats: 'Statistics', settings: 'Settings'
+          stats: 'Statistics', settings: 'Settings', audit: 'Audit log'
         };
         var out = [];
         for (var k in labels) {

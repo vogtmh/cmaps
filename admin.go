@@ -1122,6 +1122,48 @@ func (app *App) handleRestLdapProgress(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, app.ldapProg.snapshot())
 }
 
+// handleAuditReimport is the superadmin-only one-time action that re-imports the
+// historical audit log from the legacy CompanyMaps 8 MySQL database. The original
+// migration omitted the `auditlog` table, so production instances are missing
+// their pre-migration history. This clears the local audit bucket, imports the
+// old log (oldest-first) and lets live events continue to append on top. MySQL
+// credentials are not stored anywhere, so they are supplied with the request.
+func (app *App) handleAuditReimport(w http.ResponseWriter, r *http.Request) {
+	sess, ok := app.currentSession(r)
+	if !ok {
+		http.Error(w, "authentication required", http.StatusUnauthorized)
+		return
+	}
+	if app.permLevel(sess, "adminpanel") < 2 {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	c := MySQLConfig{
+		Host:     orDefault(r.FormValue("host"), "localhost"),
+		Port:     orDefault(r.FormValue("port"), "3306"),
+		Database: strings.TrimSpace(r.FormValue("database")),
+		User:     strings.TrimSpace(r.FormValue("user")),
+		Password: r.FormValue("password"),
+	}
+	if c.Database == "" || c.User == "" {
+		writeJSON(w, map[string]interface{}{"ok": false, "message": "Database and user are required."})
+		return
+	}
+	count, err := app.ImportAuditOnly(c)
+	if err != nil {
+		writeJSON(w, map[string]interface{}{"ok": false, "message": err.Error()})
+		return
+	}
+	_ = app.db.AuditLog("auditlog", sess.Username, fmt.Sprintf("Audit log re-imported from MySQL (%d historical entries)", count))
+	writeJSON(w, map[string]interface{}{"ok": true, "count": count,
+		"message": fmt.Sprintf("Imported %d historical audit entries.", count)})
+}
+
+
 // orDefaultStr returns v trimmed, or def when empty.
 func orDefaultStr(v, def string) string {
 	v = strings.TrimSpace(v)

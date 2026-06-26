@@ -323,17 +323,12 @@ func (app *App) render(w http.ResponseWriter, name string, data interface{}) {
 
 func (app *App) renderLogin(w http.ResponseWriter, errMsg, next string) {
 	next = safeNextPath(next)
-	samlLoginURL := "/auth/saml/login"
-	if next != "/" {
-		samlLoginURL += "?next=" + url.QueryEscape(next)
-	}
 	app.render(w, "login.html", map[string]interface{}{
-		"AppTitle":     app.appTitle(),
-		"SAMLEnabled":  app.cfg.SAML.Enabled,
-		"Error":        errMsg,
-		"Next":         next,
-		"SAMLLoginURL": samlLoginURL,
-		"LogoRegular":  app.settingOr("logo_regular", "/static/images/cmaps-regular.png"),
+		"AppTitle":    app.appTitle(),
+		"SAMLEnabled": app.cfg.SAML.Enabled,
+		"Error":       errMsg,
+		"Next":        next,
+		"LogoRegular": app.settingOr("logo_regular", "/static/images/cmaps-regular.png"),
 	})
 }
 

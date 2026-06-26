@@ -35,6 +35,7 @@ type ImportResult struct {
 	LdapSrc    int `json:"ldap_sources"`
 	RobinSpace int `json:"robin_spaces"`
 	Whitelist  int `json:"whitelist"`
+	Audit      int `json:"audit"`
 }
 
 // ImportProgress tracks the state of an in-flight (or finished) MySQL import so
@@ -367,7 +368,73 @@ func (app *App) ImportFromMySQL(c MySQLConfig, report func(stage string, res Imp
 		rows.Close()
 	}
 
+	// auditlog -> auditlog (ascending by ID so the oldest event gets the lowest
+	// bolt sequence and the newest stays first in the reverse-cursor listing).
+	if rows, err := sqldb.Query("SELECT `EventTime`,`EventType`,`EventUser`,`EventInfo` FROM `auditlog` ORDER BY `ID` ASC"); err == nil {
+		for rows.Next() {
+			var e AuditEntry
+			if rows.Scan(&e.Timestamp, &e.Type, &e.User, &e.Info) == nil {
+				e.Timestamp = strings.TrimSpace(e.Timestamp)
+				e.Type = strings.TrimSpace(e.Type)
+				e.User = strings.TrimSpace(e.User)
+				e.Info = strings.TrimSpace(e.Info)
+				if db.PutAuditRaw(e) == nil {
+					res.Audit++
+					if res.Audit%progressBatch == 0 {
+						progress("Audit log")
+					}
+				}
+			}
+		}
+		rows.Close()
+	}
+	progress("Audit log")
+
 	_ = db.AuditLog("setup", "admin", fmt.Sprintf("MySQL import complete: %d maps, %d desks, %d ldap users", res.Maps, res.Desks, res.LdapUsers))
 	progress("Done")
 	return res, nil
+}
+
+// ImportAuditOnly connects to a CompanyMaps 8 MySQL database, reads the entire
+// `auditlog` table (oldest first) and REPLACES the local audit bucket with it.
+// It is meant for the superadmin one-time re-import: the original full migration
+// did not copy the audit log, so production instances are missing their history.
+// The current local audit entries (typically the last day since go-live) are
+// discarded by design. The returned count is the number of imported rows.
+func (app *App) ImportAuditOnly(c MySQLConfig) (int, error) {
+	dsn := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?charset=utf8mb4&parseTime=false",
+		c.User, c.Password, c.Host, c.Port, c.Database)
+	sqldb, err := sql.Open("mysql", dsn)
+	if err != nil {
+		return 0, fmt.Errorf("opening mysql: %w", err)
+	}
+	defer sqldb.Close()
+	if err := sqldb.Ping(); err != nil {
+		return 0, fmt.Errorf("connecting to mysql: %w", err)
+	}
+
+	rows, err := sqldb.Query("SELECT `EventTime`,`EventType`,`EventUser`,`EventInfo` FROM `auditlog` ORDER BY `ID` ASC")
+	if err != nil {
+		return 0, fmt.Errorf("reading auditlog: %w", err)
+	}
+	defer rows.Close()
+
+	var entries []AuditEntry
+	for rows.Next() {
+		var e AuditEntry
+		if rows.Scan(&e.Timestamp, &e.Type, &e.User, &e.Info) == nil {
+			e.Timestamp = strings.TrimSpace(e.Timestamp)
+			e.Type = strings.TrimSpace(e.Type)
+			e.User = strings.TrimSpace(e.User)
+			e.Info = strings.TrimSpace(e.Info)
+			entries = append(entries, e)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return 0, fmt.Errorf("reading auditlog: %w", err)
+	}
+	if err := app.db.ReplaceAudit(entries); err != nil {
+		return 0, fmt.Errorf("writing auditlog: %w", err)
+	}
+	return len(entries), nil
 }

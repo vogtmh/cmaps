@@ -104,10 +104,10 @@ function addStat () {
 
 function logoutUser(mode) {
   if (mode == 'admin') {
-    remoteurl = '../rest/account/index.php'
+    remoteurl = '../rest/account/'
   }
   else {
-    remoteurl = 'rest/account/index.php'
+    remoteurl = 'rest/account/'
   }
   $.ajax({
     type: 'GET',
@@ -1985,7 +1985,7 @@ function bookDesk() {
   $("#bookstatus").css("display","none");
   $.ajax({
     type: 'GET',
-    url: 'rest/booking/index.php',
+    url: 'rest/booking/',
     data: $("#Book").serialize(),
     contentType: false,
     cache: false,
@@ -2018,7 +2018,7 @@ function bookDesk() {
 function cancelBooking(date,map,desk) {
   $.ajax({
     type: 'GET',
-    url: 'rest/booking/index.php',
+    url: 'rest/booking/',
     data: { mode: "remove", bookdate: date, bookmap: map, bookdesk: desk },
     contentType: false,
     cache: false,
@@ -2044,7 +2044,7 @@ function userBookings() {
   usershort = username.replace(domain, "");
   $.ajax({
     type: 'GET',
-    url: 'rest/booking/index.php',
+    url: 'rest/booking/',
     data: { mode: "list", bookuser: usershort },
     contentType: false,
     cache: false,
@@ -2086,7 +2086,7 @@ function userBookings() {
 function updateBookings() {
   $.ajax({
     type: 'GET',
-    url: 'rest/booking/index.php',
+    url: 'rest/booking/',
     data: { mode: "list", bookmap: map },
     contentType: false,
     cache: false,
@@ -2247,7 +2247,7 @@ $(function() {
     else {
       $.ajax({
         type: 'POST',
-        url: 'rest/avatar/index.php',
+        url: 'rest/avatar/',
         data: new FormData(this),
         contentType: false,
         cache: false,

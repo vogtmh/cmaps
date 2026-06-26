@@ -55,7 +55,7 @@ function createDesk(newX,newY) {
                   + '<div style="position:absolute; top:0px; left:0px; width:100%; font-size:1.5em;line-height:50px; height:50px;'
                   + 'background-color:#666;text-align:center;border-radius:10px 10px 0px 0px;">'+caption+'</div>'
                   + '<div id="formspace">'
-                  + '<form class="createItem" style="width:80%; margin-top:60px;margin-left:10%;" enctype="multipart/form-data" action="rest/update/index.php" method="post">'
+                  + '<form class="createItem" style="width:80%; margin-top:60px;margin-left:10%;" enctype="multipart/form-data" action="rest/update/" method="post">'
                   + '<div style="width:30%; float:left;display:inline;">Mapname</div><input type="text" style="width: 70%; float: left;display:inline;" id="apimapname" name="map">'
                   + '<div style="width:30%; float:left;display:inline;">Itemscale</div><input type="text" style="width: 70%; float: left;display:inline;" id="apimapitemscale" name="itemscale" value="1">'
                   + '<div style="width:30%; float:left;display:inline;">Published</div>'

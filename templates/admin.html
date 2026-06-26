@@ -905,6 +905,30 @@
         <h2 class="sync-card-title">Audit log</h2>
         <span class="sync-badge sync-badge-accent" id="auditCount">&hellip;</span>
       </div>
+      {{if ge .PermAdminpanel 2}}
+      <div class="sync-card-hint" style="margin-bottom:12px;">
+        Missing the pre-migration history? Re-import the legacy audit log once from the old
+        CompanyMaps&nbsp;8 MySQL database. This <strong>clears the current audit log</strong>,
+        imports the old entries, then keeps logging new events on top. The last day of local
+        events is discarded.
+        <div style="margin-top:8px;">
+          <button type="button" class="sync-btn" id="auditReimportToggle" onclick="toggleAuditReimport()">Re-import audit log&hellip;</button>
+        </div>
+        <div id="auditReimportPanel" style="display:none;margin-top:12px;max-width:560px;">
+          <div class="sync-form-grid">
+            <div class="sync-field"><span class="sync-label">Host</span><input type="text" class="sync-input" id="arHost" value="localhost"></div>
+            <div class="sync-field"><span class="sync-label">Port</span><input type="text" class="sync-input" id="arPort" value="3306"></div>
+            <div class="sync-field"><span class="sync-label">Database</span><input type="text" class="sync-input" id="arDatabase" placeholder="cmaps"></div>
+            <div class="sync-field"><span class="sync-label">User</span><input type="text" class="sync-input" id="arUser" placeholder="cmaps"></div>
+            <div class="sync-field sync-field-wide"><span class="sync-label">Password</span><input type="password" class="sync-input" id="arPassword" autocomplete="off"></div>
+          </div>
+          <div style="margin-top:12px;">
+            <button type="button" class="sync-btn-primary sync-btn" id="auditReimportRun" onclick="runAuditReimport()">Clear &amp; import</button>
+            <span id="auditReimportStatus" class="sync-status-text" style="margin-left:10px;"></span>
+          </div>
+        </div>
+      </div>
+      {{end}}
       <table class="sync-table" id="auditTable">
         <thead>
           <tr class="audit-filter-row">

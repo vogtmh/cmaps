@@ -1,4 +1,4 @@
-var root="index.php/"
+var root="/"
 
 // using the changes API to update the announcementbar
 function updateChangesOverview() {

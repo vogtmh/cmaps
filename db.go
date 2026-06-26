@@ -975,6 +975,34 @@ func (db *DB) PutAuditRaw(entry AuditEntry) error {
 	})
 }
 
+// ReplaceAudit wipes the audit bucket and re-fills it with the given entries in
+// order (so entries[0] is treated as the oldest and gets the lowest sequence,
+// keeping the reverse-cursor listing newest-first). Deleting and recreating the
+// bucket resets its sequence counter, so subsequently appended live events stay
+// above the imported history. Used by the superadmin one-time audit re-import.
+func (db *DB) ReplaceAudit(entries []AuditEntry) error {
+	return db.bolt.Update(func(tx *bolt.Tx) error {
+		if err := tx.DeleteBucket(bucketAudit); err != nil && err != bolt.ErrBucketNotFound {
+			return err
+		}
+		bkt, err := tx.CreateBucket(bucketAudit)
+		if err != nil {
+			return err
+		}
+		for _, e := range entries {
+			seq, _ := bkt.NextSequence()
+			data, err := json.Marshal(e)
+			if err != nil {
+				return err
+			}
+			if err := bkt.Put(seqKey(seq), data); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
 func (db *DB) ListAudit(limit int) ([]AuditEntry, error) {
 	var out []AuditEntry
 	err := db.bolt.View(func(tx *bolt.Tx) error {
