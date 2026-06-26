@@ -521,12 +521,8 @@ function showNameplate (deskid, desktype) {
         break;
       case "meeting":
         var caption = attr.empl;
-        if (imageExist('avatarcache/' + attr.avtr + '.jpg')) {
-          avatar = 'avatarcache/' + attr.avtr + '.jpg';
-        }
-        else {
-          avatar = 'images/' + desktype + '.png';
-        }
+        // Real avatar if one exists, else the server redirects to meeting.png.
+        avatar = 'avatarcache/' + attr.avtr + '.jpg?fb=' + desktype;
         
         var avatarcolor = $('#' + attr.id).css('background-color')
         roomstatus = meetingstatus.filter(element => element.deskid == attr.id);
@@ -916,13 +912,8 @@ function showSticky (deskid, desktype, caption) {
       case "meeting":
         var caption = attr.empl;
         var copylink = attr.empl;
-        var avatar; 
-        if (imageExist('avatarcache/' + attr.avtr + '.jpg')) {
-          avatar = 'avatarcache/' + attr.avtr + '.jpg';
-        }
-        else {
-          avatar = 'images/' + desktype + '.png';
-        }
+        // Real avatar if one exists, else the server redirects to meeting.png.
+        var avatar = 'avatarcache/' + attr.avtr + '.jpg?fb=' + desktype;
         roomstatus = meetingstatus.filter(element => element.deskid == attr.id);
         var nowcolor = 'transparent';
         var nowtext = ''; var nexttext = '';
