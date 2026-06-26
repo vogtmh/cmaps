@@ -26,7 +26,7 @@ var (
 	bucketUsers     = []byte("users")           // config_mapadmins + local users (key = username)
 	bucketChangelog = []byte("changelog")       // ldap_changelog (key = seq)
 	bucketStats     = []byte("stats")           // stats (key = YYYY-MM-DD)
-	bucketTracking  = []byte("tracking")        // unique daily visitor tracking (key = date:user)
+	bucketTracking  = []byte("tracking")        // legacy unique-visitor tracking (no longer written)
 	bucketVips      = []byte("vips")            // config_vips (key = seq)
 	bucketDepts     = []byte("departments")     // config_department_list (key = seq)
 	bucketRobin     = []byte("robinspaces")     // config_robinspaces (key = spacename)
@@ -778,19 +778,12 @@ func (db *DB) ListStats() ([]StatEntry, error) {
 
 func (db *DB) PutStat(s StatEntry) error { return putJSON(db, bucketStats, []byte(s.Date), s) }
 
-// TrackVisit increments today's visitor count once per unique user per day.
-func (db *DB) TrackVisit(user string) error {
+// AddVisit increments today's visitor count on every call (one per page view),
+// matching the legacy PHP stats behaviour.
+func (db *DB) AddVisit() error {
 	now := time.Now().In(db.loc)
 	date := now.Format("2006-01-02")
-	trackKey := []byte(date + ":" + user)
 	return db.bolt.Update(func(tx *bolt.Tx) error {
-		tb := tx.Bucket(bucketTracking)
-		if tb.Get(trackKey) != nil {
-			return nil // already counted today
-		}
-		if err := tb.Put(trackKey, []byte("1")); err != nil {
-			return err
-		}
 		sb := tx.Bucket(bucketStats)
 		var s StatEntry
 		if v := sb.Get([]byte(date)); v != nil {

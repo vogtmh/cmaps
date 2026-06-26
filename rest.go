@@ -147,9 +147,9 @@ func formatChangeTimestamp(e ChangelogEntry) string {
 func (app *App) handleRestStats(w http.ResponseWriter, r *http.Request) {
 	interval := r.URL.Query().Get("interval")
 	if interval == "" {
-		// Write path: record a visit (idempotent per user/day).
-		if sess, ok := app.currentSession(r); ok {
-			_ = app.db.TrackVisit(sess.Username)
+		// Write path: record a page-view visit.
+		if _, ok := app.currentSession(r); ok {
+			_ = app.db.AddVisit()
 		}
 		writeJSON(w, map[string]string{"stats added": "ok"})
 		return

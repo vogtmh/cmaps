@@ -95,10 +95,6 @@ func (app *App) handleIndex(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if ok {
-		app.db.TrackVisit(sess.Username)
-	}
-
 	// Persist the Extras settings panel (POST from index.html). Checkbox values
 	// are only submitted when checked, so each setting cookie is written
 	// explicitly ("1" on / "0" off), then we redirect (PRG) to avoid a resubmit.
@@ -133,6 +129,10 @@ func (app *App) handleIndex(w http.ResponseWriter, r *http.Request) {
 		}
 		http.Redirect(w, r, dest, http.StatusSeeOther)
 		return
+	}
+
+	if ok {
+		app.db.AddVisit()
 	}
 
 	app.renderIndex(w, r, sess, ok)
