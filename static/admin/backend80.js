@@ -770,6 +770,43 @@ function matchAdminNames() {
 // and rebuilt on tab re-entry instead of stacking up on the same canvas.
 var statsCharts = {};
 
+// Cumulative CSS zoom of an element and all of its ancestors.
+function cumulativeZoom(el) {
+  var z = 1;
+  for (var e = el; e; e = e.parentElement) {
+    var cz = parseFloat(getComputedStyle(e).zoom) || 1;
+    z *= cz;
+  }
+  return z;
+}
+
+// The admin body (#content) is shown with CSS `zoom` for autozoom. A non-unity
+// zoom on a Chart.js ancestor breaks tooltip/point hit-testing: the browser
+// delivers mouse offsets in painted (zoomed) pixels while Chart.js maps them
+// using the un-zoomed layout width, so the tooltip lands on the wrong point.
+//
+// To fix this we measure the real on-screen (painted) size the chart should
+// occupy, then neutralise the ancestor zoom on the chart container (zoom = 1/Z)
+// and size it explicitly in those painted pixels. The canvas then has a net
+// zoom of 1, so layout pixels == painted pixels and hit-testing is exact.
+function fitStatsChartContainer(canvas) {
+  var container = canvas.parentElement; // .statschart
+  // Reset any sizing from a previous run so we measure the natural CSS size.
+  container.style.zoom = '';
+  container.style.width = '';
+  container.style.height = '';
+  container.style.maxWidth = '';
+  var ancestorZoom = cumulativeZoom(container.parentElement);
+  // Real painted dimensions = natural layout size * the ancestor zoom factor.
+  var paintedWidth = Math.round(container.clientWidth * ancestorZoom);
+  var paintedHeight = Math.round(container.clientHeight * ancestorZoom);
+  // Cancel the ancestor zoom and pin the box to its painted pixel size.
+  container.style.zoom = String(1 / ancestorZoom);
+  container.style.maxWidth = 'none';
+  container.style.width = paintedWidth + 'px';
+  container.style.height = paintedHeight + 'px';
+}
+
 function showCharts(interval, divname) {
 
   // The stats template provides a <div class="statschart"><canvas></div> for
@@ -837,6 +874,9 @@ function showCharts(interval, divname) {
       // Replace any previous chart on this canvas before drawing a new one.
       if (statsCharts[divname]) { statsCharts[divname].destroy(); }
       var ctx = document.getElementById(divname);
+      // Size the container to real painted pixels (cancelling autozoom) so the
+      // canvas net zoom is 1 and tooltip hit-testing maps to the right point.
+      fitStatsChartContainer(ctx);
       statsCharts[divname] = new Chart(ctx, { type: 'line', data: chartData, options: chartOptions });
     },
     error: function () {
