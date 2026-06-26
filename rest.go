@@ -68,16 +68,17 @@ func (app *App) handleRestConfig(w http.ResponseWriter, r *http.Request) {
 		items := make([]map[string]interface{}, 0, len(maps))
 		for i, m := range maps {
 			items = append(items, map[string]interface{}{
-				"id":        i + 1,
-				"mapname":   m.Mapname,
-				"itemscale": m.Itemscale,
-				"published": m.Published,
-				"country":   m.Country,
-				"flagsize":  m.Flagsize,
-				"timezone":  m.Timezone,
-				"address":   m.Address,
-				"x":         m.MapX,
-				"y":         m.MapY,
+				"id":          i + 1,
+				"mapname":     m.Mapname,
+				"displayname": m.DisplayName,
+				"itemscale":   m.Itemscale,
+				"published":   m.Published,
+				"country":     m.Country,
+				"flagsize":    m.Flagsize,
+				"timezone":    m.Timezone,
+				"address":     m.Address,
+				"x":           m.MapX,
+				"y":           m.MapY,
 			})
 		}
 		writeJSON(w, map[string]interface{}{"maps": items})

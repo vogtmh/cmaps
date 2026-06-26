@@ -520,72 +520,144 @@
   {{if gt .PermAdminpanel 0}}<script>loadSamlSettings();</script>{{end}}
 
 {{else if eq .ActiveTab "maps"}}
-  <table style="margin-left:20px;">
-    <tr style="font-weight:bold;">
-      <td width="160">Mapname</td><td width="90">Itemscale</td><td width="90">Published</td>
-      <td width="100">Country</td><td width="90">Flagsize</td><td width="160">Timezone</td>
-      <td width="200">Address</td><td width="60">X</td><td width="60">Y</td>
-      <td width="120">Status</td><td width="100">&nbsp;</td>
-    </tr>
-    <tr><td>&nbsp;</td></tr>
-    {{range .Maps}}
-    <tr>
-      <td>{{.Mapname}}</td><td>{{.Itemscale}}</td>
-      <td>
-        {{if gt $.PermMaps 1}}
-        <form action="?tab=maps" method="post" style="display:inline">
-          <input type="hidden" name="tab" value="maps">
-          <input type="hidden" name="toggleMapID" value="{{.Mapname}}">
-          <input type="hidden" name="toggleMapname" value="{{.Mapname}}">
-          {{if eq .Published "yes"}}
-          <input type="hidden" name="toggleMapStatus" value="no">
-          <input type="submit" value="Yes" style="background:rgba(0,150,0,0.7);width:70px;">
-          {{else}}
-          <input type="hidden" name="toggleMapStatus" value="yes">
-          <input type="submit" value="No" style="background:rgba(150,0,0,0.7);width:70px;">
-          {{end}}
-        </form>
-        {{else}}{{.Published}}{{end}}
-      </td>
-      <td>{{.Country}}</td><td>{{.Flagsize}}</td><td>{{.Timezone}}</td>
-      <td>{{.Address}}</td><td>{{.MapX}}</td><td>{{.MapY}}</td>
-      <td>
-        <span title="map image" style="color:{{if .HasFile}}#2ecc40{{else}}#ff4136{{end}}">&#9679;</span>
-        <span title="database" style="color:{{if .HasDB}}#2ecc40{{else}}#ff4136{{end}}">&#9679;</span>
-        <span title="country flag" style="color:{{if .HasFlag}}#2ecc40{{else}}#ff4136{{end}}">&#9679;</span>
-      </td>
-      <td>
-        {{if gt $.PermMaps 1}}
-        <form action="?tab=maps" method="post">
-          <input type="hidden" name="tab" value="maps">
-          <input type="hidden" name="deleteMapID" value="{{.Mapname}}">
-          <input type="hidden" name="deleteMapname" value="{{.Mapname}}">
-          <input type="submit" value="Delete">
-        </form>
+  <div class="sync-wrap">
+    <div class="sync-card">
+      <div class="sync-card-head">
+        <h2 class="sync-card-title">Maps</h2>
+        <span class="sync-badge sync-badge-accent">{{len .Maps}} map(s)</span>
+        {{if gt .PermMaps 1}}
+        <button type="button" class="sync-btn sync-btn-sm" onclick="openAddMap()" style="margin-left:auto;">Add map</button>
         {{end}}
-      </td>
-    </tr>
-    {{end}}
-    {{if gt .PermMaps 1}}
-    <tr><td>&nbsp;</td></tr>
-    <form name="AddMap" action="?tab=maps" method="post" enctype="multipart/form-data">
-      <tr>
+      </div>
+      {{if .Maps}}
+      <table class="sync-table">
+        <thead>
+          <tr>
+            <th>Map</th><th>Display name</th><th>Itemscale</th><th>Country</th>
+            <th>Flagsize</th><th>Timezone</th><th>Address</th><th>X</th><th>Y</th>
+            <th>Status</th>{{if gt .PermMaps 1}}<th class="sync-td-min">Actions</th>{{end}}
+          </tr>
+        </thead>
+        <tbody>
+        {{range .Maps}}
+          <tr>
+            <td><code>{{.Mapname}}</code></td>
+            <td>{{if .DisplayName}}{{.DisplayName}}{{else}}&mdash;{{end}}</td>
+            <td>{{.Itemscale}}</td>
+            <td>{{.Country}}</td>
+            <td>{{.Flagsize}}</td>
+            <td>{{.Timezone}}</td>
+            <td>{{.AddressClean}}</td>
+            <td>{{.MapX}}</td>
+            <td>{{.MapY}}</td>
+            <td class="sync-col-avail">
+              <span title="map image" style="color:{{if .HasFile}}#2ecc40{{else}}#ff4136{{end}}">&#9679;</span>
+              <span title="database" style="color:{{if .HasDB}}#2ecc40{{else}}#ff4136{{end}}">&#9679;</span>
+              <span title="country flag" style="color:{{if .HasFlag}}#2ecc40{{else}}#ff4136{{end}}">&#9679;</span>
+            </td>
+            {{if gt $.PermMaps 1}}
+            <td class="sync-td-min">
+              <div style="display:flex;gap:6px;">
+                <button type="button" class="sync-btn sync-btn-sm"
+                  data-name="{{.Mapname}}" data-display="{{.DisplayName}}" data-itemscale="{{.Itemscale}}"
+                  data-published="{{.Published}}" data-country="{{.Country}}" data-flagsize="{{.Flagsize}}"
+                  data-timezone="{{.Timezone}}" data-address="{{.AddressClean}}" data-x="{{.MapX}}" data-y="{{.MapY}}"
+                  onclick="openEditMap(this)">Edit</button>
+                <form action="?tab=maps" method="post" style="margin:0;" onsubmit="return confirm('Delete map &quot;{{.Mapname}}&quot;? This also removes its desks and image file.');">
+                  <input type="hidden" name="tab" value="maps">
+                  <input type="hidden" name="deleteMapID" value="{{.Mapname}}">
+                  <input type="hidden" name="deleteMapname" value="{{.Mapname}}">
+                  <button type="submit" class="sync-btn sync-btn-sm sync-btn-danger">Delete</button>
+                </form>
+              </div>
+            </td>
+            {{end}}
+          </tr>
+        {{end}}
+        </tbody>
+      </table>
+      {{else}}
+      <div class="sync-empty">No maps configured yet.</div>
+      {{end}}
+    </div>
+  </div>
+
+  {{if gt .PermMaps 1}}
+  <!-- Add map modal -->
+  <div id="addMapOverlay" class="sync-modal">
+    <div class="sync-modal-box">
+      <div class="sync-modal-head">
+        <h2>Add map</h2>
+        <button type="button" class="sync-btn sync-btn-sm" onclick="closeMapModal('addMapOverlay')">Close</button>
+      </div>
+      <form action="?tab=maps" method="post" enctype="multipart/form-data">
         <input type="hidden" name="tab" value="maps">
-        <td><input type="text" name="newMapName" style="width:150px;" placeholder="name"></td>
-        <td><input type="text" name="newMapItemscale" value="1" style="width:80px;"></td>
-        <td><select name="newMapPublished" style="width:80px"><option value="yes" selected>Yes</option><option value="no">No</option></select></td>
-        <td><select name="newMapCountry" style="width:90px">{{range .Countryflags}}<option value="{{.}}">{{.}}</option>{{end}}</select></td>
-        <td><input type="text" name="newMapFlagsize" value="0" style="width:80px;"></td>
-        <td><select name="newMapTimezone" style="width:150px">{{range .Timezones}}<option value="{{.}}">{{.}}</option>{{end}}</select></td>
-        <td><input type="text" name="newMapAddress" style="width:190px;"></td>
-        <td><input type="text" name="newMapX" value="0" style="width:50px;"></td>
-        <td><input type="text" name="newMapY" value="0" style="width:50px;"></td>
-        <td><input type="file" name="image" accept="image/*"></td>
-        <td><input type="submit" value="Create"></td>
-      </tr>
-    </form>
-    {{end}}
-  </table>
+        <div class="sync-form-grid">
+          <div class="sync-field"><label class="sync-label">Map name (identifier)</label><input class="sync-input" type="text" name="newMapName" placeholder="e.g. goeppingen2" required></div>
+          <div class="sync-field"><label class="sync-label">Display name</label><input class="sync-input" type="text" name="newMapDisplayName" placeholder="e.g. Göppingen"></div>
+          <div class="sync-field"><label class="sync-label">Itemscale</label><input class="sync-input" type="text" name="newMapItemscale" value="1"></div>
+          <div class="sync-field"><label class="sync-label">Published</label><select class="sync-select" name="newMapPublished"><option value="yes" selected>Yes</option><option value="no">No</option></select></div>
+          <div class="sync-field"><label class="sync-label">Country</label><select class="sync-select" name="newMapCountry">{{range .Countryflags}}<option value="{{.}}">{{.}}</option>{{end}}</select></div>
+          <div class="sync-field"><label class="sync-label">Flagsize</label><input class="sync-input" type="text" name="newMapFlagsize" value="0"></div>
+          <div class="sync-field"><label class="sync-label">Timezone</label><select class="sync-select" name="newMapTimezone">{{range .Timezones}}<option value="{{.}}"{{if eq . "Europe/Berlin"}} selected{{end}}>{{.}}</option>{{end}}</select></div>
+          <div class="sync-field"><label class="sync-label">X</label><input class="sync-input" type="text" name="newMapX" value="0"></div>
+          <div class="sync-field"><label class="sync-label">Y</label><input class="sync-input" type="text" name="newMapY" value="0"></div>
+          <div class="sync-field sync-field-wide"><label class="sync-label">Address</label><textarea class="sync-textarea" name="newMapAddress" placeholder="One line per row"></textarea></div>
+          <div class="sync-field sync-field-wide"><label class="sync-label">Map image</label><input class="sync-input" type="file" name="image" accept="image/*"></div>
+        </div>
+        <div class="sync-form-actions"><button type="submit" class="sync-btn sync-btn-primary">Create map</button></div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Edit map modal -->
+  <div id="editMapOverlay" class="sync-modal">
+    <div class="sync-modal-box">
+      <div class="sync-modal-head">
+        <h2>Edit map</h2>
+        <button type="button" class="sync-btn sync-btn-sm" onclick="closeMapModal('editMapOverlay')">Close</button>
+      </div>
+      <form action="?tab=maps" method="post" enctype="multipart/form-data">
+        <input type="hidden" name="tab" value="maps">
+        <input type="hidden" name="editMapOrigName" id="editMapOrigName">
+        <div class="sync-form-grid">
+          <div class="sync-field"><label class="sync-label">Map name (identifier)</label><input class="sync-input" type="text" name="editMapName" id="editMapName" required></div>
+          <div class="sync-field"><label class="sync-label">Display name</label><input class="sync-input" type="text" name="editMapDisplayName" id="editMapDisplayName"></div>
+          <div class="sync-field"><label class="sync-label">Itemscale</label><input class="sync-input" type="text" name="editMapItemscale" id="editMapItemscale"></div>
+          <div class="sync-field"><label class="sync-label">Published</label><select class="sync-select" name="editMapPublished" id="editMapPublished"><option value="yes">Yes</option><option value="no">No</option></select></div>
+          <div class="sync-field"><label class="sync-label">Country</label><select class="sync-select" name="editMapCountry" id="editMapCountry">{{range .Countryflags}}<option value="{{.}}">{{.}}</option>{{end}}</select></div>
+          <div class="sync-field"><label class="sync-label">Flagsize</label><input class="sync-input" type="text" name="editMapFlagsize" id="editMapFlagsize"></div>
+          <div class="sync-field"><label class="sync-label">Timezone</label><select class="sync-select" name="editMapTimezone" id="editMapTimezone">{{range .Timezones}}<option value="{{.}}">{{.}}</option>{{end}}</select></div>
+          <div class="sync-field"><label class="sync-label">X</label><input class="sync-input" type="text" name="editMapX" id="editMapX"></div>
+          <div class="sync-field"><label class="sync-label">Y</label><input class="sync-input" type="text" name="editMapY" id="editMapY"></div>
+          <div class="sync-field sync-field-wide"><label class="sync-label">Address</label><textarea class="sync-textarea" name="editMapAddress" id="editMapAddress" placeholder="One line per row"></textarea></div>
+          <div class="sync-field sync-field-wide"><label class="sync-label">Replace map image (optional)</label><input class="sync-input" type="file" name="editImage" accept="image/*"></div>
+        </div>
+        <div class="sync-form-actions"><button type="submit" class="sync-btn sync-btn-primary">Save changes</button></div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    function openAddMap() { document.getElementById('addMapOverlay').style.display = 'block'; }
+    function closeMapModal(id) { document.getElementById(id).style.display = 'none'; }
+    function openEditMap(btn) {
+      var d = btn.dataset;
+      document.getElementById('editMapOrigName').value = d.name;
+      document.getElementById('editMapName').value = d.name;
+      document.getElementById('editMapDisplayName').value = d.display || '';
+      document.getElementById('editMapItemscale').value = d.itemscale || '1';
+      document.getElementById('editMapPublished').value = d.published || 'yes';
+      document.getElementById('editMapCountry').value = d.country || '';
+      document.getElementById('editMapFlagsize').value = d.flagsize || '0';
+      document.getElementById('editMapTimezone').value = d.timezone || '';
+      document.getElementById('editMapAddress').value = d.address || '';
+      document.getElementById('editMapX').value = d.x || '0';
+      document.getElementById('editMapY').value = d.y || '0';
+      document.getElementById('editMapOverlay').style.display = 'block';
+    }
+  </script>
+  {{end}}
 
 {{else if eq .ActiveTab "desks"}}
   <script>var departments = {{.DepartmentsJSON}};</script>

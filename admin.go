@@ -20,9 +20,10 @@ import (
 // mapRow is a maps-tab table row with derived existence indicators.
 type mapRow struct {
 	MapInfo
-	HasFile bool
-	HasDB   bool
-	HasFlag bool
+	HasFile      bool
+	HasDB        bool
+	HasFlag      bool
+	AddressClean string // Address with <br/> stripped, for display/editing.
 }
 
 // adminUserRow is a users-tab row (a config_mapadmins entry).
@@ -275,14 +276,8 @@ func (app *App) handleAdminPost(w http.ResponseWriter, r *http.Request, sess Ses
 			_ = app.db.AuditLog("Maps", sess.Username, "Map deleted ("+name+")")
 			return "Map deleted."
 		}
-		if id := r.FormValue("toggleMapID"); id != "" {
-			name := r.FormValue("toggleMapname")
-			status := r.FormValue("toggleMapStatus")
-			if m, found, _ := app.db.GetMap(name); found {
-				m.Published = status
-				_ = app.db.PutMap(m)
-			}
-			return "Map visibility updated."
+		if r.FormValue("editMapOrigName") != "" {
+			return app.updateMapFromForm(r, sess)
 		}
 		return app.createMapFromForm(r, sess)
 
@@ -427,15 +422,16 @@ func (app *App) createMapFromForm(r *http.Request, sess Session) string {
 	x, _ := strconv.Atoi(r.FormValue("newMapX"))
 	y, _ := strconv.Atoi(r.FormValue("newMapY"))
 	m := MapInfo{
-		Mapname:   name,
-		Itemscale: orDefaultStr(r.FormValue("newMapItemscale"), "1"),
-		Published: orDefaultStr(r.FormValue("newMapPublished"), "yes"),
-		Country:   strings.ToLower(r.FormValue("newMapCountry")),
-		Flagsize:  orDefaultStr(r.FormValue("newMapFlagsize"), "0"),
-		Timezone:  orDefaultStr(r.FormValue("newMapTimezone"), "Europe/Berlin"),
-		Address:   r.FormValue("newMapAddress"),
-		MapX:      x,
-		MapY:      y,
+		Mapname:     name,
+		DisplayName: strings.TrimSpace(r.FormValue("newMapDisplayName")),
+		Itemscale:   orDefaultStr(r.FormValue("newMapItemscale"), "1"),
+		Published:   orDefaultStr(r.FormValue("newMapPublished"), "yes"),
+		Country:     strings.ToLower(r.FormValue("newMapCountry")),
+		Flagsize:    orDefaultStr(r.FormValue("newMapFlagsize"), "0"),
+		Timezone:    orDefaultStr(r.FormValue("newMapTimezone"), "Europe/Berlin"),
+		Address:     addBR(r.FormValue("newMapAddress")),
+		MapX:        x,
+		MapY:        y,
 	}
 
 	// Save the uploaded map image if present.
@@ -448,6 +444,88 @@ func (app *App) createMapFromForm(r *http.Request, sess Session) string {
 	_ = app.db.PutMap(m)
 	_ = app.db.AuditLog("Maps", sess.Username, "Map created ("+name+")")
 	return "Map created."
+}
+
+// stripBR converts stored HTML line breaks back to plain newlines so the admin
+// panel can display/edit a map address without literal <br/> markup.
+func stripBR(s string) string {
+	return strings.NewReplacer("<br/>", "\n", "<br />", "\n", "<br>", "\n").Replace(s)
+}
+
+// addBR normalizes a user-entered address and converts newlines to the stored
+// <br/> form used by the client map plate.
+func addBR(s string) string {
+	s = strings.ReplaceAll(s, "\r\n", "\n")
+	s = strings.TrimSpace(s)
+	return strings.ReplaceAll(s, "\n", "<br/>")
+}
+
+// updateMapFromForm edits an existing map. If the name changed it renames the
+// map everywhere (DB records, desks, bookings, cached meeting status and the
+// image file on disk), rejecting the change when the target name already exists.
+func (app *App) updateMapFromForm(r *http.Request, sess Session) string {
+	orig := strings.ToLower(strings.TrimSpace(r.FormValue("editMapOrigName")))
+	if orig == "" {
+		return ""
+	}
+	m, found, _ := app.db.GetMap(orig)
+	if !found {
+		return "Error: map not found."
+	}
+	newName := strings.ToLower(strings.TrimSpace(r.FormValue("editMapName")))
+	if newName == "" {
+		return "Error: map name cannot be empty."
+	}
+
+	// Apply the rename first so subsequent attribute writes target the new key.
+	if newName != orig {
+		if _, exists, _ := app.db.GetMap(newName); exists {
+			return "Error: a map with that name already exists."
+		}
+		if err := app.db.RenameMap(orig, newName); err != nil {
+			return "Error renaming map: " + err.Error()
+		}
+		oldPath := app.cfg.dataPath("maps", orig+".png")
+		if _, err := os.Stat(oldPath); err == nil {
+			_ = os.Rename(oldPath, app.cfg.dataPath("maps", newName+".png"))
+		}
+		if updated, ok, _ := app.db.GetMap(newName); ok {
+			m = updated
+		}
+	}
+
+	m.DisplayName = strings.TrimSpace(r.FormValue("editMapDisplayName"))
+	m.Itemscale = orDefaultStr(r.FormValue("editMapItemscale"), "1")
+	m.Published = orDefaultStr(r.FormValue("editMapPublished"), "yes")
+	m.Country = strings.ToLower(r.FormValue("editMapCountry"))
+	m.Flagsize = orDefaultStr(r.FormValue("editMapFlagsize"), "0")
+	m.Timezone = orDefaultStr(r.FormValue("editMapTimezone"), "Europe/Berlin")
+	m.Address = addBR(r.FormValue("editMapAddress"))
+	if v := r.FormValue("editMapX"); v != "" {
+		if x, err := strconv.Atoi(v); err == nil {
+			m.MapX = x
+		}
+	}
+	if v := r.FormValue("editMapY"); v != "" {
+		if y, err := strconv.Atoi(v); err == nil {
+			m.MapY = y
+		}
+	}
+
+	// Replace the image only if a new one was uploaded.
+	if r.MultipartForm != nil && len(r.MultipartForm.File["editImage"]) > 0 {
+		if err := app.saveMapImage(m.Mapname, r.MultipartForm.File["editImage"][0]); err != nil {
+			return "Error saving map image: " + err.Error()
+		}
+	}
+
+	_ = app.db.PutMap(m)
+	if newName != orig {
+		_ = app.db.AuditLog("Maps", sess.Username, "Map renamed ("+orig+" -> "+newName+")")
+	} else {
+		_ = app.db.AuditLog("Maps", sess.Username, "Map updated ("+m.Mapname+")")
+	}
+	return "Map updated."
 }
 
 // nextLdapID returns max(existing IDs)+1.
@@ -554,6 +632,7 @@ func (app *App) buildAdminData(r *http.Request, sess Session, tab, msg string) a
 			if m.Country == "none" || app.flagExists(m.Country) {
 				row.HasFlag = true
 			}
+			row.AddressClean = stripBR(m.Address)
 			d.Maps = append(d.Maps, row)
 		}
 		d.Countryflags = app.listCountryflags()

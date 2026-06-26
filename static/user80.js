@@ -290,10 +290,12 @@ function showMapplate (mapname) {
   copylink_full = 'https://'+window.location.hostname+root+'?map='+mapinfo.mapname;
   copylink_full = encodeURI(copylink_full);
 
+  var maplabel = mapinfo.displayname ? mapinfo.displayname : ucWords(mapinfo.mapname);
+
   if (plateX > (targetScreenWidth/2)) {
     var outputmapplate= '<div class="leftmapplate" style="top:'+y_nameplate+'px;left:'+(plateX-400)+'px">'
                       + '<div class="leftmapplate_goto" onclick=hideMapplate()><img src="images/close3.png" style="width:70px;margin-top:60px;margin-right:20px;"></div>'
-                      + '<div class="leftmapplate_top">'+ucWords(mapinfo.mapname)+'</div>'
+                      + '<div class="leftmapplate_top">'+maplabel+'</div>'
                       + '<div class="leftmapplate_textbox" >'+mapinfo.address+'</div>'
                       + '<img class="leftmapplate_avatar" src="countryflags/'+mapinfo.country+'.svg" style="background:rgba(0, 200, 200,1.0)" />'
                       + '<a href="'+root+'?map='+mapinfo.mapname+'">'
@@ -305,7 +307,7 @@ function showMapplate (mapname) {
   else {
     var outputmapplate= '<div class="rightmapplate" style="top:'+y_nameplate+'px;left:'+plateX+'px">'
                       + '<div class="rightmapplate_goto" onclick=hideMapplate()><img src="images/close3.png" style="width:70px;margin-top:60px;margin-left:20px;"></div>'
-                      + '<div class="rightmapplate_top">'+ucWords(mapinfo.mapname)+'</div>'
+                      + '<div class="rightmapplate_top">'+maplabel+'</div>'
                       + '<div class="rightmapplate_textbox" >'+mapinfo.address+'</div>'
                       + '<img class="rightmapplate_avatar" src="countryflags/'+mapinfo.country+'.svg" style="background:rgba(0, 200, 200,1.0)" />'
                       + '<a href="'+root+'?map='+mapinfo.mapname+'">'
@@ -1461,7 +1463,7 @@ function updateOverview() {
                   + 'width:'+onemap.flagsize+'px; height:'+onemap.flagsize+'px; background-image: url(countryflags/'+onemap.country+'.svg);" '
                   + 'onclick="showMapplate(\''+onemap.mapname+'\')">'
                   + '<div style="position:relative; height:100%; text-align: center;color:white;">'
-                  + '<span style="line-height:'+onemap.flagsize+'px;font-size:'+(Number(onemap.flagsize)/100*16)+'px; background: rgba(50,50,50,0.8);">'+ucWords(onemap.mapname)+'</span>'
+                  + '<span style="line-height:'+onemap.flagsize+'px;font-size:'+(Number(onemap.flagsize)/100*16)+'px; background: rgba(50,50,50,0.8);">'+(onemap.displayname ? onemap.displayname : ucWords(onemap.mapname))+'</span>'
                   + '</div>'
                   + '</div>';
                   //+ '<div class="mapflag_results" id="mapresults_'+onemap.mapname+'"></div>  </div>';

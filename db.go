@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
@@ -53,15 +54,16 @@ type DB struct {
 
 // MapInfo mirrors a row of config_maplist.
 type MapInfo struct {
-	Mapname   string `json:"mapname"`
-	Itemscale string `json:"itemscale"`
-	Published string `json:"published"`
-	Country   string `json:"country"`
-	Flagsize  string `json:"flagsize"`
-	Timezone  string `json:"timezone"`
-	Address   string `json:"address"`
-	MapX      int    `json:"mapX"`
-	MapY      int    `json:"mapY"`
+	Mapname     string `json:"mapname"`
+	DisplayName string `json:"displayname"`
+	Itemscale   string `json:"itemscale"`
+	Published   string `json:"published"`
+	Country     string `json:"country"`
+	Flagsize    string `json:"flagsize"`
+	Timezone    string `json:"timezone"`
+	Address     string `json:"address"`
+	MapX        int    `json:"mapX"`
+	MapY        int    `json:"mapY"`
 }
 
 // Desk mirrors a row of a desks_<map> table, with the map name attached. Desktype
@@ -431,6 +433,106 @@ func (db *DB) MapToday(name string) string {
 func (db *DB) PutMap(m MapInfo) error { return putJSON(db, bucketMaps, []byte(m.Mapname), m) }
 
 func (db *DB) DeleteMap(name string) error { return deleteKey(db, bucketMaps, []byte(name)) }
+
+// RenameMap renames a map and re-keys everything that references it: the map
+// record itself, all of its desks, its cached meeting status, and any bookings.
+// It returns an error if the destination name already exists or the source is
+// missing. The map image file on disk is handled by the caller. All database
+// changes happen atomically in a single transaction.
+func (db *DB) RenameMap(oldName, newName string) error {
+	return db.bolt.Update(func(tx *bolt.Tx) error {
+		mapsB := tx.Bucket(bucketMaps)
+		if mapsB.Get([]byte(newName)) != nil {
+			return fmt.Errorf("a map named %q already exists", newName)
+		}
+		raw := mapsB.Get([]byte(oldName))
+		if raw == nil {
+			return fmt.Errorf("map %q not found", oldName)
+		}
+		var m MapInfo
+		if err := json.Unmarshal(raw, &m); err != nil {
+			return err
+		}
+		m.Mapname = newName
+		data, err := json.Marshal(m)
+		if err != nil {
+			return err
+		}
+		if err := mapsB.Put([]byte(newName), data); err != nil {
+			return err
+		}
+		if err := mapsB.Delete([]byte(oldName)); err != nil {
+			return err
+		}
+
+		// Re-key desks ("<old>:<id>" -> "<new>:<id>").
+		if err := rekeyMapPrefix(tx, bucketDesks, oldName, newName, func(d *Desk) { d.Map = newName }); err != nil {
+			return err
+		}
+		// Re-key cached meeting status ("<old>:<room>" -> "<new>:<room>").
+		if err := rekeyMapPrefix(tx, bucketMeeting, oldName, newName, func(s *MeetingStatus) { s.Map = newName }); err != nil {
+			return err
+		}
+
+		// Update bookings (keyed by seq, value references the map).
+		bkB := tx.Bucket(bucketBookings)
+		type kv struct{ k, v []byte }
+		var updates []kv
+		c := bkB.Cursor()
+		for k, v := c.First(); k != nil; k, v = c.Next() {
+			var b Booking
+			if json.Unmarshal(v, &b) != nil || b.Map != oldName {
+				continue
+			}
+			b.Map = newName
+			nv, err := json.Marshal(b)
+			if err != nil {
+				return err
+			}
+			updates = append(updates, kv{append([]byte(nil), k...), nv})
+		}
+		for _, u := range updates {
+			if err := bkB.Put(u.k, u.v); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
+// rekeyMapPrefix moves every "<old>:<suffix>" entry in a bucket to
+// "<new>:<suffix>", applying patch to each decoded value before re-storing it.
+// Keys are collected first, then mutated, since bolt forbids modifying a bucket
+// while iterating its cursor.
+func rekeyMapPrefix[T any](tx *bolt.Tx, bucket []byte, oldName, newName string, patch func(*T)) error {
+	b := tx.Bucket(bucket)
+	prefix := []byte(oldName + ":")
+	type move struct{ oldKey, newKey, val []byte }
+	var moves []move
+	c := b.Cursor()
+	for k, v := c.Seek(prefix); k != nil && bytes.HasPrefix(k, prefix); k, v = c.Next() {
+		var item T
+		if err := json.Unmarshal(v, &item); err != nil {
+			return err
+		}
+		patch(&item)
+		nv, err := json.Marshal(item)
+		if err != nil {
+			return err
+		}
+		newKey := append([]byte(newName+":"), k[len(prefix):]...)
+		moves = append(moves, move{append([]byte(nil), k...), newKey, nv})
+	}
+	for _, m := range moves {
+		if err := b.Put(m.newKey, m.val); err != nil {
+			return err
+		}
+		if err := b.Delete(m.oldKey); err != nil {
+			return err
+		}
+	}
+	return nil
+}
 
 // --- Desks ---
 
