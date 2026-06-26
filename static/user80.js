@@ -1881,9 +1881,12 @@ function updateDesks(forceRefresh) {
             break;
           }
           deskClass = 'deskball ' + deskType;
-          // Robin live-occupancy overlay: tint the ball pink so it is clearly
-          // distinct from native desk states.
-          var robinStyle = (counter.robin == '1') ? 'background-color:#a81f6b;' : '';
+          // Robin live-occupancy overlay: tag the ball with a class so the pink
+          // tint comes from CSS and survives resetColors() (which only clears
+          // inline background-color set by the search highlighter).
+          if (counter.robin == '1') {
+            deskClass += ' robin';
+          }
 
           switch (deskType) {
             case "floor": 
@@ -1910,7 +1913,7 @@ function updateDesks(forceRefresh) {
               break;
             default: 
                 outputdesks+='<div id="' + counter.id + '" class="' + deskClass + '" style="position:absolute;left:' 
-                            + (counter.x/itemscale-halfsize) + 'px;top:' + (counter.y/itemscale-halfsize) + 'px;border-radius:50%;zoom:' + itemscale + ';' + robinStyle + '"'
+                            + (counter.x/itemscale-halfsize) + 'px;top:' + (counter.y/itemscale-halfsize) + 'px;border-radius:50%;zoom:' + itemscale + ';"'
                             + '>'
                             + '<div id="caption' + counter.id + '" class="caption">' + nameplate_caption + '</div></div>';
                 break;

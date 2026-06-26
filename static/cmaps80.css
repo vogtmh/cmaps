@@ -1417,6 +1417,14 @@ input.cmn-toggle-round-flat:checked + label:after {
  z-index: 99;
 }
 
+/* Robin live-occupancy overlay: pink tint via class so it survives the
+   inline-style reset done by resetColors(). Two classes outrank the
+   single-class desk-type colors; the search highlighter's inline style
+   still wins while a match is active. */
+.deskball.robin {
+ background-color: #a81f6b;
+}
+
 .occupied {
  width: 20px;
  height: 20px;
