@@ -690,6 +690,76 @@ function downloadRobinDeskDump() {
   window.location.href = '../rest/robin/deskdump';
 }
 
+// ── Robin strip-pattern suggestions ─────────────────────────
+function scanRobinStrip() {
+  var btn = document.getElementById('robinSuggestBtn');
+  var box = document.getElementById('robinSuggestResult');
+  if (btn) { btn.disabled = true; btn.textContent = 'Scanning\u2026'; }
+  if (box) box.innerHTML = '<div class="sync-empty">Scanning Robin seats\u2026</div>';
+  $.ajax({
+    url: '../rest/robin/suggestions', type: 'GET', dataType: 'JSON',
+    success: function (res) { renderRobinStripSuggestions(res); },
+    error: function () { if (box) box.innerHTML = '<div class="sync-empty">Scan failed.</div>'; },
+    complete: function () { if (btn) { btn.disabled = false; btn.textContent = 'Scan for suggestions'; } }
+  });
+}
+
+function renderRobinStripSuggestions(res) {
+  var box = document.getElementById('robinSuggestResult');
+  if (!box) return;
+  if (res && res.error) {
+    box.innerHTML = '<div class="sync-empty">' + esc(res.error) + '</div>';
+    return;
+  }
+  var list = (res && res.suggestions) || [];
+  if (!list.length) {
+    box.innerHTML = '<div class="sync-empty">No partial matches found. Every Robin seat already matches a desk (or no extra prefix/suffix was detected).</div>';
+    return;
+  }
+  var html = '';
+  for (var i = 0; i < list.length; i++) {
+    var s = list[i];
+    var label = (s.type === 'prefix') ? 'strip prefix' : 'strip suffix';
+    var cnt = (s.count > 1) ? ' <span class="sync-badge sync-badge-off">' + s.count + '\u00d7</span>' : '';
+    html += '<div class="robin-suggest-row">'
+          + '<span class="robin-suggest-text">Partial match: <b>"' + esc(s.sample) + '"</b>, '
+          + label + ' <code>"' + esc(s.pattern) + '"</code>' + cnt + '</span>'
+          + '<button type="button" class="sync-btn sync-btn-sm robin-suggest-add" data-type="' + escAttr(s.type) + '" data-pattern="' + escAttr(s.pattern) + '">Add</button>'
+          + '</div>';
+  }
+  box.innerHTML = html;
+  var btns = box.querySelectorAll('.robin-suggest-add');
+  for (var j = 0; j < btns.length; j++) {
+    btns[j].addEventListener('click', function () {
+      addRobinStrip(this, this.getAttribute('data-type'), this.getAttribute('data-pattern'));
+    });
+  }
+}
+
+function addRobinStrip(btn, type, pattern) {
+  btn.disabled = true; btn.textContent = 'Adding\u2026';
+  $.ajax({
+    url: '../rest/robin/strip/add', type: 'POST', dataType: 'JSON',
+    data: { type: type, pattern: pattern },
+    success: function (res) {
+      if (res && res.ok) {
+        var row = btn.closest('.robin-suggest-row');
+        if (row) { row.classList.add('robin-suggest-done'); }
+        btn.textContent = res.already ? 'Already set' : 'Added';
+      } else {
+        btn.disabled = false; btn.textContent = 'Add';
+        alert((res && res.error) ? res.error : 'Could not add pattern.');
+      }
+    },
+    error: function () { btn.disabled = false; btn.textContent = 'Add'; alert('Could not add pattern.'); }
+  });
+}
+
+// Escape a string for safe use inside a double-quoted HTML attribute.
+function escAttr(s) {
+  return esc(s).replace(/"/g, '&quot;');
+}
+
 // ── Admin add-user directory autocomplete ───────────────────
 var _dirSearchTimer = null;
 var _dirResults = [];

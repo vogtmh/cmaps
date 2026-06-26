@@ -10,6 +10,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 )
 
 // robinSyncWorkers is the number of rooms polled concurrently during a Robin
@@ -1237,4 +1238,153 @@ func (app *App) pollRobinDeskOccupancy() {
 	if err := app.db.ReplaceRobinDeskStatus(statuses); err != nil {
 		log.Printf("robin desk occupancy: %v", err)
 	}
+}
+
+// --- Robin strip-pattern suggestions ---
+
+// robinStripSuggestion is a proposed strip prefix/suffix that would make a Robin
+// seat name match a CompanyMaps desk number exactly.
+type robinStripSuggestion struct {
+	Sample  string `json:"sample"`  // full Robin seat name, e.g. "blabla / GER"
+	Type    string `json:"type"`    // "prefix" | "suffix"
+	Pattern string `json:"pattern"` // literal text to strip, e.g. " / GER"
+	Count   int    `json:"count"`   // how many seats share this pattern
+}
+
+// isStripSeparator reports whether r is a sensible boundary character between a
+// desk number and an extra prefix/suffix (so we only suggest patterns that begin
+// or end at a real separator, never mid-token like "100" → "00").
+func isStripSeparator(r rune) bool {
+	return !unicode.IsLetter(r) && !unicode.IsDigit(r)
+}
+
+// collectRobinStripSuggestions walks every mapped Robin location's seats and
+// proposes strip prefixes/suffixes for seat names that contain a CompanyMaps
+// desk number exactly but with extra text on one side (and a separator at the
+// boundary). Seats that already match after the current strip config, and
+// patterns already configured, are skipped. Read-only: no API writes.
+func (app *App) collectRobinStripSuggestions() ([]robinStripSuggestion, error) {
+	if app.db.GetRobinSetting("robintoken") == "" {
+		return nil, fmt.Errorf("Robin access token is not configured")
+	}
+	cfg := app.loadRobinStripCfg()
+
+	existingPrefix := map[string]bool{}
+	for _, p := range splitRobinList(app.db.GetRobinSetting("robinStripPrefixList")) {
+		existingPrefix[p] = true
+	}
+	existingSuffix := map[string]bool{}
+	for _, s := range splitRobinList(app.db.GetRobinSetting("robinStripSuffixList")) {
+		existingSuffix[s] = true
+	}
+
+	spaces, _ := app.db.ListRobinSpaces()
+	sort.Slice(spaces, func(i, j int) bool { return spaces[i].Spacename < spaces[j].Spacename })
+
+	deskByMap := map[string]map[string]Desk{}
+	deskLookup := func(mapName string) map[string]Desk {
+		if m, ok := deskByMap[mapName]; ok {
+			return m
+		}
+		m := make(map[string]Desk)
+		ds, _ := app.db.ListDesks(mapName)
+		for _, d := range ds {
+			m[strings.ToLower(strings.TrimSpace(d.Desknumber))] = d
+		}
+		deskByMap[mapName] = m
+		return m
+	}
+
+	type aggKey struct{ typ, pat string }
+	agg := map[aggKey]*robinStripSuggestion{}
+	addAgg := func(typ, pat, sample string) {
+		k := aggKey{typ, pat}
+		if s, ok := agg[k]; ok {
+			s.Count++
+			return
+		}
+		agg[k] = &robinStripSuggestion{Sample: sample, Type: typ, Pattern: pat, Count: 1}
+	}
+
+	for _, s := range spaces {
+		desks := deskLookup(s.MapName())
+		if len(desks) == 0 {
+			continue
+		}
+		rawSpaces, _, err := app.robinGetRaw(fmt.Sprintf("/locations/%d/spaces?page=1&per_page=200", s.Spaceid))
+		if err != nil {
+			continue
+		}
+		var list robinSpaceList
+		if json.Unmarshal(rawSpaces, &list) != nil {
+			continue
+		}
+		for _, sp := range list.Data {
+			for page := 1; page <= 50; page++ {
+				raw, _, e := app.robinGetRaw(fmt.Sprintf("/spaces/%d/seats?page=%d&per_page=200", sp.ID, page))
+				if e != nil {
+					break
+				}
+				var sl robinSeatList
+				if json.Unmarshal(raw, &sl) != nil {
+					break
+				}
+				for _, st := range sl.Data {
+					trimmed := strings.TrimSpace(st.Name)
+					if trimmed == "" {
+						continue
+					}
+					// Already matches a desk after the current strip config.
+					if _, ok := desks[normalizeSeatName(st.Name, cfg)]; ok {
+						continue
+					}
+					ltrim := strings.ToLower(trimmed)
+					for dk := range desks {
+						if dk == "" || len(ltrim) <= len(dk) {
+							continue
+						}
+						// Desk at the start → extra text is a suffix.
+						if strings.HasPrefix(ltrim, dk) {
+							suffix := trimmed[len(dk):]
+							if suffix != "" && !existingSuffix[suffix] {
+								if r := []rune(suffix); isStripSeparator(r[0]) {
+									addAgg("suffix", suffix, trimmed)
+								}
+							}
+						}
+						// Desk at the end → extra text is a prefix.
+						if strings.HasSuffix(ltrim, dk) {
+							prefix := trimmed[:len(trimmed)-len(dk)]
+							if prefix != "" && !existingPrefix[prefix] {
+								if r := []rune(prefix); isStripSeparator(r[len(r)-1]) {
+									addAgg("prefix", prefix, trimmed)
+								}
+							}
+						}
+					}
+				}
+				if len(sl.Data) < 200 {
+					break
+				}
+			}
+		}
+	}
+
+	out := make([]robinStripSuggestion, 0, len(agg))
+	for _, s := range agg {
+		out = append(out, *s)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Count != out[j].Count {
+			return out[i].Count > out[j].Count
+		}
+		if out[i].Type != out[j].Type {
+			return out[i].Type < out[j].Type
+		}
+		return out[i].Pattern < out[j].Pattern
+	})
+	if len(out) > 100 {
+		out = out[:100]
+	}
+	return out, nil
 }

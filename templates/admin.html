@@ -528,6 +528,17 @@
     </div>
     {{end}}
 
+    {{if and (gt .PermLdap 1) .RobinSet}}
+    <div class="sync-card">
+      <div class="sync-card-head">
+        <h2 class="sync-card-title">Strip suggestions</h2>
+        <button type="button" class="sync-btn sync-btn-primary" id="robinSuggestBtn" onClick="scanRobinStrip()">Scan for suggestions</button>
+      </div>
+      <p class="sync-card-hint">Scans Robin seat names that fully contain a CompanyMaps desk number but have extra text on one side. Click <b>Add</b> to save the suggested strip pattern so the desk matches.</p>
+      <div id="robinSuggestResult"></div>
+    </div>
+    {{end}}
+
     {{if .RobinSet}}
     <div class="sync-card">
       <div class="sync-card-head">

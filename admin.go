@@ -1254,6 +1254,61 @@ func (app *App) handleRestRobinDeskDump(w http.ResponseWriter, r *http.Request) 
 	_, _ = w.Write(buf.Bytes())
 }
 
+// handleRestRobinSuggestions scans every mapped Robin location's seats and
+// returns proposed strip prefixes/suffixes that would make a near-miss seat name
+// match a CompanyMaps desk number. Read-only.
+func (app *App) handleRestRobinSuggestions(w http.ResponseWriter, r *http.Request) {
+	sess, ok := app.currentSession(r)
+	if !ok || app.permLevel(sess, "ldap") < 1 {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	suggestions, err := app.collectRobinStripSuggestions()
+	if err != nil {
+		writeJSON(w, map[string]interface{}{"error": err.Error()})
+		return
+	}
+	writeJSON(w, map[string]interface{}{"suggestions": suggestions})
+}
+
+// handleRestRobinStripAdd appends a single strip prefix/suffix pattern to the
+// configured list (enabling that strip type) so a suggestion can be applied with
+// one click.
+func (app *App) handleRestRobinStripAdd(w http.ResponseWriter, r *http.Request) {
+	sess, ok := app.currentSession(r)
+	if !ok || app.permLevel(sess, "ldap") < 2 {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	pat := r.FormValue("pattern")
+	if strings.TrimSpace(pat) == "" {
+		writeJSON(w, map[string]interface{}{"error": "empty pattern"})
+		return
+	}
+	var listKey, enKey string
+	switch r.FormValue("type") {
+	case "prefix":
+		listKey, enKey = "robinStripPrefixList", "robinStripPrefixEnabled"
+	case "suffix":
+		listKey, enKey = "robinStripSuffixList", "robinStripSuffixEnabled"
+	default:
+		writeJSON(w, map[string]interface{}{"error": "invalid type"})
+		return
+	}
+	existing := splitRobinList(app.db.GetRobinSetting(listKey))
+	for _, e := range existing {
+		if e == pat {
+			writeJSON(w, map[string]interface{}{"ok": true, "already": true})
+			return
+		}
+	}
+	existing = append(existing, pat)
+	_ = app.db.SetRobinSetting(listKey, strings.Join(existing, "\n"))
+	_ = app.db.SetRobinSetting(enKey, "1")
+	_ = app.db.AuditLog("LDAP", sess.Username, "Robin strip "+r.FormValue("type")+" added: "+pat)
+	writeJSON(w, map[string]interface{}{"ok": true})
+}
+
 // handleRestLdapSync starts an AD sync of all sources in the background so the
 // admin Sync tab can poll for live progress.
 func (app *App) handleRestLdapSync(w http.ResponseWriter, r *http.Request) {

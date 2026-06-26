@@ -211,6 +211,14 @@
 .sync-toggle input:checked + .sync-toggle-slider::before { transform: translateX(20px); }
 .sync-toggle-label { font-weight: 600; }
 
+.robin-suggest-row {
+  display: flex; align-items: center; gap: 12px;
+  padding: 8px 10px; border-bottom: 1px solid var(--sy-border);
+}
+.robin-suggest-row:last-child { border-bottom: none; }
+.robin-suggest-text { flex: 1; }
+.robin-suggest-done { opacity: 0.55; }
+
 /* ── Badges / tags ───────────────────────────────────────── */
 .sync-badge {
   display: inline-block;
