@@ -1969,7 +1969,6 @@ function updateTeams() {
         teambox += '<tr><td><a href="'+root+'?findme='+members+'&teamlabel='+teamname+'" style="color:'+textcolor+'">'+teamname+'</a></td></tr>'
         if (teamfound) {
           document.getElementById("addressbook_img").src="images/addressbook_found.png";    
-          pulsateTeamResults()
           if (inMobileMode) {$('#mobile_teambutton').css("background-color", "#ff7f00")} 
         }
         else {
