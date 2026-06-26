@@ -633,9 +633,11 @@ function showNameplate (deskid, desktype) {
     else {
       var color = '#999';
     }
-    // Robin live-occupancy overlay: force the pink accent on the plate header.
+    // Robin live-occupancy overlay: keep the standard grey header (the tinted
+    // ball already marks the desk as a Robin reservation) and show a badge.
+    var robinBadge = '';
     if (attr.robin == '1') {
-      color = '#a81f6b';
+      robinBadge = '<span class="robinbadge">Robin</span>';
     }
     avatarcolor = avatarcolor.replace(/[^,]+(?=\))/, '1.0');
     if (attr.y < 100) {
@@ -651,7 +653,8 @@ function showNameplate (deskid, desktype) {
                         + '">' + caption + '</div>'
                         + '<div class="leftnameplate_textbox" style="'+boxstyle+'" id="textbox' + attr.id +'">' + content + '</div>'
                         + '<img src="' + avatar + '" class="leftnameplate_avatar" style="background:' + avatarcolor + '" onerror="this.src=\'images/noavatar.png\'">'
-                        + '<div class="leftnameplate_number">' + attr.dsk + '</div></div>'
+                        + '<div class="leftnameplate_number">' + attr.dsk + '</div>'
+                        + robinBadge + '</div>'
                         + '<div id="caption' + attr.id + '" class="caption">' + attr.empl + '</div>'
                         + '</div>';
       }
@@ -684,7 +687,8 @@ function showNameplate (deskid, desktype) {
         }
 
         outputnameplate += '</div>'
-                        + '<div class="leftnameplate_number">' + attr.dsk + '</div></div>'
+                        + '<div class="leftnameplate_number">' + attr.dsk + '</div>'
+                        + robinBadge + '</div>'
                         + '<div id="caption' + attr.id + '" class="caption">' + attr.empl + '</div>'
                         + '</div>';
       }
@@ -696,7 +700,8 @@ function showNameplate (deskid, desktype) {
                       + '">' + caption + '</div>'
                       + '<div class="rightnameplate_textbox" style="'+boxstyle+'" id="textbox' + attr.id +'">' + content + '</div>'
                       + '<img src="' + avatar + '" class="rightnameplate_avatar" style="background:' + avatarcolor + '" onerror="this.src=\'images/noavatar.png\'">'
-                      + '<div class="rightnameplate_number">' + attr.dsk + '</div></div>'
+                      + '<div class="rightnameplate_number">' + attr.dsk + '</div>'
+                      + robinBadge + '</div>'
                       + '<div id="caption' + attr.id + '" class="caption">' + attr.empl + '</div>'
                       + '</div>';
       }
@@ -728,7 +733,8 @@ function showNameplate (deskid, desktype) {
             break;
         }              
         outputnameplate += '</div>'
-                      + '<div class="rightnameplate_number">' + attr.dsk + '</div></div>'
+                      + '<div class="rightnameplate_number">' + attr.dsk + '</div>'
+                      + robinBadge + '</div>'
                       + '<div id="caption' + attr.id + '" class="caption">' + attr.empl + '</div>'
                       + '</div>';
       }
@@ -1058,10 +1064,10 @@ function showSticky (deskid, desktype, caption) {
     else {
       var color = '#999';
     }
-    // Robin live-occupancy overlay: force the pink accent and show a badge.
+    // Robin live-occupancy overlay: keep the standard grey header and show a
+    // badge next to the copy icon instead of tinting the whole plate.
     var robinBadge = '';
     if (attr.robin == '1') {
-      color = '#a81f6b';
       robinBadge = '<span class="robinbadge">Robin</span>';
     }
     avatarcolor = avatarcolor.replace(/[^,]+(?=\))/, '1.0');
