@@ -88,6 +88,12 @@
   padding: 18px 20px;
   margin-bottom: 18px;
 }
+/* Two cards side by side; stacks on narrow viewports. Direct .sync-card
+   children must not keep their bottom margin (the row gap handles spacing). */
+.sync-cols { display: flex; gap: 18px; align-items: flex-start; flex-wrap: wrap; }
+.sync-cols > .sync-card, .sync-cols > form { flex: 1 1 0; min-width: 320px; margin-bottom: 18px; }
+.sync-cols > form { margin: 0; }
+.sync-cols > form > .sync-card { margin-bottom: 0; }
 .sync-card-head {
   display: flex;
   align-items: center;

@@ -342,14 +342,30 @@ func (app *App) handleAdminPost(w http.ResponseWriter, r *http.Request, sess Ses
 		}
 
 	case "teams":
+		if app.permLevel(sess, "teams") < 2 {
+			return ""
+		}
 		if del := r.FormValue("deleteTeam"); del != "" {
 			_ = app.db.DeleteTeam(del)
 			_ = app.db.AuditLog("Teams", sess.Username, "Team removed ("+del+")")
 			return "Team removed."
 		}
-		name := r.FormValue("newTeam")
-		members := r.FormValue("newMembers")
-		if name != "" && members != "" {
+		if orig := r.FormValue("editTeamOrigName"); orig != "" {
+			name := strings.TrimSpace(r.FormValue("editTeamName"))
+			if name == "" {
+				return ""
+			}
+			members := normalizeMembers(r.FormValue("editTeamMembers"))
+			if name != orig {
+				_ = app.db.DeleteTeam(orig)
+			}
+			_ = app.db.PutTeam(Team{Teamname: name, Members: members})
+			_ = app.db.AuditLog("Teams", sess.Username, "Team updated ("+name+")")
+			return "Team updated."
+		}
+		name := strings.TrimSpace(r.FormValue("newTeam"))
+		if name != "" {
+			members := normalizeMembers(r.FormValue("newMembers"))
 			_ = app.db.PutTeam(Team{Teamname: name, Members: members})
 			_ = app.db.AuditLog("Teams", sess.Username, "New team created ("+name+")")
 			return "Team created."
@@ -362,6 +378,20 @@ func (app *App) handleAdminPost(w http.ResponseWriter, r *http.Request, sess Ses
 		return app.saveLogosFromForm(r, sess)
 	}
 	return ""
+}
+
+// normalizeMembers turns a user-entered member list (comma- and/or pipe-separated,
+// possibly with surrounding spaces) into the stored format: full names joined by
+// "|" with no spaces around the pipes.
+func normalizeMembers(s string) string {
+	parts := strings.FieldsFunc(s, func(r rune) bool { return r == ',' || r == '|' })
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		if p = strings.TrimSpace(p); p != "" {
+			out = append(out, p)
+		}
+	}
+	return strings.Join(out, "|")
 }
 
 // saveLogosFromForm stores any uploaded logo images and points the matching
@@ -720,17 +750,11 @@ func (app *App) buildAdminData(r *http.Request, sess Session, tab, msg string) a
 		sort.Slice(d.Teams, func(i, j int) bool { return d.Teams[i].Teamname < d.Teams[j].Teamname })
 
 	case "auditlog":
-		d.AuditFilter = r.FormValue("auditlogEventType")
-		d.AuditTypes = []string{"All", "Access", "Users", "Desks", "Teams", "LDAP"}
-		all, _ := app.db.ListAudit(0)
-		for _, e := range all {
-			if d.AuditFilter == "" || e.Type == d.AuditFilter {
-				d.AuditEntries = append(d.AuditEntries, e)
-			}
-			if len(d.AuditEntries) >= 200 {
-				break
-			}
-		}
+		// The audit log can hold 100k+ rows on production, so it is no longer
+		// rendered server-side. The template renders the filter controls and the
+		// front-end pages through entries lazily via /rest/auditlog. AuditTypes
+		// feeds the Type dropdown.
+		d.AuditTypes = []string{"Maps", "Desks", "Users", "Teams", "LDAP", "Settings", "Avatar", "login", "account", "setup"}
 	}
 
 	return d

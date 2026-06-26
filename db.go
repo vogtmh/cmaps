@@ -143,6 +143,15 @@ type Team struct {
 	Members  string `json:"teammembers"`
 }
 
+// MembersDisplay renders the pipe-separated member list (the stored format) as a
+// comma-separated string for display in the admin UI.
+func (t Team) MembersDisplay() string {
+	if t.Members == "" {
+		return ""
+	}
+	return strings.ReplaceAll(t.Members, "|", ", ")
+}
+
 // Role mirrors a row of config_roles. Perms maps a feature name to a level
 // (0=none, 1=read, 2=write).
 type Role struct {
@@ -982,6 +991,57 @@ func (db *DB) ListAudit(limit int) ([]AuditEntry, error) {
 		return nil
 	})
 	return out, err
+}
+
+// ListAuditPage returns up to limit audit entries (newest first) matching the
+// given filters, skipping the first `offset` matches. hasMore reports whether
+// further matching entries exist beyond the returned page. Filtering happens in
+// the DB scan so the (100k+ on production) audit log is never materialised in
+// full – the front-end pages through it via lazy scroll.
+func (db *DB) ListAuditPage(offset, limit int, fType, fTime, fUser, fInfo string) ([]AuditEntry, bool, error) {
+	if limit <= 0 {
+		limit = 100
+	}
+	fType = strings.ToLower(strings.TrimSpace(fType))
+	fTime = strings.ToLower(strings.TrimSpace(fTime))
+	fUser = strings.ToLower(strings.TrimSpace(fUser))
+	fInfo = strings.ToLower(strings.TrimSpace(fInfo))
+
+	out := make([]AuditEntry, 0, limit)
+	hasMore := false
+	skipped := 0
+	err := db.bolt.View(func(tx *bolt.Tx) error {
+		c := tx.Bucket(bucketAudit).Cursor()
+		for k, v := c.Last(); k != nil; k, v = c.Prev() {
+			var e AuditEntry
+			if json.Unmarshal(v, &e) != nil {
+				continue
+			}
+			if fType != "" && strings.ToLower(e.Type) != fType {
+				continue
+			}
+			if fTime != "" && !strings.Contains(strings.ToLower(e.Timestamp), fTime) {
+				continue
+			}
+			if fUser != "" && !strings.Contains(strings.ToLower(e.User), fUser) {
+				continue
+			}
+			if fInfo != "" && !strings.Contains(strings.ToLower(e.Info), fInfo) {
+				continue
+			}
+			if skipped < offset {
+				skipped++
+				continue
+			}
+			if len(out) == limit {
+				hasMore = true
+				return nil
+			}
+			out = append(out, e)
+		}
+		return nil
+	})
+	return out, hasMore, err
 }
 
 // --- Meta (wizard state, etc.) ---

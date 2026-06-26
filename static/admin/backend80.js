@@ -955,5 +955,136 @@ function deskSummary(map) {
     }    
   });
 
-      
+}
+
+// ---------------------------------------------------------------------------
+// Audit log: server-paginated, lazily scrolled. The production audit log can
+// hold 100k+ rows, so entries are never loaded all at once. /rest/auditlog
+// returns a page (offset+limit) filtered server-side by type and free-text;
+// scrolling the sentinel into view fetches the next page and appends it.
+// ---------------------------------------------------------------------------
+var AUDIT_PAGE = 100;
+var _auditOffset = 0;
+var _auditHasMore = true;
+var _auditLoading = false;
+var _auditObserver = null;
+var _auditDebounce = null;
+var _auditGen = 0; // bumped on every filter change; stale responses are ignored
+
+function auditFilterValues() {
+  return {
+    type: (document.getElementById('auditFilterType') || {}).value || '',
+    time: (document.getElementById('auditFilterTime') || {}).value || '',
+    user: (document.getElementById('auditFilterUser') || {}).value || '',
+    info: (document.getElementById('auditFilterInfo') || {}).value || ''
+  };
+}
+
+// Called on every keystroke / dropdown change. Debounced so typing doesn't fire
+// a request per character; resets the pager and reloads from the top. Bumping
+// the generation makes any in-flight request's response be discarded.
+function auditFilterChanged() {
+  clearTimeout(_auditDebounce);
+  _auditDebounce = setTimeout(function () {
+    _auditGen++;
+    _auditOffset = 0;
+    _auditHasMore = true;
+    _auditLoading = false;
+    var body = document.getElementById('auditBody');
+    if (body) { body.innerHTML = ''; }
+    loadAuditPage();
+  }, 300);
+}
+
+function loadAuditPage() {
+  if (_auditLoading || !_auditHasMore) { return; }
+  _auditLoading = true;
+  var gen = _auditGen;
+  var f = auditFilterValues();
+  $.ajax({
+    url: '../rest/auditlog/',
+    async: true,
+    type: 'get',
+    dataType: 'JSON',
+    data: { offset: _auditOffset, limit: AUDIT_PAGE, type: f.type, time: f.time, user: f.user, info: f.info },
+    success: function (res) {
+      if (gen !== _auditGen) { return; } // superseded by a newer filter state
+      var rows = (res && res.entries) ? res.entries : [];
+      var body = document.getElementById('auditBody');
+      if (body) {
+        rows.forEach(function (e) {
+          var tr = document.createElement('tr');
+          var tdTime = document.createElement('td');
+          tdTime.style.whiteSpace = 'nowrap';
+          tdTime.textContent = e.timestamp || '';
+          var tdType = document.createElement('td');
+          tdType.textContent = e.type || '';
+          var tdUser = document.createElement('td');
+          tdUser.textContent = e.user || '';
+          var tdInfo = document.createElement('td');
+          tdInfo.style.whiteSpace = 'normal';
+          tdInfo.textContent = e.info || '';
+          tr.appendChild(tdTime);
+          tr.appendChild(tdType);
+          tr.appendChild(tdUser);
+          tr.appendChild(tdInfo);
+          body.appendChild(tr);
+        });
+      }
+      _auditOffset += rows.length;
+      _auditHasMore = !!(res && res.hasMore);
+      _auditLoading = false;
+      updateAuditStatus();
+      // If the first page(s) didn't fill the viewport, keep loading until the
+      // sentinel is pushed out of view or there is nothing more to fetch.
+      if (_auditHasMore && auditSentinelVisible()) { loadAuditPage(); }
+    },
+    error: function () {
+      if (gen !== _auditGen) { return; }
+      _auditLoading = false;
+      var s = document.getElementById('auditStatus');
+      if (s) { s.textContent = 'Could not load audit log.'; }
+    }
+  });
+}
+
+function auditSentinelVisible() {
+  var s = document.getElementById('auditSentinel');
+  if (!s) { return false; }
+  var r = s.getBoundingClientRect();
+  return r.top < (window.innerHeight || document.documentElement.clientHeight);
+}
+
+function updateAuditStatus() {
+  var cnt = document.getElementById('auditCount');
+  if (cnt) {
+    cnt.textContent = _auditOffset + (_auditHasMore ? '+' : '') + (_auditOffset === 1 ? ' entry' : ' entries');
+  }
+  var s = document.getElementById('auditStatus');
+  if (!s) { return; }
+  if (_auditOffset === 0) {
+    s.textContent = 'No matching entries.';
+  } else if (_auditHasMore) {
+    s.textContent = 'Showing ' + _auditOffset + ' \u2014 scroll for more';
+  } else {
+    s.textContent = 'Showing all ' + _auditOffset + ' matching entries';
+  }
+}
+
+function initAuditLog() {
+  _auditGen++;
+  _auditOffset = 0;
+  _auditHasMore = true;
+  _auditLoading = false;
+  var body = document.getElementById('auditBody');
+  if (body) { body.innerHTML = ''; }
+  loadAuditPage();
+  var sentinel = document.getElementById('auditSentinel');
+  if (sentinel && 'IntersectionObserver' in window) {
+    if (_auditObserver) { _auditObserver.disconnect(); }
+    _auditObserver = new IntersectionObserver(function (entries) {
+      if (entries[0].isIntersecting) { loadAuditPage(); }
+    }, { threshold: 0 });
+    _auditObserver.observe(sentinel);
+  }
 }

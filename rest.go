@@ -102,6 +102,35 @@ func (app *App) handleRestTeams(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]interface{}{"teams": items})
 }
 
+// handleRestAuditlog serves /rest/auditlog with server-side pagination and
+// filtering so the (100k+ on production) audit log can be browsed via lazy
+// scroll without loading the whole table into memory or the browser. Query
+// params: offset, limit, type, time, user, info. Response: {entries, hasMore}.
+func (app *App) handleRestAuditlog(w http.ResponseWriter, r *http.Request) {
+	sess, ok := app.currentSession(r)
+	if !ok || app.permLevel(sess, "auditlog") < 1 {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	q := r.URL.Query()
+	offset := atoiDefault(q.Get("offset"), 0)
+	limit := atoiDefault(q.Get("limit"), 100)
+	if limit < 1 || limit > 500 {
+		limit = 100
+	}
+	entries, hasMore, _ := app.db.ListAuditPage(offset, limit, q.Get("type"), q.Get("time"), q.Get("user"), q.Get("info"))
+	items := make([]map[string]string, 0, len(entries))
+	for _, e := range entries {
+		items = append(items, map[string]string{
+			"timestamp": e.Timestamp,
+			"type":      e.Type,
+			"user":      e.User,
+			"info":      e.Info,
+		})
+	}
+	writeJSON(w, map[string]interface{}{"entries": items, "hasMore": hasMore})
+}
+
 // handleRestChanges serves /rest/changes?maxresults= (Title/Employee only).
 func (app *App) handleRestChanges(w http.ResponseWriter, r *http.Request) {
 	maxResults := atoiDefault(r.URL.Query().Get("maxresults"), 0)

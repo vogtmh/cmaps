@@ -125,36 +125,81 @@
   </script>
 
 {{else if eq .ActiveTab "config"}}
-  <h2 style="margin-left:20px">Logo</h2><br />
-  <form action="?tab=config" method="post" enctype="multipart/form-data">
-    <input type="hidden" name="tab" value="config">
-    <table style="margin-left: 20px">
-      <tr style="font-weight:bold"><td width="270">Variable</td><td width="260">Current</td><td>Upload new (PNG/JPG/GIF)</td></tr>
-      <tr>
-        <td>logo_regular</td>
-        <td><img src="{{.LogoRegular}}" height="45" alt="logo_regular" style="background:#333;padding:4px;border-radius:4px;"></td>
-        <td><input type="file" name="logoRegular" accept="image/png,image/jpeg,image/gif"></td>
-      </tr>
-      <tr>
-        <td>logo_hover</td>
-        <td><img src="{{.LogoHover}}" height="45" alt="logo_hover" style="background:#333;padding:4px;border-radius:4px;"></td>
-        <td><input type="file" name="logoHover" accept="image/png,image/jpeg,image/gif"></td>
-      </tr>
-      <tr><td>&nbsp;</td></tr>
-      <tr><td><input type="submit" value="Upload logos" style="background:rgba(0,120,0,0.8); padding:6px 18px;"></td></tr>
-    </table>
-  </form>
-  <br/>
-  <h2 style="margin-left:20px">Configured base variables</h2><br />
-  <table style="margin-left: 20px">
-    <tr style="font-weight:bold"><td width="270">Variable</td><td width="420">Value</td>{{if gt .PermConfig 1}}<td width="80">&nbsp;</td>{{end}}</tr>
-    <tr><td>&nbsp;</td><td>&nbsp;</td></tr>
-    {{range .GeneralVars}}<tr>{{if gt $.PermConfig 1}}<td>{{.Variable}}</td><td><input type="text" id="setting_{{.Variable}}" value="{{.Value}}" style="width:400px;"></td><td><button type="button" class="sync-btn sync-btn-sm" onclick="saveSetting('{{.Variable}}', this)">Save</button></td>{{else}}<td>{{.Variable}}</td><td>{{.Value}}</td>{{end}}</tr>{{end}}
-  </table>
-  <br/>
-  <h2 style="margin-left:20px">VIP desk borders</h2>
-  <p style="margin-left:20px;color:#aaa;max-width:760px;">Add tags that are matched against each person's job title. Matching desks get a colored border on the maps.</p>
-  <div id="vipCategories" class="vip-cats" style="margin-left:20px;">Loading&hellip;</div>
+  <div class="sync-wrap">
+
+    <div class="sync-cols">
+
+      <!-- Base variables (left half) -->
+      <div class="sync-card">
+        <div class="sync-card-head">
+          <h2 class="sync-card-title">Base variables</h2>
+          <span class="sync-badge sync-badge-accent">{{len .GeneralVars}} setting(s)</span>
+        </div>
+        {{if .GeneralVars}}
+        <table class="sync-table">
+          <thead>
+            <tr><th style="width:280px;">Variable</th><th>Value</th>{{if gt .PermConfig 1}}<th class="sync-td-min">Actions</th>{{end}}</tr>
+          </thead>
+          <tbody>
+          {{range .GeneralVars}}
+            <tr>
+              <td>{{.Variable}}</td>
+              {{if gt $.PermConfig 1}}
+              <td><input class="sync-input" type="text" id="setting_{{.Variable}}" value="{{.Value}}" style="width:100%;"></td>
+              <td class="sync-td-min"><button type="button" class="sync-btn sync-btn-sm" onclick="saveSetting('{{.Variable}}', this)">Save</button></td>
+              {{else}}
+              <td>{{.Value}}</td>
+              {{end}}
+            </tr>
+          {{end}}
+          </tbody>
+        </table>
+        {{else}}
+        <div class="sync-empty">No base variables configured.</div>
+        {{end}}
+      </div>
+
+      <!-- Logos (right half) -->
+      <form action="?tab=config" method="post" enctype="multipart/form-data">
+        <input type="hidden" name="tab" value="config">
+        <div class="sync-card">
+          <div class="sync-card-head">
+            <h2 class="sync-card-title">Logos</h2>
+          </div>
+          <p class="sync-card-hint">PNG, JPG or GIF. The hover logo is shown when a user points at the brand in the top bar.</p>
+          <table class="sync-table">
+            <thead>
+              <tr><th>Variable</th><th>Current</th><th>Upload new</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>logo_regular</td>
+                <td><img src="{{.LogoRegular}}" height="45" alt="logo_regular" style="background:#333;padding:4px;border-radius:4px;"></td>
+                <td><input type="file" name="logoRegular" accept="image/png,image/jpeg,image/gif"></td>
+              </tr>
+              <tr>
+                <td>logo_hover</td>
+                <td><img src="{{.LogoHover}}" height="45" alt="logo_hover" style="background:#333;padding:4px;border-radius:4px;"></td>
+                <td><input type="file" name="logoHover" accept="image/png,image/jpeg,image/gif"></td>
+              </tr>
+            </tbody>
+          </table>
+          <div class="sync-form-actions"><button type="submit" class="sync-btn sync-btn-primary">Upload logos</button></div>
+        </div>
+      </form>
+
+    </div>
+
+    <!-- VIP desk borders -->
+    <div class="sync-card">
+      <div class="sync-card-head">
+        <h2 class="sync-card-title">VIP desk borders</h2>
+      </div>
+      <p class="sync-card-hint">Add tags that are matched against each person's job title. Matching desks get a colored border on the maps.</p>
+      <div id="vipCategories" class="vip-cats">Loading&hellip;</div>
+    </div>
+
+  </div>
   <script>loadVips({{if gt .PermConfig 1}}true{{else}}false{{end}});</script>
 
 {{else if eq .ActiveTab "ldap"}}
@@ -744,34 +789,101 @@
   </div>
 
 {{else if eq .ActiveTab "teams"}}
-  <table style="margin-left:20px;">
-    <tr style="font-weight:bold"><td width="350">Name</td><td width="850">Members</td><td width="150">&nbsp;</td></tr>
-    <tr><td>&nbsp;</td></tr>
-    {{range .Teams}}
-    <tr>
-      <td>{{.Teamname}}</td><td>{{.Members}}</td>
-      <td>
-        {{if gt $.PermTeams 1}}
-        <form name="DeleteTeam" action="?tab=teams" method="post">
-          <input type="hidden" name="tab" value="teams">
-          <input type="hidden" name="deleteTeam" value="{{.Teamname}}">
-          <input type="hidden" name="deleteMembers" value="{{.Members}}">
-          <input type="submit" value="Delete">
-        </form>
+  <div class="sync-wrap">
+    <div class="sync-card">
+      <div class="sync-card-head">
+        <h2 class="sync-card-title">Teams</h2>
+        <span class="sync-badge sync-badge-accent">{{len .Teams}} team(s)</span>
+        {{if gt .PermTeams 1}}
+        <button type="button" class="sync-btn sync-btn-sm" onclick="openAddTeam()" style="margin-left:auto;">Add team</button>
         {{end}}
-      </td>
-    </tr>
-    {{end}}
-    <tr><td>&nbsp;</td></tr>
-    <form name="NewTeam" action="?tab=teams" method="post">
-      <tr>
+      </div>
+      {{if .Teams}}
+      <table class="sync-table">
+        <thead>
+          <tr>
+            <th>Name</th><th>Members</th>{{if gt .PermTeams 1}}<th class="sync-td-min">Actions</th>{{end}}
+          </tr>
+        </thead>
+        <tbody>
+        {{range .Teams}}
+          <tr>
+            <td>{{.Teamname}}</td>
+            <td style="max-width:760px;white-space:normal;">{{if .MembersDisplay}}{{.MembersDisplay}}{{else}}&mdash;{{end}}</td>
+            {{if gt $.PermTeams 1}}
+            <td class="sync-td-min">
+              <div style="display:flex;gap:6px;">
+                <button type="button" class="sync-btn sync-btn-sm"
+                  data-name="{{.Teamname}}" data-members="{{.MembersDisplay}}"
+                  onclick="openEditTeam(this)">Edit</button>
+                <form action="?tab=teams" method="post" style="margin:0;" onsubmit="return confirm('Delete team &quot;{{.Teamname}}&quot;?');">
+                  <input type="hidden" name="tab" value="teams">
+                  <input type="hidden" name="deleteTeam" value="{{.Teamname}}">
+                  <button type="submit" class="sync-btn sync-btn-sm sync-btn-danger">Delete</button>
+                </form>
+              </div>
+            </td>
+            {{end}}
+          </tr>
+        {{end}}
+        </tbody>
+      </table>
+      {{else}}
+      <div class="sync-empty">No teams configured yet.</div>
+      {{end}}
+    </div>
+  </div>
+
+  {{if gt .PermTeams 1}}
+  <div class="sync-wrap">
+  <!-- Add team modal -->
+  <div id="addTeamOverlay" class="sync-modal">
+    <div class="sync-modal-box">
+      <div class="sync-modal-head">
+        <h2>Add team</h2>
+        <button type="button" class="sync-btn sync-btn-sm" onclick="closeTeamModal('addTeamOverlay')">Close</button>
+      </div>
+      <form action="?tab=teams" method="post">
         <input type="hidden" name="tab" value="teams">
-        <td><input type="text" name="newTeam" style="width:320px;"></td>
-        <td><input type="text" name="newMembers" style="width:820px;"></td>
-        <td><input type="submit" value="Create"></td>
-      </tr>
-    </form>
-  </table>
+        <div class="sync-form-grid">
+          <div class="sync-field"><label class="sync-label">Team name</label><input class="sync-input" type="text" name="newTeam" placeholder="e.g. Engineering" required></div>
+          <div class="sync-field sync-field-wide"><label class="sync-label">Members</label><textarea class="sync-textarea sync-textarea-text" name="newMembers" placeholder="Comma-separated full names, e.g. Alice Smith, Bob Jones"></textarea></div>
+        </div>
+        <div class="sync-form-actions"><button type="submit" class="sync-btn sync-btn-primary">Create team</button></div>
+      </form>
+    </div>
+  </div>
+  <!-- Edit team modal -->
+  <div id="editTeamOverlay" class="sync-modal">
+    <div class="sync-modal-box">
+      <div class="sync-modal-head">
+        <h2>Edit team</h2>
+        <button type="button" class="sync-btn sync-btn-sm" onclick="closeTeamModal('editTeamOverlay')">Close</button>
+      </div>
+      <form action="?tab=teams" method="post">
+        <input type="hidden" name="tab" value="teams">
+        <input type="hidden" name="editTeamOrigName" id="editTeamOrigName">
+        <div class="sync-form-grid">
+          <div class="sync-field"><label class="sync-label">Team name</label><input class="sync-input" type="text" name="editTeamName" id="editTeamName" required></div>
+          <div class="sync-field sync-field-wide"><label class="sync-label">Members</label><textarea class="sync-textarea sync-textarea-text" name="editTeamMembers" id="editTeamMembers" placeholder="Comma-separated full names"></textarea></div>
+        </div>
+        <div class="sync-form-actions"><button type="submit" class="sync-btn sync-btn-primary">Save changes</button></div>
+      </form>
+    </div>
+  </div>
+  </div>
+  <script>
+    function openAddTeam() { document.getElementById('addTeamOverlay').style.display = 'block'; }
+    function closeTeamModal(id) { document.getElementById(id).style.display = 'none'; }
+    function openEditTeam(btn) {
+      var d = btn.dataset;
+      document.getElementById('editTeamOrigName').value = d.name;
+      document.getElementById('editTeamName').value = d.name;
+      document.getElementById('editTeamMembers').value = d.members || '';
+      document.getElementById('editTeamOverlay').style.display = 'block';
+    }
+  </script>
+  {{end}}
 
 {{else if eq .ActiveTab "stats"}}
   <h2 style="margin-left:10px">Daily chart</h2>
@@ -787,32 +899,36 @@
   </script>
 
 {{else if eq .ActiveTab "auditlog"}}
-  <h2>AuditLog of the last changes</h2><br />
-  {{$filter := .AuditFilter}}
-  {{range $name := .AuditTypes}}
-  <div style="float: left; margin-right:10px;">
-    <form action="?tab=auditlog" method="post">
-      <input type="hidden" name="tab" value="auditlog">
-      <input type="hidden" name="auditlogEventType" value="{{if eq $name "All"}}{{else}}{{$name}}{{end}}">
-      {{if or (eq $filter $name) (and (eq $name "All") (eq $filter ""))}}
-      <input type="submit" value="{{$name}}" style="width:80px; background: rgba(0, 200, 0, 0.7);">
-      {{else}}
-      <input type="submit" value="{{$name}}" style="width:80px; background: rgba(0, 0, 200, 0.7);">
-      {{end}}
-    </form>
+  <div class="sync-wrap">
+    <div class="sync-card">
+      <div class="sync-card-head">
+        <h2 class="sync-card-title">Audit log</h2>
+        <span class="sync-badge sync-badge-accent" id="auditCount">&hellip;</span>
+      </div>
+      <table class="sync-table" id="auditTable">
+        <thead>
+          <tr class="audit-filter-row">
+            <th><input type="text" class="sync-input" id="auditFilterTime" placeholder="Filter time&hellip;" style="width:100%;box-sizing:border-box;" oninput="auditFilterChanged()"></th>
+            <th>
+              <select class="sync-select" id="auditFilterType" style="width:100%;box-sizing:border-box;" onchange="auditFilterChanged()">
+                <option value="">All types</option>
+                {{range .AuditTypes}}<option value="{{.}}">{{.}}</option>{{end}}
+              </select>
+            </th>
+            <th><input type="text" class="sync-input" id="auditFilterUser" placeholder="Filter user&hellip;" style="width:100%;box-sizing:border-box;" oninput="auditFilterChanged()"></th>
+            <th><input type="text" class="sync-input" id="auditFilterInfo" placeholder="Filter info&hellip;" style="width:100%;box-sizing:border-box;" oninput="auditFilterChanged()"></th>
+          </tr>
+          <tr>
+            <th style="width:170px;">Time</th><th style="width:120px;">Type</th><th style="width:220px;">User</th><th>Info</th>
+          </tr>
+        </thead>
+        <tbody id="auditBody"></tbody>
+      </table>
+      <div id="auditSentinel" style="height:1px;"></div>
+      <div id="auditStatus" class="sync-status-text" style="margin-top:10px;"></div>
+    </div>
   </div>
-  {{end}}
-  <br style="clear:both" />
-  <table>
-    <tr style="font-weight:bold;">
-      <td width="200">EventTime</td><td width="200">EventType</td>
-      <td width="250">EventUser</td><td width="880">EventInfo</td>
-    </tr>
-    <tr><td>&nbsp;</td></tr>
-    {{range .AuditEntries}}
-    <tr><td>{{.Timestamp}}</td><td>{{.Type}}</td><td>{{.User}}</td><td>{{.Info}}</td></tr>
-    {{end}}
-  </table><br /><br />
+  <script>initAuditLog();</script>
 
 {{end}}
 

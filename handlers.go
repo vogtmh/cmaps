@@ -52,6 +52,7 @@ func (app *App) registerRESTRoutes(mux *http.ServeMux) {
 	rest("/rest/users", app.handleRestUsers)
 	rest("/rest/config", app.handleRestConfig)
 	rest("/rest/teams", app.handleRestTeams)
+	rest("/rest/auditlog", app.handleRestAuditlog)
 	rest("/rest/booking", app.handleRestBooking)
 	rest("/rest/changes", app.handleRestChanges)
 	rest("/rest/stats", app.handleRestStats)
