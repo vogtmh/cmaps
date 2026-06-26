@@ -25,6 +25,10 @@ type App struct {
 	robinProg syncProgress
 	ldapProg  syncProgress
 
+	// robinDeskProg tracks the background desk-data diagnostic so the admin Sync
+	// tab can show a live progress bar + log.
+	robinDeskProg syncProgress
+
 	// robinDump caches the most recent desk-data diagnostic bundle so the admin
 	// "Download JSON bundle" button can export exactly what the last run captured
 	// without re-hitting the Robin API.

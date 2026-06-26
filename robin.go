@@ -56,9 +56,41 @@ type robinSpaceList struct {
 }
 
 type robinSpaceEntry struct {
+	ID        int      `json:"id"`
+	Name      string   `json:"name"`
+	Type      string   `json:"type"`
+	Behaviors []string `json:"behaviors"`
+}
+
+// --- Robin desk (seat) API response shapes ---
+
+type robinSeatList struct {
+	Data []robinSeatEntry `json:"data"`
+}
+
+type robinSeatEntry struct {
 	ID   int    `json:"id"`
 	Name string `json:"name"`
-	Type string `json:"type"`
+}
+
+type robinSeatResvList struct {
+	Data []robinSeatResv `json:"data"`
+}
+
+type robinSeatResv struct {
+	SeatID   int           `json:"seat_id"`
+	Type     string        `json:"type"`
+	Start    robinDateTime `json:"start"`
+	End      robinDateTime `json:"end"`
+	Reservee struct {
+		Email  string `json:"email"`
+		UserID int    `json:"user_id"`
+	} `json:"reservee"`
+}
+
+type robinDateTime struct {
+	DateTime string `json:"date_time"`
+	TimeZone string `json:"time_zone"`
 }
 
 type robinState struct {
@@ -620,17 +652,7 @@ func (app *App) robinGetRaw(path string) ([]byte, int, error) {
 }
 
 // robinDataCount counts the elements in a Robin {"data":[...]} envelope without
-// assuming the shape of each element (used for concise log lines).
-func robinDataCount(raw []byte) int {
-	var env struct {
-		Data []json.RawMessage `json:"data"`
-	}
-	if json.Unmarshal(raw, &env) != nil {
-		return -1
-	}
-	return len(env.Data)
-}
-
+// robinDataCount counts the elements in a Robin {"data":[...]} envelope without
 // sanitizeDumpSegment makes a string safe to use as a file-path segment inside
 // the diagnostic zip.
 func sanitizeDumpSegment(s string) string {
@@ -657,14 +679,39 @@ func sanitizeDumpSegment(s string) string {
 	return out
 }
 
-// RunRobinDeskDump walks every configured Robin location and captures the raw
-// JSON of the full sync surface (spaces, and for each space its state, events,
-// seats and seat reservations for today). It returns a short human-readable log
-// and the captured raw-JSON files. Nothing is persisted to the app.
+// RobinDeskDumpResult carries the headline counts of a desk diagnostic run so
+// the caller can build a one-line summary for the progress bar.
+type RobinDeskDumpResult struct {
+	Locations   int
+	Seats       int
+	OccupiedNow int
+	Matched     int
+	Unmatched   int
+	Files       int
+}
+
+// RunRobinDeskDump runs the desk diagnostic without progress reporting.
 func (app *App) RunRobinDeskDump() ([]string, []robinDumpFile) {
+	logs, files, _ := app.runRobinDeskDump(nil)
+	return logs, files
+}
+
+// runRobinDeskDump walks every configured Robin location and captures the raw
+// JSON of the full sync surface (spaces, and for each space its state, events,
+// seats and seat reservations for today). For every seat reservation that is
+// active *right now*, it resolves the occupant (reservee email → LDAP mirror
+// name) and matches the Robin seat name to a CompanyMaps desk (Desknumber) on
+// the mapped map, logging each match. When prog is non-nil it reports a
+// determinate progress bar (one step per Robin space) and a live log. Nothing
+// is persisted to the meeting cache, the booking feature, or the map.
+func (app *App) runRobinDeskDump(prog *syncProgress) ([]string, []robinDumpFile, RobinDeskDumpResult) {
 	var logs []string
 	add := func(format string, args ...interface{}) {
-		logs = append(logs, fmt.Sprintf(format, args...))
+		line := fmt.Sprintf(format, args...)
+		logs = append(logs, line)
+		if prog != nil {
+			prog.logf("%s", line)
+		}
 	}
 	var files []robinDumpFile
 	capture := func(name string, raw []byte) {
@@ -673,10 +720,11 @@ func (app *App) RunRobinDeskDump() ([]string, []robinDumpFile) {
 		}
 		files = append(files, robinDumpFile{Name: name, Data: raw})
 	}
+	var res RobinDeskDumpResult
 
 	if app.db.GetRobinSetting("robintoken") == "" {
 		add("ERROR: Robin access token is not configured. Enter it on the Credentials card and save first.")
-		return logs, files
+		return logs, files, res
 	}
 
 	// Today's window (local day → UTC), used for events and seat reservations.
@@ -689,104 +737,175 @@ func (app *App) RunRobinDeskDump() ([]string, []robinDumpFile) {
 
 	spaces, _ := app.db.ListRobinSpaces()
 	sort.Slice(spaces, func(i, j int) bool { return spaces[i].Spacename < spaces[j].Spacename })
+	res.Locations = len(spaces)
 	add("Configured location(s): %d", len(spaces))
 	if len(spaces) == 0 {
 		add("No Robin locations configured. Add at least one mapping first.")
-		return logs, files
+		return logs, files, res
 	}
 
-	totalSpaces, totalSeats, totalResv, totalErrs := 0, 0, 0, 0
+	// LDAP mirror for resolving reservee emails → display names.
+	ldap, _ := app.db.ListLdap()
+	emailUser := make(map[string]LdapUser)
+	for _, u := range ldap {
+		if u.Mail != "" {
+			emailUser[strings.ToLower(u.Mail)] = u
+		}
+	}
 
+	// Desk lookups per CompanyMaps map (built lazily, reused across spaces).
+	deskByMap := make(map[string]map[string]Desk)
+	deskLookup := func(mapName string) map[string]Desk {
+		if m, ok := deskByMap[mapName]; ok {
+			return m
+		}
+		m := make(map[string]Desk)
+		ds, _ := app.db.ListDesks(mapName)
+		for _, d := range ds {
+			m[strings.ToLower(strings.TrimSpace(d.Desknumber))] = d
+		}
+		deskByMap[mapName] = m
+		return m
+	}
+
+	// Phase 1: fetch + capture every location's space list so the progress bar
+	// is determinate (one step per space).
+	type locWork struct {
+		s      RobinSpace
+		dir    string
+		spaces []robinSpaceEntry
+	}
+	var work []locWork
+	totalSpaces := 0
+	if prog != nil {
+		prog.setStage("Fetching locations…")
+	}
 	for _, s := range spaces {
 		dir := fmt.Sprintf("location_%d_%s", s.Spaceid, sanitizeDumpSegment(s.Spacename))
-		add("")
-		add("== %s (location id %d) → map %s ==", s.Spacename, s.Spaceid, s.MapName())
-
 		rawSpaces, status, err := app.robinGetRaw(fmt.Sprintf("/locations/%d/spaces?page=1&per_page=200", s.Spaceid))
 		capture(dir+"/spaces.json", rawSpaces)
 		if err != nil {
-			totalErrs++
-			add("  ERROR fetching spaces (HTTP %d): %v", status, err)
+			add("✗ %s (location id %d): ERROR fetching spaces (HTTP %d): %v", s.Spacename, s.Spaceid, status, err)
+			work = append(work, locWork{s: s, dir: dir})
 			continue
 		}
 		var list robinSpaceList
-		if jerr := json.Unmarshal(rawSpaces, &list); jerr != nil {
-			add("  WARNING: could not parse spaces list: %v", jerr)
-		}
-		add("  %d space(s) in this location.", len(list.Data))
+		_ = json.Unmarshal(rawSpaces, &list)
+		totalSpaces += len(list.Data)
+		work = append(work, locWork{s: s, dir: dir, spaces: list.Data})
+	}
+	if prog != nil {
+		prog.setTotal(totalSpaces)
+		prog.setStage("Polling spaces…")
+	}
 
-		for _, sp := range list.Data {
-			totalSpaces++
-			base := fmt.Sprintf("%s/space_%d_%s", dir, sp.ID, sanitizeDumpSegment(sp.Name))
-			typeLabel := sp.Type
-			if typeLabel == "" {
-				typeLabel = "unknown"
-			}
+	for _, lw := range work {
+		s := lw.s
+		add("")
+		add("== %s (location id %d) → map %s ==", s.Spacename, s.Spaceid, s.MapName())
+		desks := deskLookup(s.MapName())
 
-			// State.
-			if raw, st, e := app.robinGetRaw(fmt.Sprintf("/spaces/%d/state", sp.ID)); true {
+		for _, sp := range lw.spaces {
+			base := fmt.Sprintf("%s/space_%d_%s", lw.dir, sp.ID, sanitizeDumpSegment(sp.Name))
+
+			// State + events (captured for the bundle; not needed for desks).
+			if raw, _, _ := app.robinGetRaw(fmt.Sprintf("/spaces/%d/state", sp.ID)); true {
 				capture(base+"_state.json", raw)
-				if e != nil {
-					totalErrs++
-					add("    [%s] \"%s\" (#%d): state ERROR (HTTP %d)", typeLabel, sp.Name, sp.ID, st)
-				}
 			}
-
-			// Events (today).
-			if raw, _, e := app.robinGetRaw(fmt.Sprintf("/spaces/%d/events?after=%s&before=%s&page=1&per_page=200", sp.ID, after, before)); true {
+			if raw, _, _ := app.robinGetRaw(fmt.Sprintf("/spaces/%d/events?after=%s&before=%s&page=1&per_page=200", sp.ID, after, before)); true {
 				capture(base+"_events.json", raw)
-				if e != nil {
-					totalErrs++
-				}
 			}
 
-			// Seats (paginated).
+			// Seats (paginated) → seat id → name lookup.
+			seatName := make(map[int]string)
 			seatCount := 0
 			for page := 1; page <= 50; page++ {
-				raw, st, e := app.robinGetRaw(fmt.Sprintf("/spaces/%d/seats?page=%d&per_page=200", sp.ID, page))
+				raw, _, e := app.robinGetRaw(fmt.Sprintf("/spaces/%d/seats?page=%d&per_page=200", sp.ID, page))
 				capture(fmt.Sprintf("%s_seats_p%d.json", base, page), raw)
 				if e != nil {
-					totalErrs++
-					add("    [%s] \"%s\" (#%d): seats ERROR (HTTP %d)", typeLabel, sp.Name, sp.ID, st)
 					break
 				}
-				n := robinDataCount(raw)
-				if n > 0 {
-					seatCount += n
+				var sl robinSeatList
+				if json.Unmarshal(raw, &sl) != nil {
+					break
 				}
-				if n < 200 { // last page
+				for _, st := range sl.Data {
+					seatName[st.ID] = st.Name
+					seatCount++
+				}
+				if len(sl.Data) < 200 {
 					break
 				}
 			}
-			totalSeats += seatCount
+			res.Seats += seatCount
 
 			// Seat reservations for today (paginated).
-			resvCount := 0
+			var resvs []robinSeatResv
 			for page := 1; page <= 50; page++ {
-				raw, st, e := app.robinGetRaw(fmt.Sprintf("/reservations/seats?space_ids=%d&after=%s&before=%s&page=%d&per_page=200", sp.ID, after, before, page))
+				raw, _, e := app.robinGetRaw(fmt.Sprintf("/reservations/seats?space_ids=%d&after=%s&before=%s&page=%d&per_page=200", sp.ID, after, before, page))
 				capture(fmt.Sprintf("%s_reservations_p%d.json", base, page), raw)
 				if e != nil {
-					totalErrs++
-					add("    [%s] \"%s\" (#%d): reservations ERROR (HTTP %d)", typeLabel, sp.Name, sp.ID, st)
 					break
 				}
-				n := robinDataCount(raw)
-				if n > 0 {
-					resvCount += n
+				var rl robinSeatResvList
+				if json.Unmarshal(raw, &rl) != nil {
+					break
 				}
-				if n < 200 { // last page
+				resvs = append(resvs, rl.Data...)
+				if len(rl.Data) < 200 {
 					break
 				}
 			}
-			totalResv += resvCount
 
-			add("    [%s] \"%s\" (#%d): %d seat(s), %d reservation(s) today", typeLabel, sp.Name, sp.ID, seatCount, resvCount)
+			// Evaluate occupancy active right now and match to a CompanyMaps desk.
+			for _, rv := range resvs {
+				st, ok1 := parseRobinTime(rv.Start.DateTime)
+				en, ok2 := parseRobinTime(rv.End.DateTime)
+				if !ok1 || !ok2 {
+					continue
+				}
+				if !(st.Before(now) && now.Before(en)) {
+					continue // only reservations active right now
+				}
+				res.OccupiedNow++
+
+				nm := seatName[rv.SeatID]
+				who := rv.Reservee.Email
+				if u, ok := emailUser[strings.ToLower(rv.Reservee.Email)]; ok {
+					full := strings.TrimSpace(u.Givenname + " " + u.Surname)
+					if full != "" {
+						who = full + " <" + rv.Reservee.Email + ">"
+					}
+				}
+				if who == "" {
+					who = fmt.Sprintf("user #%d", rv.Reservee.UserID)
+				}
+
+				if d, matched := desks[strings.ToLower(strings.TrimSpace(nm))]; matched {
+					res.Matched++
+					add("  ✓ %s → desk #%d on %s — occupied now by %s (%s, until %s)",
+						nm, d.ID, s.MapName(), who, rv.Type, en.Format("15:04"))
+				} else {
+					res.Unmatched++
+					seatLabel := nm
+					if seatLabel == "" {
+						seatLabel = fmt.Sprintf("seat #%d", rv.SeatID)
+					}
+					add("  – %s (in \"%s\") occupied now by %s — no matching desk on %s",
+						seatLabel, sp.Name, who, s.MapName())
+				}
+			}
+
+			if prog != nil {
+				prog.step("")
+			}
 		}
 	}
 
+	res.Files = len(files)
 	add("")
-	add("Done. %d space(s) across %d location(s): %d seat(s), %d reservation(s) today, %d error(s).",
-		totalSpaces, len(spaces), totalSeats, totalResv, totalErrs)
-	add("Captured %d raw JSON file(s). Use \"Download JSON bundle (zip)\" to export everything.", len(files))
-	return logs, files
+	add("Done. %d location(s), %d seat(s) seen. Occupied right now: %d (matched a CompanyMaps desk: %d, no matching desk: %d).",
+		res.Locations, res.Seats, res.OccupiedNow, res.Matched, res.Unmatched)
+	add("Captured %d raw JSON file(s). Use \"Download JSON bundle (zip)\" to export everything.", res.Files)
+	return logs, files, res
 }

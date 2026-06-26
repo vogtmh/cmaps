@@ -1092,30 +1092,49 @@ func (app *App) handleRestRobinProgress(w http.ResponseWriter, r *http.Request) 
 	writeJSON(w, app.robinProg.snapshot())
 }
 
-// handleRestRobinDeskTest runs the read-only Robin desk-data diagnostic. It
-// walks every configured location's full sync surface (spaces → state, events,
-// seats, seat reservations for today), captures the raw JSON, caches that bundle
-// in memory for download, and returns a short log. It never writes to the
-// meeting cache, the booking feature, or the map.
+// handleRestRobinDeskTest starts the read-only Robin desk-data diagnostic in
+// the background (if one is not already running) so the admin Sync tab can poll
+// for a live progress bar + log. The diagnostic walks every configured location
+// (spaces → state, events, seats, seat reservations for today), captures the raw
+// JSON, logs every seat reservation active right now matched to a CompanyMaps
+// desk, and caches the bundle for download. It never writes to the meeting
+// cache, the booking feature, or the map.
 func (app *App) handleRestRobinDeskTest(w http.ResponseWriter, r *http.Request) {
 	sess, ok := app.currentSession(r)
 	if !ok || app.permLevel(sess, "ldap") < 1 {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}
+	if !app.robinDeskProg.start(0, "Starting…") {
+		writeJSON(w, map[string]interface{}{"started": false, "running": true})
+		return
+	}
 	_ = app.db.AuditLog("LDAP", sess.Username, "Robin desk-data diagnostic run")
+	go func() {
+		defer func() {
+			if rec := recover(); rec != nil {
+				app.robinDeskProg.finish("", fmt.Sprintf("diagnostic crashed: %v", rec))
+			}
+		}()
+		_, files, res := app.runRobinDeskDump(&app.robinDeskProg)
+		app.robinDumpMu.Lock()
+		app.robinDumpFiles = files
+		app.robinDumpTime = time.Now().Format("2006-01-02 15:04:05")
+		app.robinDumpMu.Unlock()
+		app.robinDeskProg.finish(fmt.Sprintf("%d desk(s) occupied now matched (%d unmatched). %d JSON file(s) captured.",
+			res.Matched, res.Unmatched, res.Files), "")
+	}()
+	writeJSON(w, map[string]interface{}{"started": true})
+}
 
-	logs, files := app.RunRobinDeskDump()
-
-	app.robinDumpMu.Lock()
-	app.robinDumpFiles = files
-	app.robinDumpTime = time.Now().Format("2006-01-02 15:04:05")
-	app.robinDumpMu.Unlock()
-
-	writeJSON(w, map[string]interface{}{
-		"log":   logs,
-		"files": len(files),
-	})
+// handleRestRobinDeskProgress returns the current desk-diagnostic progress.
+func (app *App) handleRestRobinDeskProgress(w http.ResponseWriter, r *http.Request) {
+	sess, ok := app.currentSession(r)
+	if !ok || app.permLevel(sess, "ldap") < 1 {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	writeJSON(w, app.robinDeskProg.snapshot())
 }
 
 // handleRestRobinDeskDump streams the most recently captured desk-data

@@ -72,6 +72,7 @@ func (app *App) registerRESTRoutes(mux *http.ServeMux) {
 	rest("/rest/robin/sync", app.handleRestRobinSync)
 	rest("/rest/robin/progress", app.handleRestRobinProgress)
 	rest("/rest/robin/desktest", app.handleRestRobinDeskTest)
+	rest("/rest/robin/desktest/progress", app.handleRestRobinDeskProgress)
 	rest("/rest/robin/deskdump", app.handleRestRobinDeskDump)
 }
 

@@ -564,7 +564,11 @@
           <button type="button" class="sync-btn sync-btn-primary" id="robinDeskTestBtn" onClick="runRobinDeskTest()">Run desk diagnostic</button>
         </div>
       </div>
-      <p class="sync-card-hint">Read-only. Walks every configured location (spaces &rarr; state, events, seats and seat reservations for <b>today</b>) and captures the raw Robin JSON. Nothing is written to the map, the meeting cache or the booking feature. Run the diagnostic, then download the bundle.</p>
+      <p class="sync-card-hint">Read-only. Walks every configured location (spaces &rarr; state, events, seats and seat reservations for <b>today</b>) and captures the raw Robin JSON. Every seat reservation active <b>right now</b> is matched to a CompanyMaps desk and logged with the occupant&rsquo;s name. Nothing is written to the map, the meeting cache or the booking feature.</p>
+      <div class="sync-progress" id="robinDeskProgress">
+        <div class="sync-progress-head"><span id="robinDeskProgStage">Working…</span><span id="robinDeskProgCount"></span></div>
+        <div class="sync-progress-track"><div class="sync-progress-fill" id="robinDeskProgFill"></div></div>
+      </div>
       <pre class="sync-log" id="robinDeskLog" style="display:none;"></pre>
     </div>
   </div>

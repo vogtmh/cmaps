@@ -651,24 +651,38 @@ function startLdapSync() {
 // ── Robin desk-data diagnostic (read-only) ───────────────────
 function runRobinDeskTest() {
   var btn = document.getElementById('robinDeskTestBtn');
-  var log = document.getElementById('robinDeskLog');
-  if (!log) return;
-  var orig = btn ? btn.textContent : '';
   if (btn) { btn.disabled = true; btn.textContent = 'Running\u2026'; }
-  log.style.display = 'block';
-  log.textContent = 'Running desk diagnostic\u2026 this can take a while for large organisations.';
-  fetch('../rest/robin/desktest', { credentials: 'same-origin' })
-    .then(function (r) { if (!r.ok) throw new Error('request failed'); return r.json(); })
-    .then(function (res) {
-      var lines = (res && res.log) ? res.log : [];
-      log.textContent = lines.length ? lines.join('\n') : 'No output.';
-    })
-    .catch(function () {
-      log.textContent = 'Diagnostic failed. Check that the Robin token is configured and the server is reachable.';
-    })
-    .then(function () {
-      if (btn) { btn.disabled = false; btn.textContent = orig; }
+  var logEl = document.getElementById('robinDeskLog');
+  if (logEl) { logEl.textContent = ''; logEl.style.display = 'block'; }
+  $.ajax({
+    url: '../rest/robin/desktest', type: 'POST', dataType: 'JSON',
+    complete: function () { pollRobinDeskTest(); }
+  });
+}
+
+function pollRobinDeskTest() {
+  var timer = setInterval(function () {
+    $.ajax({
+      url: '../rest/robin/desktest/progress', type: 'GET', dataType: 'JSON',
+      success: function (snap) {
+        renderSyncProgress('robinDesk', snap);
+        if (!snap.running && snap.done) {
+          clearInterval(timer);
+          var fill = document.getElementById('robinDeskProgFill');
+          if (fill) {
+            fill.classList.remove('indeterminate');
+            fill.style.width = '100%';
+            if (snap.error) fill.style.background = 'var(--sy-danger)';
+          }
+          var stage = document.getElementById('robinDeskProgStage');
+          if (stage) stage.textContent = snap.error ? ('Error: ' + snap.error) : (snap.summary || 'Done');
+          var btn = document.getElementById('robinDeskTestBtn');
+          if (btn) { btn.disabled = false; btn.textContent = 'Run desk diagnostic'; }
+        }
+      },
+      error: function () { clearInterval(timer); }
     });
+  }, 800);
 }
 
 function downloadRobinDeskDump() {
