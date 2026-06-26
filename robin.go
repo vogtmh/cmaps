@@ -306,6 +306,17 @@ func (app *App) pollRobinRoomVerbose(roomID int, roomName, mapName string) []str
 		return logs
 	}
 
+	// Diagnostics: report how many events Robin returned and the raw datetime
+	// format of the first one, so we can verify the events are actually pulled
+	// and parsed correctly.
+	add("    events returned: %d", len(events.Data))
+	if len(events.Data) > 0 {
+		e0 := events.Data[0]
+		_, ok := parseRobinTime(e0.Start.DateTime)
+		add("    first event: title=%q start=%q end=%q tz=%q parsed=%v",
+			e0.Title, e0.Start.DateTime, e0.End.DateTime, e0.End.TimeZone, ok)
+	}
+
 	ev := roomEventWindows(events)
 	if ev.nowStart != "" {
 		add("    now: %s (%s - %s)", ev.nowTitle, ev.nowStart, ev.nowEnd)
