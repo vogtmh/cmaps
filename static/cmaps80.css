@@ -632,6 +632,22 @@
     opacity: 1.0;
 }
 
+/* Robin live-occupancy badge shown on overlaid desk plates */
+.robinbadge {
+    position: absolute;
+    left: 2px;
+    bottom: 2px;
+    height: 30px;
+    line-height: 30px;
+    padding: 0 14px;
+    border-radius: 15px;
+    background: #a81f6b;
+    color: #fff;
+    font-size: 14px;
+    font-weight: bold;
+    letter-spacing: 0.5px;
+}
+
 /* Used by both nameplates */
 .nameplate_edit {
     position: absolute; 

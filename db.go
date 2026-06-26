@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -31,6 +32,8 @@ var (
 	bucketDepts     = []byte("departments")     // config_department_list (key = seq)
 	bucketRobin     = []byte("robinspaces")     // config_robinspaces (key = spacename)
 	bucketRobinCfg  = []byte("robinconfig")     // robin org/token/last-sync (key = name)
+	bucketRobinDesk = []byte("robindeskstatus") // live Robin seat occupancy (key = "<map>:<desknumber>")
+	bucketRobinUser = []byte("robinusers")      // Robin user-id -> name cache (key = user id)
 	bucketMeeting   = []byte("meetingstatus")   // meetingstatus (key = "<map>:<room>")
 	bucketWhitelist = []byte("healthwhitelist") // health_whitelist (key = seq)
 	bucketLdapSrc   = []byte("ldapsources")     // config_ldap (key = id)
@@ -42,7 +45,7 @@ var allBuckets = [][]byte{
 	bucketSettings, bucketMaps, bucketDesks, bucketLdap, bucketBookings, bucketTeams,
 	bucketRoles, bucketUsers, bucketChangelog, bucketStats, bucketTracking, bucketVips,
 	bucketDepts, bucketRobin, bucketMeeting, bucketWhitelist, bucketLdapSrc, bucketAudit,
-	bucketMeta, bucketDirectory, bucketRobinCfg,
+	bucketMeta, bucketDirectory, bucketRobinCfg, bucketRobinDesk, bucketRobinUser,
 }
 
 type DB struct {
@@ -220,6 +223,34 @@ func (s RobinSpace) MapName() string {
 		return s.Mapname
 	}
 	return s.Spacename
+}
+
+// RobinDeskStatus is a single live Robin seat reservation that is active right
+// now, resolved to a CompanyMaps desk. It is cached by the Robin scheduler and
+// read by the desk overlay. It is intentionally separate from the native
+// booking feature and the meeting cache.
+type RobinDeskStatus struct {
+	Map        string `json:"map"`
+	Desknumber string `json:"desknumber"`
+	Name       string `json:"name"`
+	Userid     string `json:"userid"`
+	Mail       string `json:"mail"`
+	Phone      string `json:"phone"`
+	Title      string `json:"title"`
+	Mobile     string `json:"mobile"`
+	Type       string `json:"type"`
+	End        string `json:"end"`
+}
+
+// RobinUser caches a Robin user-id → display-name lookup so the overlay does
+// not hit the Robin API for every reservation. The Email is stored as a sanity
+// check: if a future reservation reports a different email for the same user id
+// the cache entry is considered stale and re-fetched.
+type RobinUser struct {
+	UserID    int    `json:"user_id"`
+	Email     string `json:"email"`
+	Name      string `json:"name"`
+	FetchedAt string `json:"fetched_at"`
 }
 
 // MeetingStatus mirrors a row of the meetingstatus cache table.
@@ -898,6 +929,56 @@ func (db *DB) PutRobinSpace(s RobinSpace) error {
 
 func (db *DB) DeleteRobinSpace(name string) error {
 	return deleteKey(db, bucketRobin, []byte(name))
+}
+
+// --- Robin desk occupancy cache (robindeskstatus) ---
+
+func robinDeskKey(mapName, desknumber string) []byte {
+	return []byte(mapName + ":" + desknumber)
+}
+
+// ListRobinDeskStatus returns the cached live Robin occupancy for a map (or all
+// maps when mapName is empty).
+func (db *DB) ListRobinDeskStatus(mapName string) ([]RobinDeskStatus, error) {
+	if mapName == "" {
+		return listJSON[RobinDeskStatus](db, bucketRobinDesk, "")
+	}
+	return listJSON[RobinDeskStatus](db, bucketRobinDesk, mapName+":")
+}
+
+// ReplaceRobinDeskStatus atomically clears the occupancy cache and writes the
+// supplied set, so a poll fully replaces the previous snapshot.
+func (db *DB) ReplaceRobinDeskStatus(all []RobinDeskStatus) error {
+	return db.bolt.Update(func(tx *bolt.Tx) error {
+		if err := tx.DeleteBucket(bucketRobinDesk); err != nil && err != bolt.ErrBucketNotFound {
+			return err
+		}
+		bkt, err := tx.CreateBucketIfNotExists(bucketRobinDesk)
+		if err != nil {
+			return err
+		}
+		for _, s := range all {
+			data, err := json.Marshal(s)
+			if err != nil {
+				return err
+			}
+			if err := bkt.Put(robinDeskKey(s.Map, s.Desknumber), data); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
+// --- Robin user-id name cache (robinusers) ---
+
+func (db *DB) GetRobinUser(userID int) (RobinUser, bool) {
+	u, found, _ := getJSON[RobinUser](db, bucketRobinUser, []byte(strconv.Itoa(userID)))
+	return u, found
+}
+
+func (db *DB) PutRobinUser(u RobinUser) error {
+	return putJSON(db, bucketRobinUser, []byte(strconv.Itoa(u.UserID)), u)
 }
 
 // --- Meeting status ---

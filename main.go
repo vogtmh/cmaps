@@ -98,6 +98,9 @@ func main() {
 	// Background Robin meeting-room refresh (no-op until Robin is configured).
 	app.StartRobinScheduler(5 * time.Minute)
 
+	// Background Robin location discovery (no-op until token + organisation set).
+	app.StartRobinLocationScheduler(1 * time.Hour)
+
 	log.Printf("CompanyMaps 9 listening on %s (data dir: %s)", cfg.ListenAddr, cfg.DataDir)
 	if err := http.ListenAndServe(cfg.ListenAddr, mux); err != nil {
 		log.Fatalf("server: %v", err)

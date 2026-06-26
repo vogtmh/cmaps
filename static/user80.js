@@ -633,6 +633,10 @@ function showNameplate (deskid, desktype) {
     else {
       var color = '#999';
     }
+    // Robin live-occupancy overlay: force the pink accent on the plate header.
+    if (attr.robin == '1') {
+      color = '#a81f6b';
+    }
     avatarcolor = avatarcolor.replace(/[^,]+(?=\))/, '1.0');
     if (attr.y < 100) {
       var y_nameplate = 100;
@@ -1054,6 +1058,12 @@ function showSticky (deskid, desktype, caption) {
     else {
       var color = '#999';
     }
+    // Robin live-occupancy overlay: force the pink accent and show a badge.
+    var robinBadge = '';
+    if (attr.robin == '1') {
+      color = '#a81f6b';
+      robinBadge = '<span class="robinbadge">Robin</span>';
+    }
     avatarcolor = avatarcolor.replace(/[^,]+(?=\))/, '1.0');
     deskidstring = "'" + deskid + "'";
     desktypestring = "'" + desktype + "'";
@@ -1075,6 +1085,7 @@ function showSticky (deskid, desktype, caption) {
                           + '<img src="images/close2.png" class="leftnameplate_close" onclick=hideSticky() />'
                           + '<div class="leftnameplate_number">' + attr.dsk + '</div>'
                           + '<img class="leftnameplate_copy" src="images/copy.png" onclick="copyToClipboard(\''+copylink_full+'\')" />'
+                          + robinBadge
                           + '</div>'
                           + '<div id="caption' + attr.id + '" class="caption">' + attr.empl + '</div>'
                           + '</div>'
@@ -1090,6 +1101,7 @@ function showSticky (deskid, desktype, caption) {
                           + '<img src="images/close2.png" class="rightnameplate_close" onclick=hideSticky() />'
                           + '<div class="rightnameplate_number">' + attr.dsk + '</div>'
                           + '<img class="rightnameplate_copy" src="images/copy.png" onclick="copyToClipboard(\''+copylink_full+'\')" />'
+                          + robinBadge
                           + '</div>'
                           + '<div id="caption' + attr.id + '" class="caption">' + attr.empl + '</div>'
                           + '</div>'
@@ -1863,6 +1875,9 @@ function updateDesks(forceRefresh) {
             break;
           }
           deskClass = 'deskball ' + deskType;
+          // Robin live-occupancy overlay: tint the ball pink so it is clearly
+          // distinct from native desk states.
+          var robinStyle = (counter.robin == '1') ? 'background-color:#a81f6b;' : '';
 
           switch (deskType) {
             case "floor": 
@@ -1889,7 +1904,7 @@ function updateDesks(forceRefresh) {
               break;
             default: 
                 outputdesks+='<div id="' + counter.id + '" class="' + deskClass + '" style="position:absolute;left:' 
-                            + (counter.x/itemscale-halfsize) + 'px;top:' + (counter.y/itemscale-halfsize) + 'px;border-radius:50%;zoom:' + itemscale + ';"'
+                            + (counter.x/itemscale-halfsize) + 'px;top:' + (counter.y/itemscale-halfsize) + 'px;border-radius:50%;zoom:' + itemscale + ';' + robinStyle + '"'
                             + '>'
                             + '<div id="caption' + counter.id + '" class="caption">' + nameplate_caption + '</div></div>';
                 break;

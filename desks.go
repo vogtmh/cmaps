@@ -27,6 +27,7 @@ type deskItem struct {
 	Color    string    `json:"color"`
 	Parsed   string    `json:"parsed"`
 	Booked   string    `json:"booked"`
+	Robin    string    `json:"robin,omitempty"`
 	Bookdata *bookData `json:"bookdata,omitempty"`
 }
 
@@ -82,6 +83,18 @@ func (app *App) buildMapDesks(mapName, date, search string, vips []VIP, bookings
 	desks, _ := app.db.ListDesks(mapName)
 	var items []deskItem
 
+	// Robin live-occupancy overlay (kept fully separate from native booking).
+	// Empty unless the overlay is enabled and Robin reports occupied desks for
+	// this map; free desks are therefore never affected.
+	robinMode := app.db.GetRobinSetting("robinDeskMode")
+	robinStatus := map[string]RobinDeskStatus{}
+	if robinMode == "all" || robinMode == "unused" {
+		sts, _ := app.db.ListRobinDeskStatus(mapName)
+		for _, s := range sts {
+			robinStatus[strings.ToLower(strings.TrimSpace(s.Desknumber))] = s
+		}
+	}
+
 	for _, d := range desks {
 		// Booking lookup for this desk on the given date.
 		var booked string = "0"
@@ -90,6 +103,41 @@ func (app *App) buildMapDesks(mapName, date, search string, vips []VIP, bookings
 			if b.Date == date && b.Map == mapName && b.Desk == d.Desknumber {
 				booked = "1"
 				bd = &bookData{Name: b.Fullname, Phone: b.Phone, Mail: b.Mail}
+			}
+		}
+
+		// Robin overlay: a desk occupied in Robin right now is shown as occupied,
+		// overriding its native state (including multi-user shared desks, which
+		// collapse to a single occupied item). "all" overlays any occupied desk;
+		// "unused" only overlays desks with no native occupant and no booking.
+		if rs, ok := robinStatus[strings.ToLower(strings.TrimSpace(d.Desknumber))]; ok {
+			show := robinMode == "all"
+			if robinMode == "unused" {
+				hasUser := strings.TrimSpace(d.Employee) != ""
+				if d.Desktype == "addesk" {
+					hasUser = false
+					for _, u := range ldap {
+						if u.Office == d.Desknumber {
+							hasUser = true
+							break
+						}
+					}
+				}
+				show = !hasUser && booked == "0"
+			}
+			if show {
+				avtr := rs.Userid
+				if avtr == "" {
+					avtr = "noavatar"
+				}
+				item := deskItem{
+					Map: mapName, ID: d.ID, Desktype: "occupied", X: d.X, Y: d.Y,
+					Dsk: d.Desknumber, Empl: rs.Name, Avtr: avtr, Dept: d.Department,
+					Phone: rs.Phone, Mail: rs.Mail, Title: rs.Title, Mobil: rs.Mobile,
+					Booked: booked, Robin: "1",
+				}
+				app.appendIfMatch(&items, item, search, rs.Name)
+				continue
 			}
 		}
 

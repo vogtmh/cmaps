@@ -82,6 +82,13 @@ type adminData struct {
 	RobinSet        bool
 	RobinLastSync   RobinSyncResult
 	RobinHasSync    bool
+	RobinDeskMode   string
+	RobinStripPrefixEnabled bool
+	RobinStripPrefixList    string
+	RobinStripSuffixEnabled bool
+	RobinStripSuffixList    string
+	RobinLastDiscovery      string
+	RobinUnmapped           int
 	Maps            []mapRow
 	DeskMaps        []string
 	Mapadmins       []adminUserRow
@@ -226,6 +233,29 @@ func (app *App) handleAdminPost(w http.ResponseWriter, r *http.Request, sess Ses
 			_ = app.db.SetRobinSetting("robinOrganisation", strings.TrimSpace(r.FormValue("robinOrganisation")))
 			_ = app.db.AuditLog("LDAP", sess.Username, "Robin credentials updated")
 			return "Robin settings saved."
+		}
+		if r.FormValue("saveRobinOptions") != "" {
+			mode := strings.TrimSpace(r.FormValue("robinDeskMode"))
+			switch mode {
+			case "all", "unused":
+			default:
+				mode = "off"
+			}
+			_ = app.db.SetRobinSetting("robinDeskMode", mode)
+			_ = app.db.SetRobinSetting("robinStripPrefixEnabled", checkboxValue(r.FormValue("robinStripPrefixEnabled")))
+			_ = app.db.SetRobinSetting("robinStripPrefixList", r.FormValue("robinStripPrefixList"))
+			_ = app.db.SetRobinSetting("robinStripSuffixEnabled", checkboxValue(r.FormValue("robinStripSuffixEnabled")))
+			_ = app.db.SetRobinSetting("robinStripSuffixList", r.FormValue("robinStripSuffixList"))
+			_ = app.db.AuditLog("LDAP", sess.Username, "Robin options updated")
+			return "Robin options saved."
+		}
+		if r.FormValue("discoverRobin") != "" {
+			summary, err := app.reconcileRobinLocations()
+			if err != nil {
+				return "Discovery failed: " + err.Error()
+			}
+			_ = app.db.AuditLog("LDAP", sess.Username, "Robin locations discovered")
+			return summary
 		}
 		if r.FormValue("runRobinSync") != "" {
 			res := app.RunRobinSyncStructured()
@@ -493,6 +523,15 @@ func stripBR(s string) string {
 	return strings.NewReplacer("<br/>", "\n", "<br />", "\n", "<br>", "\n").Replace(s)
 }
 
+// checkboxValue normalizes an HTML checkbox form value to the "1"/"" form used
+// for boolean settings (a checked box posts a non-empty value).
+func checkboxValue(v string) string {
+	if strings.TrimSpace(v) == "" {
+		return ""
+	}
+	return "1"
+}
+
 // addBR normalizes a user-entered address and converts newlines to the stored
 // <br/> form used by the client map plate.
 func addBR(s string) string {
@@ -670,6 +709,20 @@ func (app *App) buildAdminData(r *http.Request, sess Session, tab, msg string) a
 		}
 		sort.Strings(d.RobinMapOptions)
 		d.RobinLastSync, d.RobinHasSync = app.LastRobinSyncResult()
+		d.RobinDeskMode = app.db.GetRobinSetting("robinDeskMode")
+		if d.RobinDeskMode == "" {
+			d.RobinDeskMode = "off"
+		}
+		d.RobinStripPrefixEnabled = app.db.GetRobinSetting("robinStripPrefixEnabled") == "1"
+		d.RobinStripPrefixList = app.db.GetRobinSetting("robinStripPrefixList")
+		d.RobinStripSuffixEnabled = app.db.GetRobinSetting("robinStripSuffixEnabled") == "1"
+		d.RobinStripSuffixList = app.db.GetRobinSetting("robinStripSuffixList")
+		d.RobinLastDiscovery = app.db.GetRobinSetting("robinLocLastDiscovery")
+		for _, s := range d.RobinSpaces {
+			if strings.TrimSpace(s.Mapname) == "" {
+				d.RobinUnmapped++
+			}
+		}
 
 	case "maps":
 		maps, _ := app.db.ListMaps()

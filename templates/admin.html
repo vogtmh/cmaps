@@ -405,98 +405,34 @@
   {{if gt .PermLdap 0}}
   <div id="syncsub_robin" class="syncsub" style="display:none;">
 
-    {{if gt .PermLdap 1}}
     <div class="sync-card">
       <div class="sync-card-head">
-        <h2 class="sync-card-title">Credentials</h2>
+        <h2 class="sync-card-title">Last sync</h2>
         <div style="display:flex; gap:10px; align-items:center;">
           {{if .RobinSet}}<span class="sync-badge sync-badge-ok">Token configured</span>{{else}}<span class="sync-badge sync-badge-warn">No token</span>{{end}}
-          <button type="button" class="sync-toggle-btn" onclick="toggleCollapse('robinCredCollapse', this)"><span class="caret">&#9654;</span> Edit</button>
+          {{if gt .PermLdap 1}}
+          <button type="button" class="sync-toggle-btn" onclick="toggleCollapse('robinCredCollapse', this)"><span class="caret">&#9654;</span> Configure</button>
+          <button type="button" class="sync-btn" id="robinReloadBtn" style="display:none;">View updated results</button>
+          <button type="button" class="sync-btn sync-btn-primary" id="robinSyncBtn" onClick="startRobinSync()">Run sync now</button>
+          {{end}}
         </div>
       </div>
+
+      {{if gt .PermLdap 1}}
       <div class="sync-collapse" id="robinCredCollapse">
         <form action="?tab=ldap" method="post">
           <input type="hidden" name="tab" value="ldap">
           <input type="hidden" name="saveRobin" value="1">
           <div class="sync-form-grid">
             <div class="sync-field"><label class="sync-label">Access token</label><input class="sync-input" type="password" name="robintoken" placeholder="{{if .RobinSet}}(configured — leave blank to keep){{else}}Robin access token{{end}}"></div>
-            <div class="sync-field"><label class="sync-label">Organisation id</label><input class="sync-input" type="text" name="robinOrganisation" value="{{.RobinOrg}}" placeholder="Robin organisation id (optional)"></div>
+            <div class="sync-field"><label class="sync-label">Organisation id (required)</label><input class="sync-input" type="text" name="robinOrganisation" value="{{.RobinOrg}}" placeholder="Robin organisation id" required></div>
           </div>
           <div class="sync-form-actions">
             <button type="submit" class="sync-btn sync-btn-primary">Save credentials</button>
           </div>
         </form>
       </div>
-    </div>
-    {{end}}
-
-    <div class="sync-card">
-      <div class="sync-card-head">
-        <h2 class="sync-card-title">Location mappings</h2>
-        <button type="button" class="sync-toggle-btn" onclick="toggleCollapse('robinMapCollapse', this)"><span class="caret">&#9654;</span> {{if gt .PermLdap 1}}Manage{{else}}Show{{end}} ({{len .RobinSpaces}})</button>
-      </div>
-      <div class="sync-collapse" id="robinMapCollapse">
-      {{if .RobinSpaces}}
-      <table class="sync-table">
-        <thead><tr><th>Space name</th><th>Map</th><th>Robin location id</th>{{if gt .PermLdap 1}}<th class="sync-td-min"></th>{{end}}</tr></thead>
-        <tbody>
-        {{range .RobinSpaces}}
-          <tr>
-            <td>{{.Spacename}}</td>
-            <td>
-              {{if gt $.PermLdap 1}}
-              {{$cur := .MapName}}
-              <form action="?tab=ldap" method="post" style="margin:0;">
-                <input type="hidden" name="tab" value="ldap">
-                <input type="hidden" name="setRobinMapSpace" value="{{.Spacename}}">
-                <select class="sync-select" name="robinMapname" style="max-width:220px;" onchange="this.form.submit()">
-                  {{range $.RobinMapOptions}}<option value="{{.}}"{{if eq . $cur}} selected{{end}}>{{.}}</option>{{end}}
-                </select>
-              </form>
-              {{else}}{{.MapName}}{{end}}
-            </td>
-            <td><code>{{.Spaceid}}</code></td>
-            {{if gt $.PermLdap 1}}
-            <td class="sync-td-min">
-              <form action="?tab=ldap" method="post" style="margin:0;" onsubmit="return confirm('Remove Robin location &quot;{{.Spacename}}&quot;?');">
-                <input type="hidden" name="tab" value="ldap">
-                <input type="hidden" name="deleteRobinSpace" value="{{.Spacename}}">
-                <button type="submit" class="sync-btn sync-btn-sm sync-btn-danger">Delete</button>
-              </form>
-            </td>
-            {{end}}
-          </tr>
-        {{end}}
-        </tbody>
-      </table>
-      {{else}}
-      <div class="sync-empty">No Robin locations configured yet.</div>
       {{end}}
-
-      {{if gt .PermLdap 1}}
-      <form action="?tab=ldap" method="post" style="margin-top:16px;">
-        <input type="hidden" name="tab" value="ldap">
-        <div class="sync-form-grid">
-          <div class="sync-field"><label class="sync-label">Space name</label><input class="sync-input" type="text" name="robinSpacename" placeholder="e.g. goeppingenMain"></div>
-          <div class="sync-field"><label class="sync-label">Map name (optional)</label><input class="sync-input" type="text" name="robinMapname" placeholder="Leave blank to use space name"></div>
-          <div class="sync-field"><label class="sync-label">Robin location id</label><input class="sync-input" type="text" name="robinSpaceid" placeholder="e.g. 22008"></div>
-        </div>
-        <div class="sync-form-actions"><button type="submit" class="sync-btn sync-btn-primary">Add location</button></div>
-      </form>
-      {{end}}
-      </div>
-    </div>
-
-    <div class="sync-card">
-      <div class="sync-card-head">
-        <h2 class="sync-card-title">Last sync</h2>
-        {{if gt .PermLdap 1}}
-        <div style="display:flex; gap:10px; align-items:center;">
-          <button type="button" class="sync-btn" id="robinReloadBtn" style="display:none;">View updated results</button>
-          <button type="button" class="sync-btn sync-btn-primary" id="robinSyncBtn" onClick="startRobinSync()">Run sync now</button>
-        </div>
-        {{end}}
-      </div>
 
       <div class="sync-progress" id="robinProgress">
         <div class="sync-progress-head"><span id="robinProgStage">Working…</span><span id="robinProgCount"></span></div>
@@ -556,6 +492,111 @@
       {{end}}
     </div>
 
+    {{if gt .PermLdap 1}}
+    <div class="sync-card">
+      <div class="sync-card-head">
+        <h2 class="sync-card-title">Robin options</h2>
+      </div>
+      <form action="?tab=ldap" method="post">
+        <input type="hidden" name="tab" value="ldap">
+        <input type="hidden" name="saveRobinOptions" value="1">
+        <div class="sync-field">
+          <label class="sync-label">Show Robin desk reservations</label>
+          <select class="sync-select" name="robinDeskMode" style="max-width:280px;">
+            <option value="off"{{if eq .RobinDeskMode "off"}} selected{{end}}>Off</option>
+            <option value="all"{{if eq .RobinDeskMode "all"}} selected{{end}}>All desks</option>
+            <option value="unused"{{if eq .RobinDeskMode "unused"}} selected{{end}}>Unused desks only</option>
+          </select>
+          <p class="sync-card-hint">When on, desks that are occupied in Robin right now are overlaid live on the map. &ldquo;Unused desks only&rdquo; overlays only desks that have no assigned employee and no native booking.</p>
+        </div>
+        <div class="sync-field" style="margin-top:14px;">
+          <div class="sync-toggle-row">
+            <label class="sync-toggle"><input type="checkbox" name="robinStripPrefixEnabled" value="1"{{if .RobinStripPrefixEnabled}} checked{{end}}><span class="sync-toggle-slider"></span></label>
+            <span class="sync-toggle-label">Strip prefixes from Robin seat names</span>
+          </div>
+          <textarea class="sync-input" name="robinStripPrefixList" rows="3" placeholder="One prefix per line (matched literally, e.g. GER / )">{{.RobinStripPrefixList}}</textarea>
+        </div>
+        <div class="sync-field" style="margin-top:14px;">
+          <div class="sync-toggle-row">
+            <label class="sync-toggle"><input type="checkbox" name="robinStripSuffixEnabled" value="1"{{if .RobinStripSuffixEnabled}} checked{{end}}><span class="sync-toggle-slider"></span></label>
+            <span class="sync-toggle-label">Strip suffixes from Robin seat names</span>
+          </div>
+          <textarea class="sync-input" name="robinStripSuffixList" rows="3" placeholder="One suffix per line (matched literally, e.g.  / GER)">{{.RobinStripSuffixList}}</textarea>
+        </div>
+        <div class="sync-form-actions"><button type="submit" class="sync-btn sync-btn-primary">Save options</button></div>
+      </form>
+    </div>
+    {{end}}
+
+    {{if .RobinSet}}
+    <div class="sync-card">
+      <div class="sync-card-head">
+        <h2 class="sync-card-title">Location mappings</h2>
+        <div style="display:flex; gap:10px; align-items:center;">
+          {{if .RobinLastDiscovery}}<span class="sync-badge sync-badge-off">Discovered {{.RobinLastDiscovery}}</span>{{end}}
+          {{if .RobinUnmapped}}<span class="sync-badge sync-badge-warn">{{.RobinUnmapped}} unmapped</span>{{end}}
+          {{if gt .PermLdap 1}}
+          <form action="?tab=ldap" method="post" style="margin:0;">
+            <input type="hidden" name="tab" value="ldap">
+            <input type="hidden" name="discoverRobin" value="1">
+            <button type="submit" class="sync-btn">Discover locations now</button>
+          </form>
+          {{end}}
+          <button type="button" class="sync-toggle-btn" onclick="toggleCollapse('robinMapCollapse', this)"><span class="caret">&#9654;</span> {{if gt .PermLdap 1}}Manage{{else}}Show{{end}} ({{len .RobinSpaces}})</button>
+        </div>
+      </div>
+      <div class="sync-collapse" id="robinMapCollapse">
+      {{if .RobinSpaces}}
+      <table class="sync-table">
+        <thead><tr><th>Space name</th><th>Map</th><th>Robin location id</th>{{if gt .PermLdap 1}}<th class="sync-td-min"></th>{{end}}</tr></thead>
+        <tbody>
+        {{range .RobinSpaces}}
+          <tr>
+            <td>{{.Spacename}}</td>
+            <td>
+              {{if gt $.PermLdap 1}}
+              {{$cur := .MapName}}
+              <form action="?tab=ldap" method="post" style="margin:0;">
+                <input type="hidden" name="tab" value="ldap">
+                <input type="hidden" name="setRobinMapSpace" value="{{.Spacename}}">
+                <select class="sync-select" name="robinMapname" style="max-width:220px;" onchange="this.form.submit()">
+                  {{range $.RobinMapOptions}}<option value="{{.}}"{{if eq . $cur}} selected{{end}}>{{.}}</option>{{end}}
+                </select>
+              </form>
+              {{else}}{{.MapName}}{{end}}
+            </td>
+            <td><code>{{.Spaceid}}</code></td>
+            {{if gt $.PermLdap 1}}
+            <td class="sync-td-min">
+              <form action="?tab=ldap" method="post" style="margin:0;" onsubmit="return confirm('Remove Robin location &quot;{{.Spacename}}&quot;?');">
+                <input type="hidden" name="tab" value="ldap">
+                <input type="hidden" name="deleteRobinSpace" value="{{.Spacename}}">
+                <button type="submit" class="sync-btn sync-btn-sm sync-btn-danger">Delete</button>
+              </form>
+            </td>
+            {{end}}
+          </tr>
+        {{end}}
+        </tbody>
+      </table>
+      {{else}}
+      <div class="sync-empty">No Robin locations configured yet.</div>
+      {{end}}
+
+      {{if gt .PermLdap 1}}
+      <form action="?tab=ldap" method="post" style="margin-top:16px;">
+        <input type="hidden" name="tab" value="ldap">
+        <div class="sync-form-grid">
+          <div class="sync-field"><label class="sync-label">Space name</label><input class="sync-input" type="text" name="robinSpacename" placeholder="e.g. goeppingenMain"></div>
+          <div class="sync-field"><label class="sync-label">Map name (optional)</label><input class="sync-input" type="text" name="robinMapname" placeholder="Leave blank to use space name"></div>
+          <div class="sync-field"><label class="sync-label">Robin location id</label><input class="sync-input" type="text" name="robinSpaceid" placeholder="e.g. 22008"></div>
+        </div>
+        <div class="sync-form-actions"><button type="submit" class="sync-btn sync-btn-primary">Add location</button></div>
+      </form>
+      {{end}}
+      </div>
+    </div>
+
     <div class="sync-card">
       <div class="sync-card-head">
         <h2 class="sync-card-title">Desk data diagnostic</h2>
@@ -571,6 +612,7 @@
       </div>
       <pre class="sync-log" id="robinDeskLog" style="display:none;"></pre>
     </div>
+    {{end}}
   </div>
   {{end}}
 
