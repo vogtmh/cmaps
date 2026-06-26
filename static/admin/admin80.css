@@ -237,6 +237,30 @@
 /* ── Status bar (SAML) ───────────────────────────────────── */
 .sync-statusbar { margin: 0 0 16px; }
 
+/* ── Map status icon (show/hide, tinted via mask) ────────── */
+.map-status {
+  display: inline-block;
+  width: 22px;
+  height: 22px;
+  vertical-align: middle;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-size: contain;
+  mask-size: contain;
+}
+.map-status-active {
+  background-color: #2ecc71;
+  -webkit-mask-image: url(../images/show.png);
+  mask-image: url(../images/show.png);
+}
+.map-status-hidden {
+  background-color: #e74c3c;
+  -webkit-mask-image: url(../images/hide.png);
+  mask-image: url(../images/hide.png);
+}
+
 /* ── Empty state ─────────────────────────────────────────── */
 .sync-empty {
   padding: 26px;

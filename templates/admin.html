@@ -533,14 +533,21 @@
       <table class="sync-table">
         <thead>
           <tr>
-            <th>Map</th><th>Display name</th><th>Itemscale</th><th>Country</th>
+            <th class="sync-td-min">Status</th><th>Map</th><th>Display name</th><th>Itemscale</th><th>Country</th>
             <th>Flagsize</th><th>Timezone</th><th>Address</th><th>X</th><th>Y</th>
-            <th>Status</th>{{if gt .PermMaps 1}}<th class="sync-td-min">Actions</th>{{end}}
+            {{if gt .PermMaps 1}}<th class="sync-td-min">Actions</th>{{end}}
           </tr>
         </thead>
         <tbody>
         {{range .Maps}}
           <tr>
+            <td class="sync-td-min">
+              {{if eq .Published "yes"}}
+              <span class="map-status map-status-active" title="Active (visible)"></span>
+              {{else}}
+              <span class="map-status map-status-hidden" title="Hidden"></span>
+              {{end}}
+            </td>
             <td>{{.Mapname}}</td>
             <td>{{if .DisplayName}}{{.DisplayName}}{{else}}&mdash;{{end}}</td>
             <td>{{.Itemscale}}</td>
@@ -550,11 +557,6 @@
             <td style="max-width:340px;white-space:normal;">{{.AddressClean}}</td>
             <td style="white-space:nowrap;">{{.MapX}}</td>
             <td style="white-space:nowrap;">{{.MapY}}</td>
-            <td class="sync-col-avail">
-              <span title="map image" style="color:{{if .HasFile}}#2ecc40{{else}}#ff4136{{end}}">&#9679;</span>
-              <span title="database" style="color:{{if .HasDB}}#2ecc40{{else}}#ff4136{{end}}">&#9679;</span>
-              <span title="country flag" style="color:{{if .HasFlag}}#2ecc40{{else}}#ff4136{{end}}">&#9679;</span>
-            </td>
             {{if gt $.PermMaps 1}}
             <td class="sync-td-min">
               <div style="display:flex;gap:6px;">
