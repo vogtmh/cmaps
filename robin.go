@@ -732,6 +732,36 @@ func (app *App) LastRobinSyncResult() (RobinSyncResult, bool) {
 	return res, true
 }
 
+// RobinDeskSyncResult is the persisted summary of the most recent desk-reservation
+// sync (the people overlay). The reservations themselves live in the desk-status
+// cache; this records when the last sync ran, in which mode, and how many seats
+// were occupied so the admin Sync tab can show a headline even after a restart.
+type RobinDeskSyncResult struct {
+	Time  string `json:"time"`
+	Mode  string `json:"mode"`
+	Count int    `json:"count"`
+}
+
+// saveRobinDeskSyncResult persists the desk-sync summary as JSON.
+func (app *App) saveRobinDeskSyncResult(res RobinDeskSyncResult) {
+	if b, err := json.Marshal(res); err == nil {
+		_ = app.db.SetRobinSetting("robinDeskLastSync", string(b))
+	}
+}
+
+// LastRobinDeskSyncResult returns the most recently persisted desk-sync summary.
+func (app *App) LastRobinDeskSyncResult() (RobinDeskSyncResult, bool) {
+	js := app.db.GetRobinSetting("robinDeskLastSync")
+	if js == "" {
+		return RobinDeskSyncResult{}, false
+	}
+	var res RobinDeskSyncResult
+	if err := json.Unmarshal([]byte(js), &res); err != nil {
+		return RobinDeskSyncResult{}, false
+	}
+	return res, true
+}
+
 // --- Robin desk-data diagnostic dump ---
 //
 // This is a read-only diagnostic that walks the entire Robin sync surface
@@ -1237,7 +1267,13 @@ func (app *App) pollRobinDeskOccupancy() {
 	statuses, _ := app.collectRobinOccupancy(nil, nil, nil)
 	if err := app.db.ReplaceRobinDeskStatus(statuses); err != nil {
 		log.Printf("robin desk occupancy: %v", err)
+		return
 	}
+	app.saveRobinDeskSyncResult(RobinDeskSyncResult{
+		Time:  time.Now().Format("2006-01-02 15:04:05"),
+		Mode:  mode,
+		Count: len(statuses),
+	})
 }
 
 // --- Robin strip-pattern suggestions ---

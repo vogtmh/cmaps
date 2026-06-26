@@ -412,7 +412,6 @@
           {{if .RobinSet}}<span class="sync-badge sync-badge-ok">Token configured</span>{{else}}<span class="sync-badge sync-badge-warn">No token</span>{{end}}
           {{if gt .PermLdap 1}}
           <button type="button" class="sync-toggle-btn" onclick="toggleCollapse('robinCredCollapse', this)"><span class="caret">&#9654;</span> Configure</button>
-          <button type="button" class="sync-btn" id="robinReloadBtn" style="display:none;">View updated results</button>
           <button type="button" class="sync-btn sync-btn-primary" id="robinSyncBtn" onClick="startRobinSync()">Run sync now</button>
           {{end}}
         </div>
@@ -440,6 +439,16 @@
       </div>
       <pre class="sync-log" id="robinLog" style="display:none;"></pre>
 
+      <div class="robin-rtabs">
+        <button type="button" class="robin-rtab active" id="robinResNav_rooms" onclick="showRobinResultTab('rooms')">Meeting rooms</button>
+        {{if eq .RobinDeskMode "off"}}
+        <button type="button" class="robin-rtab" id="robinResNav_people" disabled title="Enable &ldquo;Show Robin desk reservations&rdquo; in Robin options to sync desk reservations">Desk reservations</button>
+        {{else}}
+        <button type="button" class="robin-rtab" id="robinResNav_people" onclick="showRobinResultTab('people')">Desk reservations{{if .RobinDeskHasSync}} <span class="sync-badge sync-badge-accent">{{.RobinDeskCount}}</span>{{end}}</button>
+        {{end}}
+      </div>
+
+      <div id="robinRes_rooms" class="robin-rpanel">
       {{if .RobinHasSync}}
         <div class="sync-summary">
           <div class="sync-summary-item"><span class="sync-summary-num">{{.RobinLastSync.TotalRooms}}</span><span class="sync-summary-lbl">Rooms found</span></div>
@@ -490,6 +499,34 @@
       {{else}}
         <div class="sync-empty">No sync has run yet. Click &ldquo;Run sync now&rdquo; to poll Robin and see which rooms match a meeting desk.</div>
       {{end}}
+      </div>
+
+      <div id="robinRes_people" class="robin-rpanel" style="display:none;">
+      {{if eq .RobinDeskMode "off"}}
+        <div class="sync-empty">Desk-reservation sync is off. Enable &ldquo;Show Robin desk reservations&rdquo; in Robin options to sync who is sitting where.</div>
+      {{else if .RobinDeskReservations}}
+        <div class="sync-summary">
+          <div class="sync-summary-item"><span class="sync-summary-num" style="color:var(--sy-ok);">{{.RobinDeskCount}}</span><span class="sync-summary-lbl">Desks occupied</span></div>
+          <div class="sync-summary-item"><span class="sync-summary-num" style="font-size:1.05em;">{{.RobinDeskLastSyncTime}}</span><span class="sync-summary-lbl">Last run</span></div>
+        </div>
+        <table class="sync-table">
+          <thead><tr><th>Person</th><th>Map</th><th>Desk</th><th>Type</th><th>Until</th></tr></thead>
+          <tbody>
+          {{range .RobinDeskReservations}}
+            <tr>
+              <td>{{if .Name}}{{.Name}}{{else}}&mdash;{{end}}</td>
+              <td>{{.Map}}</td>
+              <td><span class="sync-badge sync-badge-ok">{{.Desknumber}}</span></td>
+              <td>{{if .Type}}{{.Type}}{{else}}&mdash;{{end}}</td>
+              <td>{{if .End}}{{.End}}{{else}}&mdash;{{end}}</td>
+            </tr>
+          {{end}}
+          </tbody>
+        </table>
+      {{else}}
+        <div class="sync-empty">No desk reservations were active at the last sync{{if .RobinDeskHasSync}} ({{.RobinDeskLastSyncTime}}){{end}}.</div>
+      {{end}}
+      </div>
     </div>
 
     {{if gt .PermLdap 1}}
@@ -636,6 +673,7 @@
   </div>
   <script>
     showSyncSub("{{if .SyncSub}}{{.SyncSub}}{{else}}ldap{{end}}");
+    if (typeof showRobinResultTab === 'function') { showRobinResultTab('rooms'); }
   </script>
   {{if gt .PermAdminpanel 0}}<script>loadSamlSettings();</script>{{end}}
 

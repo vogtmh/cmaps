@@ -656,7 +656,43 @@ function pollSync(prefix, progressUrl, subTab) {
 }
 
 function startRobinSync() {
-  startSync('robin', '../rest/robin/sync', '../rest/robin/progress', 'robin');
+  var btn = document.getElementById('robinSyncBtn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Syncing\u2026'; }
+  $.ajax({
+    url: '../rest/robin/sync', type: 'POST', dataType: 'JSON',
+    complete: function () { pollRobinSync(); }
+  });
+}
+
+// pollRobinSync drives the Robin sync progress bar, then auto-refreshes the
+// Sync tab so the rooms/desk-reservation results below reflect the latest data
+// (no manual "view updated results" step).
+function pollRobinSync() {
+  var timer = setInterval(function () {
+    $.ajax({
+      url: '../rest/robin/progress', type: 'GET', dataType: 'JSON',
+      success: function (snap) {
+        renderSyncProgress('robin', snap);
+        if (!snap.running && snap.done) {
+          clearInterval(timer);
+          loadAdminTab('ldap', 'robin', false);
+        }
+      },
+      error: function () { clearInterval(timer); }
+    });
+  }, 800);
+}
+
+// showRobinResultTab toggles the "Meeting rooms" / "Desk reservations" panels in
+// the Last sync card.
+function showRobinResultTab(name) {
+  var tabs = ['rooms', 'people'];
+  tabs.forEach(function (t) {
+    var panel = document.getElementById('robinRes_' + t);
+    var nav = document.getElementById('robinResNav_' + t);
+    if (panel) panel.style.display = (t === name) ? 'block' : 'none';
+    if (nav) nav.classList.toggle('active', t === name);
+  });
 }
 
 function startLdapSync() {

@@ -89,6 +89,10 @@ type adminData struct {
 	RobinStripSuffixList    string
 	RobinLastDiscovery      string
 	RobinUnmapped           int
+	RobinDeskReservations   []RobinDeskStatus
+	RobinDeskHasSync        bool
+	RobinDeskLastSyncTime   string
+	RobinDeskCount          int
 	Maps            []mapRow
 	DeskMaps        []string
 	Mapadmins       []adminUserRow
@@ -723,6 +727,20 @@ func (app *App) buildAdminData(r *http.Request, sess Session, tab, msg string) a
 				d.RobinUnmapped++
 			}
 		}
+		// Desk-reservation (people) overlay: the cached occupancy is the source of
+		// truth shown on the map; surface it in the Sync tab too.
+		d.RobinDeskReservations, _ = app.db.ListRobinDeskStatus("")
+		sort.Slice(d.RobinDeskReservations, func(i, j int) bool {
+			if d.RobinDeskReservations[i].Map != d.RobinDeskReservations[j].Map {
+				return d.RobinDeskReservations[i].Map < d.RobinDeskReservations[j].Map
+			}
+			return d.RobinDeskReservations[i].Desknumber < d.RobinDeskReservations[j].Desknumber
+		})
+		if dr, ok := app.LastRobinDeskSyncResult(); ok {
+			d.RobinDeskHasSync = true
+			d.RobinDeskLastSyncTime = dr.Time
+			d.RobinDeskCount = dr.Count
+		}
 
 	case "maps":
 		maps, _ := app.db.ListMaps()
@@ -1126,6 +1144,11 @@ func (app *App) handleRestRobinSync(w http.ResponseWriter, r *http.Request) {
 			}
 		}()
 		res := app.runRobinSyncStructured(&app.robinProg)
+		// Refresh the desk-reservation overlay in the same run (no-op unless the
+		// "Show Robin desk reservations" mode is enabled), exactly like the
+		// 5-minute scheduler does, so one button syncs everything.
+		app.robinProg.setStage("Syncing desk reservations…")
+		app.pollRobinDeskOccupancy()
 		if res.Note != "" {
 			app.robinProg.finish(res.Note, "")
 			return

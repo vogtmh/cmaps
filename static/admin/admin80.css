@@ -197,6 +197,18 @@
 .sync-saved-note { font-size: 13px; color: var(--sy-ok); }
 .sync-saved-note.error { color: var(--sy-danger); }
 
+/* ── Robin result tabs (Meeting rooms / Desk reservations) ── */
+.robin-rtabs { display: flex; gap: 6px; margin: 4px 0 14px; border-bottom: 1px solid var(--sy-border); }
+.robin-rtab {
+  appearance: none; background: transparent; color: var(--sy-muted);
+  border: none; border-bottom: 2px solid transparent;
+  padding: 8px 14px; font-size: 13px; font-weight: 600; cursor: pointer;
+  margin-bottom: -1px;
+}
+.robin-rtab:hover:not(:disabled) { color: var(--sy-fg); }
+.robin-rtab.active { color: var(--sy-fg); border-bottom-color: var(--sy-accent); }
+.robin-rtab:disabled { opacity: 0.45; cursor: not-allowed; }
+
 /* ── Toggle switch ───────────────────────────────────────── */
 .sync-toggle-row { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
 .sync-toggle { position: relative; display: inline-block; width: 44px; height: 24px; flex-shrink: 0; }
