@@ -775,11 +775,16 @@
 
 {{else if eq .ActiveTab "stats"}}
   <h2 style="margin-left:10px">Daily chart</h2>
-  <script>showCharts('day', 'daycanvas')</script>
+  <div class="statschart"><canvas id="daycanvas"></canvas></div>
   <h2 style="margin-left:10px">Monthly chart</h2>
-  <script>showCharts('month', 'monthcanvas')</script>
+  <div class="statschart"><canvas id="monthcanvas"></canvas></div>
   <h2 style="margin-left:10px">Yearly chart</h2>
-  <script>showCharts('year', 'yearcanvas')</script>
+  <div class="statschart"><canvas id="yearcanvas"></canvas></div>
+  <script>
+    showCharts('day', 'daycanvas');
+    showCharts('month', 'monthcanvas');
+    showCharts('year', 'yearcanvas');
+  </script>
 
 {{else if eq .ActiveTab "auditlog"}}
   <h2>AuditLog of the last changes</h2><br />

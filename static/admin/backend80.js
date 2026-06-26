@@ -766,89 +766,84 @@ function matchAdminNames() {
     });
 }
 
+// Holds the live Chart.js instances keyed by canvas id so they can be destroyed
+// and rebuilt on tab re-entry instead of stacking up on the same canvas.
+var statsCharts = {};
+
 function showCharts(interval, divname) {
 
-  // Check if canvas already exists or create one
-  var checkcanvas = document.getElementById(divname);
-  if (checkcanvas == null) {
-    var p = document.getElementById('content');
-    var newElement = document.createElement('div');
-    newElement.setAttribute('id', divname+'_container');
-    newElement.setAttribute('style', 'background:rgba(60,60,60,0.5);border-radius:5px;padding:15px;opacity:1.0;width:1560px;margin-left:10px;height:250px;margin-bottom:20px;');
-    newElement.innerHTML = '<canvas id="'+divname+'" width="1500" height="230"></canvas>';
-    p.appendChild(newElement);
+  // The stats template provides a <div class="statschart"><canvas></div> for
+  // each chart. As a fallback (e.g. older callers) create the same structure.
+  // The canvas must NOT carry fixed width/height attributes: Chart.js sizes it
+  // to the container (with maintainAspectRatio:false), which keeps point/tooltip
+  // hit-areas aligned. Fixed attributes caused the canvas to be drawn small then
+  // CSS-stretched, shifting every tooltip away from its data point.
+  if (document.getElementById(divname) == null) {
+    var content = document.getElementById('content');
+    var container = document.createElement('div');
+    container.className = 'statschart';
+    var canvas = document.createElement('canvas');
+    canvas.id = divname;
+    container.appendChild(canvas);
+    content.appendChild(container);
   }
 
   $.ajax({
-    
-    // fetch data from stats API
-    url: '../rest/stats/index.php?interval='+interval,
-    async: true, 
+
+    // fetch data from stats API (newest-first; reverse to chronological order)
+    url: '../rest/stats/?interval=' + interval,
+    async: true,
     type: 'get',
     dataType: 'JSON',
-    success: function(result){
+    success: function (result) {
 
-      console.log('result for '+interval+':')
-      console.log(result)
-      // Copy items to comma-separated string for the chart
-      var outlabels = result.reverse().map( function(item){ return item.period; });
-      var outcount = result.map( function(item){ return item.count; });
-      console.log('outlabels for '+interval+':')
-      console.log(outlabels)
-      console.log('outcount for '+interval+':')
-      console.log(outcount)
+      var outlabels = result.reverse().map(function (item) { return item.period; });
+      var outcount = result.map(function (item) { return item.count; });
 
-      // Prepare chart
       var chartData = {
-        labels : outlabels,
-        datasets : [{
-            borderColor: 'rgba(90, 190, 90,1.0)',
-            backgroundColor:'rgba(90,190,90,0.5)',
-            fill: true,
-            tension: 0.4,
-            pointRadius:5,
-            pointHitRadius:10,
-            data : outcount
+        labels: outlabels,
+        datasets: [{
+          borderColor: 'rgba(90,190,90,1.0)',
+          backgroundColor: 'rgba(90,190,90,0.5)',
+          fill: true,
+          tension: 0.4,
+          pointRadius: 5,
+          pointHitRadius: 10,
+          data: outcount
         }]
-      }
+      };
+
       var chartOptions = {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: false,
+        interaction: { mode: 'index', intersect: false },
         scales: {
           x: {
-            ticks: {
-              color: 'rgba(255,255,255,1.0)'
-            },
-            grid: {
-              color: 'rgba(255,255,255,0.5)'
-            }
+            ticks: { color: 'rgba(255,255,255,1.0)' },
+            grid: { color: 'rgba(255,255,255,0.5)' }
           },
           y: {
-            ticks: {
-              color: 'rgba(255,255,255,1.0)'
-            },
-            grid: {
-              color: 'rgba(255,255,255,0.5)'
-            }
-          },
+            beginAtZero: true,
+            ticks: { color: 'rgba(255,255,255,1.0)', precision: 0 },
+            grid: { color: 'rgba(255,255,255,0.5)' }
+          }
         },
         plugins: {
-          legend: {
-              display: false,
-          }
+          legend: { display: false }
         }
-      }
-      
-      // Draw chart
-      var ctx = document.getElementById(divname);
-      new Chart(ctx, {type: 'line', data: chartData, options: chartOptions})
+      };
 
-      console.log('Stats: Graph output for '+divname+' completed')
+      // Replace any previous chart on this canvas before drawing a new one.
+      if (statsCharts[divname]) { statsCharts[divname].destroy(); }
+      var ctx = document.getElementById(divname);
+      statsCharts[divname] = new Chart(ctx, { type: 'line', data: chartData, options: chartOptions });
     },
-    error: function()
-    {
-      console.log('Stats: Could not get data for '+divname+' from database.')
+    error: function () {
+      console.log('Stats: Could not get data for ' + divname + ' from database.');
     }
   });
-  
+
 }
 
 function ucWords (word) {

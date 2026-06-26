@@ -510,3 +510,18 @@
   padding: 6px 10px;
   font-size: 13px;
 }
+
+/* Stats tab charts: a responsive, position:relative wrapper that gives the
+   canvas a fixed height. Chart.js (maintainAspectRatio:false) fills it, so
+   tooltips/points stay aligned instead of being CSS-stretched. */
+.statschart {
+  position: relative;
+  height: 250px;
+  width: 1560px;
+  max-width: calc(100% - 20px);
+  margin: 0 10px 20px;
+  padding: 15px;
+  box-sizing: border-box;
+  background: rgba(60, 60, 60, 0.5);
+  border-radius: 5px;
+}
