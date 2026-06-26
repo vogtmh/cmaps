@@ -55,7 +55,8 @@ $(function(){
   pageWidth = $('#container').width();
   pageHeight = $('#container').height();
   scalePages();
-  
+  // Expose a relayout hook so the search sidebar can re-shrink/re-shift the map.
+  window.cmapsRescale = scalePages;
   //using underscore to delay resize method till finished resizing window
   $(window).resize(_.debounce(function () {
   pageWidth = $('#container').width();  
@@ -114,8 +115,21 @@ $(function(){
   // The map content uses CSS `zoom` (not transform:scale) so the browser
   // re-rasterizes desk labels at the final size and fonts stay crisp. `zoom`
   // also scales left/top offsets, so divide them by the zoom factor.
-  var contentZoom = basePage.scale*manualscale;
-  page.attr('style', 'zoom:' + contentZoom + ';left:' + (newLeftPos/contentZoom) + 'px;top:' + ((69*basePage.scale)/contentZoom) + 'px;');
+  // The search sidebar (Option B) shrinks & pushes the MAP only (the top
+  // header keeps its full-width scale), by removing the sidebar width from
+  // the usable map area and re-centering the map in the remaining space.
+  var sidebarW = (typeof searchSidebarWidth === 'number') ? searchSidebarWidth : 0;
+  var mapScale = basePage.scale;
+  var mapLeftPos = newLeftPos;
+  if (sidebarW > 0) {
+    var mapMaxWidth = maxWidth - sidebarW;
+    var mapSetWidth = (mapMaxWidth/maxHeight > 2) ? maxHeight*2 : mapMaxWidth;
+    mapScale = (mapSetWidth / basePage.width)*0.99;
+    mapSetWidth = mapSetWidth*manualscale;
+    mapLeftPos = sidebarW + Math.abs(Math.floor((mapMaxWidth - mapSetWidth)/2));
+  }
+  var contentZoom = mapScale*manualscale;
+  page.attr('style', 'zoom:' + contentZoom + ';left:' + (mapLeftPos/contentZoom) + 'px;top:' + ((69*basePage.scale)/contentZoom) + 'px;');
   buttonsleftanchor.attr('style', 'position:fixed; left: 10px; bottom: '+ (25*basePage.scale) + 'px; z-index:5;');
   buttonsleft.attr('style', 'position:relative; height:80px;background: transparent; zoom:' + basePage.scale + ';');
   buttonsright.attr('style', 'position:fixed; right: 10px; bottom: ' + (25*basePage.scale) + 'px; height:auto;width:80px;background: transparent; transform:scale(' + basePage.scale +');transform-origin:100% 100%;');
@@ -136,7 +150,7 @@ $(function(){
   
   document.cookie = "autozoom=" + basePage.scale+'; expires=Fri, 31 Dec 9999 23:59:59 GMT; SameSite=Lax';
   document.cookie = "LeftPos=" + newLeftPos+'; expires=Fri, 31 Dec 9999 23:59:59 GMT; SameSite=Lax';
-  autozoom = basePage.scale;
+  autozoom = mapScale;
   if (typeof checkMobile === 'function') {checkMobile()}
   }
 });

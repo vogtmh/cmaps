@@ -12,6 +12,13 @@ var inMobileMode = false;
 var activecalendar = '';
 var userdate = '';
 
+// Search results sidebar (Google-Maps-style). Width 0 = closed.
+var SEARCH_SIDEBAR_WIDTH = 340;
+var searchSidebarWidth = 0;
+var searchLocalResults = [];
+var searchGlobalResults = [];
+var searchSelectedId = null;
+
 function toggleUsermode() {
   if (setting_usermode == 'edit') {
     setting_usermode = 'user';
@@ -1402,11 +1409,18 @@ function searchDesks() {
   hideSticky()
   // Start search
   if (searchtext) {
-    showInfo("searching...")
+    searchLocalResults = []
+    searchGlobalResults = []
+    searchSelectedId = null
+    openSearchSidebar()
     if (map != 'overview') {
       searchLocaldesks()
     }
     searchGlobaldesks()
+    renderSearchSidebar()
+  }
+  else {
+    closeSearchSidebar()
   }
   updateTeams()
 }
@@ -1433,6 +1447,22 @@ function searchLocaldesks() {
           localresults++
           // output local results
           $('#'+localdesk.id).css('background-color','rgba(255, 127, 0, 1)')
+          // collect for the search sidebar (dedupe by desk id)
+          if (!searchLocalResults.some(function(x){ return x.id == localdesk.id; })) {
+            var sbname = (localdesk.fname+' '+localdesk.lname).trim();
+            if (sbname == '' && localdesk.booked == 1 && localdesk.bookdata) {
+              sbname = localdesk.bookdata.name;
+            }
+            searchLocalResults.push({
+              id: localdesk.id,
+              name: sbname,
+              dsk: localdesk.dsk,
+              empl: localdesk.empl,
+              title: localdesk.title,
+              desktype: localdesk.desktype,
+              avtr: localdesk.avtr
+            });
+          }
           // show labels if no teamsearch has been triggered
           if (typeof teamlabel == 'undefined') {
             $('#caption'+localdesk.id).attr("style", "visibility: visible")
@@ -1507,13 +1537,228 @@ function searchGlobaldesks() {
           }
         }
       }    
-      // Output global search results
-      for (var g = 0; g < globalmaps.length; g++) {
-        mapoutput = globalmaps[g].charAt(0).toUpperCase() + globalmaps[g].substr(1).toLowerCase()
-        document.getElementById("notifycontent").innerHTML += '<a href="'+root+'?map='+globalmaps[g]+'&findme='+searchtext+'"><span class="notifybadge">'+globalresults[g]+' | '+mapoutput+'</span></a>'
+      // Feed the search sidebar with the other-location results
+      searchGlobalResults = []
+      for (var h = 0; h < globalmaps.length; h++) {
+        searchGlobalResults.push({ map: globalmaps[h], count: globalresults[h] })
       }
+      renderSearchSidebar()
     }
   });
+}
+
+// --- Search results sidebar (Google-Maps-style) ---
+
+function openSearchSidebar() {
+  // Skip the sidebar on mobile - the layout there has its own search flow.
+  if (inMobileMode) { return; }
+  var sidebar = document.getElementById('searchsidebar');
+  if (!sidebar) { return; }
+  // Align the sidebar top with the bottom of the header bar.
+  var cp = document.getElementById('controlpanel');
+  sidebar.style.top = (cp ? cp.offsetHeight : 70) + 'px';
+  if (searchSidebarWidth === SEARCH_SIDEBAR_WIDTH) { return; }
+  searchSidebarWidth = SEARCH_SIDEBAR_WIDTH;
+  sidebar.classList.add('open');
+  if (typeof window.cmapsRescale === 'function') { window.cmapsRescale(); }
+}
+
+function closeSearchSidebar() {
+  var sidebar = document.getElementById('searchsidebar');
+  if (sidebar) { sidebar.classList.remove('open'); }
+  if (searchSidebarWidth === 0) { return; }
+  searchSidebarWidth = 0;
+  if (typeof window.cmapsRescale === 'function') { window.cmapsRescale(); }
+}
+
+function renderSearchSidebar() {
+  var inner = document.getElementById('searchsidebar_inner');
+  if (!inner) { return; }
+  inner.innerHTML = '';
+
+  var head = document.createElement('div');
+  head.className = 'searchsidebar_header';
+  head.textContent = 'Search results';
+  inner.appendChild(head);
+
+  // Current map results first
+  if (map != 'overview') {
+    var lh = document.createElement('div');
+    lh.className = 'searchsidebar_section';
+    lh.textContent = 'On this map (' + searchLocalResults.length + ')';
+    inner.appendChild(lh);
+    if (searchLocalResults.length === 0) {
+      var none = document.createElement('div');
+      none.className = 'searchsidebar_empty';
+      none.textContent = 'No matches on this map';
+      inner.appendChild(none);
+    }
+    else {
+      for (var i = 0; i < searchLocalResults.length; i++) {
+        inner.appendChild(buildSidebarLocalRow(searchLocalResults[i]));
+      }
+    }
+  }
+
+  // Other locations
+  if (searchGlobalResults.length > 0) {
+    var gh = document.createElement('div');
+    gh.className = 'searchsidebar_section';
+    gh.textContent = 'Other locations';
+    inner.appendChild(gh);
+    for (var j = 0; j < searchGlobalResults.length; j++) {
+      inner.appendChild(buildSidebarGlobalRow(searchGlobalResults[j]));
+    }
+  }
+}
+
+function buildSidebarLocalRow(r) {
+  var row = document.createElement('div');
+  row.className = 'searchsidebar_row';
+  row.setAttribute('data-deskid', r.id);
+  row.onclick = function () { selectSearchResult(r.id, row); };
+
+  var img = document.createElement('img');
+  img.className = 'searchsidebar_avatar';
+  img.src = 'avatarcache/' + r.avtr + '.jpg';
+  img.onerror = function () { this.onerror = null; this.src = 'images/noavatar.png'; };
+  row.appendChild(img);
+
+  var txt = document.createElement('div');
+  txt.className = 'searchsidebar_text';
+  var nm = document.createElement('div');
+  nm.className = 'searchsidebar_name';
+  nm.textContent = r.name || (r.dsk ? r.dsk : '\u2014');
+  var sub = document.createElement('div');
+  sub.className = 'searchsidebar_sub';
+  // Subtitle:
+  //  - People (desk types): job title, falling back to the desk name.
+  //  - Facilities (printer, meeting, ...): description (empl), falling back to the type.
+  var personTypes = ['addesk', 'occupied', 'occupiedldap', 'shareddesk', 'free', 'hotseat', 'booking_booked', 'hotseat_booked'];
+  if (personTypes.indexOf(r.desktype) !== -1) {
+    sub.textContent = (r.title && r.title.trim() !== '') ? r.title : r.dsk;
+  }
+  else {
+    sub.textContent = (r.empl && r.empl.trim() !== '') ? r.empl : r.desktype;
+  }
+  txt.appendChild(nm);
+  txt.appendChild(sub);
+  row.appendChild(txt);
+  return row;
+}
+
+function buildSidebarGlobalRow(g) {
+  var row = document.createElement('div');
+  row.className = 'searchsidebar_row';
+  row.onclick = function () {
+    window.location.href = root + '?map=' + encodeURIComponent(g.map) + '&findme=' + encodeURIComponent(searchtext);
+  };
+
+  var icon = document.createElement('div');
+  icon.className = 'searchsidebar_mapicon';
+  icon.textContent = g.count;
+  row.appendChild(icon);
+
+  var txt = document.createElement('div');
+  txt.className = 'searchsidebar_text';
+  var nm = document.createElement('div');
+  nm.className = 'searchsidebar_name';
+  nm.textContent = g.map.charAt(0).toUpperCase() + g.map.substr(1).toLowerCase();
+  var sub = document.createElement('div');
+  sub.className = 'searchsidebar_sub';
+  sub.textContent = g.count + (g.count == 1 ? ' result' : ' results');
+  txt.appendChild(nm);
+  txt.appendChild(sub);
+  row.appendChild(txt);
+  return row;
+}
+
+function selectSearchResult(id, row) {
+  var inner = document.getElementById('searchsidebar_inner');
+  // Toggle: clicking the already-active result restores all matches.
+  if (searchSelectedId == id) {
+    searchSelectedId = null;
+    if (inner) {
+      var allrows = inner.querySelectorAll('.searchsidebar_row');
+      for (var a = 0; a < allrows.length; a++) { allrows[a].classList.remove('selected'); }
+    }
+    showAllSearchResultsOnMap();
+    return;
+  }
+  // Switch selection: highlight just this row in the list.
+  searchSelectedId = id;
+  if (inner) {
+    var rows = inner.querySelectorAll('.searchsidebar_row');
+    for (var i = 0; i < rows.length; i++) {
+      if (rows[i] === row) { rows[i].classList.add('selected'); }
+      else { rows[i].classList.remove('selected'); }
+    }
+  }
+  // On the map: hide every other match, keep only this desk orange + caption.
+  for (var k = 0; k < searchLocalResults.length; k++) {
+    var oid = searchLocalResults[k].id;
+    if (oid != id) {
+      $('#' + oid).css('background-color', '');
+      $('#caption' + oid).attr('style', 'visibility: hidden');
+    }
+  }
+  $('#' + id).css('background-color', 'rgba(255, 127, 0, 1)');
+  $('#caption' + id).attr('style', 'visibility: visible');
+  jumpToDesk(id);
+}
+
+// Re-apply the orange highlight + caption to all current local matches.
+function showAllSearchResultsOnMap() {
+  for (var k = 0; k < searchLocalResults.length; k++) {
+    var oid = searchLocalResults[k].id;
+    $('#' + oid).css('background-color', 'rgba(255, 127, 0, 1)');
+    $('#caption' + oid).attr('style', 'visibility: visible');
+  }
+}
+
+function closeSearchAndClear() {
+  $('#searchtext').val('');
+  searchDesks();
+}
+
+function jumpToDesk(id) {
+  var el = document.getElementById(id);
+  if (!el) { return; }
+  // Center the desk in the visible map area (the region right of the sidebar),
+  // using on-screen geometry so it works regardless of zoom/scale math.
+  var rect = el.getBoundingClientRect();
+  var visLeft = searchSidebarWidth;
+  var visCenterX = visLeft + (window.innerWidth - visLeft) / 2;
+  var visCenterY = window.innerHeight / 2;
+  var dx = (rect.left + rect.width / 2) - visCenterX;
+  var dy = (rect.top + rect.height / 2) - visCenterY;
+  window.scrollBy({ left: dx, top: dy, behavior: 'smooth' });
+  pulseSearchResult(id);
+}
+
+function pulseSearchResult(id) {
+  if (setting_noanimation == 1) { return; }
+  var desk = result_old.desks.filter(function (e) { return e.id == id; })[0];
+  if (!desk) { return; }
+  var old = document.getElementById('pulse' + id);
+  if (old !== null && old.parentNode) { old.parentNode.removeChild(old); }
+  var container = document.getElementById('deskitems') || document.getElementById('content');
+  if (!container) { return; }
+  var n = document.createElement('div');
+  n.setAttribute('id', 'pulse' + id);
+  container.appendChild(n);
+  $('#pulse' + id).css('position', 'absolute');
+  $('#pulse' + id).css('left', (desk.x - (15 * itemscale)) + 'px');
+  $('#pulse' + id).css('top', (desk.y - (15 * itemscale)) + 'px');
+  $('#pulse' + id).css('width', (30 * itemscale) + 'px');
+  $('#pulse' + id).css('height', (30 * itemscale) + 'px');
+  $('#pulse' + id).css('border-radius', '50%');
+  $('#pulse' + id).css('pointer-events', 'none');
+  $('#pulse' + id).css('animation', 'orange-jumppulse 1.2s 3');
+  setTimeout(function () {
+    var e = document.getElementById('pulse' + id);
+    if (e !== null && e.parentNode) { e.parentNode.removeChild(e); }
+  }, 4000);
 }
 
 // using the desks API to create all deskitems
