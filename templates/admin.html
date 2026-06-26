@@ -104,12 +104,13 @@
 <!-- Content -->
 <div id="content" class="page_content" style="position:absolute; top:{{.ContentTop}}px; left:{{.ContentLeft}}px; width:{{.TargetScreenWidth}}px; zoom:{{.ContentScale}};"> <br />
 
+{{define "admincontent"}}
 {{if .Message}}<div style="margin-left:20px; padding:8px; background:rgba(0,120,0,0.6); border-radius:5px; width:600px;">{{.Message}}</div><br />{{end}}
 
 {{if eq .ActiveTab "dashboard"}}
   <script>
     updateSystemStats();
-    setInterval(updateSystemStats, 15000);
+    adminSetInterval(updateSystemStats, 15000);
   </script>
 
 {{else if eq .ActiveTab "health"}}
@@ -121,7 +122,7 @@
   </form>
   <script>
     updateHealthDetails();
-    setInterval(updateHealthDetails, 60000);
+    adminSetInterval(updateHealthDetails, 60000);
   </script>
 
 {{else if eq .ActiveTab "config"}}
@@ -955,6 +956,8 @@
   <script>initAuditLog();</script>
 
 {{end}}
+{{end}}
+{{template "admincontent" .}}
 
 </div>
 </body>

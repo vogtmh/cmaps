@@ -168,7 +168,14 @@ func (app *App) handleAdmin(w http.ResponseWriter, r *http.Request) {
 	data := app.buildAdminData(r, sess, tab, msg)
 	data.SyncSub = syncSub
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := app.tmpl.ExecuteTemplate(w, "admin.html", data); err != nil {
+	// AJAX tab switches and form submits request ?partial=1 and receive only the
+	// content fragment (the "admincontent" block), which the client swaps into
+	// #content without a full page reload.
+	tmplName := "admin.html"
+	if r.URL.Query().Get("partial") == "1" {
+		tmplName = "admincontent"
+	}
+	if err := app.tmpl.ExecuteTemplate(w, tmplName, data); err != nil {
 		http.Error(w, "template error: "+err.Error(), http.StatusInternalServerError)
 	}
 }

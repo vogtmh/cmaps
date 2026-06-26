@@ -5,11 +5,115 @@
 // deskSummary() can never throw a ReferenceError even if invoked early.
 var departments = {};
 
+// ===================================================================
+//  AJAX admin navigation
+//  Switch tabs and submit forms without full page reloads. The server
+//  returns just the #content fragment (the "admincontent" template) for
+//  ?partial=1 requests; we swap it in and let jQuery run the inline init
+//  <script> blocks so each tab behaves exactly like a full page load.
+// ===================================================================
+var adminTimers = [];
+
+// adminSetInterval registers a poller that is cleared on the next tab switch,
+// so dashboard/health timers don't stack up as the user navigates.
+function adminSetInterval(fn, ms) {
+  var id = setInterval(fn, ms);
+  adminTimers.push(id);
+  return id;
+}
+
+function clearAdminTimers() {
+  for (var i = 0; i < adminTimers.length; i++) { clearInterval(adminTimers[i]); }
+  adminTimers = [];
+}
+
+// setActiveAdminTab highlights the given tab pill in the header.
+function setActiveAdminTab(tab) {
+  $(".control_content .headeritem").css({ "background-color": "", "border-radius": "" });
+  $("#tab_dashboard").css("background-color", "transparent");
+  $("#tab_" + tab).css({ "background-color": "#505050", "border-radius": "50px" });
+}
+
+// loadAdminTab fetches a tab's content fragment and swaps it into #content.
+function loadAdminTab(tab, sub, push) {
+  if (!tab) { tab = 'dashboard'; }
+  clearAdminTimers();
+  var q = '?tab=' + encodeURIComponent(tab);
+  if (sub) { q += '&sub=' + encodeURIComponent(sub); }
+  $('#content').html('<br />\n<div style="margin:20px;color:#aaa;">Loading\u2026</div>');
+  $.ajax({
+    url: q + '&partial=1',
+    type: 'get',
+    dataType: 'html',
+    success: function (html) {
+      $('#content').html('<br />\n' + html);
+      setActiveAdminTab(tab === 'saml' ? 'ldap' : tab);
+      if (push !== false) { history.pushState({ tab: tab, sub: sub }, '', q); }
+    },
+    error: function () {
+      $('#content').html('<br />\n<div style="margin:20px;color:#f88;">Could not load this tab. <a href="' + q + '">Reload</a></div>');
+    }
+  });
+}
+
+// submitAdminForm posts a form via AJAX and swaps the returned content fragment
+// in place, so saving a setting refreshes the tab (lists + status banner)
+// without a full page reload.
+function submitAdminForm(form) {
+  var action = $(form).attr('action') || '';
+  var m = action.match(/[?&]tab=([^&]+)/);
+  var tab = m ? decodeURIComponent(m[1]) : ($(form).find('input[name=tab]').val() || 'dashboard');
+  var subM = action.match(/[?&]sub=([^&]+)/);
+  var sub = subM ? decodeURIComponent(subM[1]) : '';
+  var q = '?tab=' + encodeURIComponent(tab);
+  if (sub) { q += '&sub=' + encodeURIComponent(sub); }
+  $.ajax({
+    url: q + '&partial=1',
+    type: 'post',
+    data: new FormData(form),
+    processData: false,
+    contentType: false,
+    dataType: 'html',
+    success: function (html) {
+      clearAdminTimers();
+      $('#content').html('<br />\n' + html);
+      setActiveAdminTab(tab === 'saml' ? 'ldap' : tab);
+    },
+    error: function () { alert('Could not save. Please try again.'); }
+  });
+  return false;
+}
+
+$(function () {
+  // Intercept header tab links.
+  $(document).on('click', '.control_content .headeritem a[href^="?tab="]', function (e) {
+    e.preventDefault();
+    var href = $(this).attr('href');
+    var p = new URLSearchParams(href.substring(href.indexOf('?')));
+    loadAdminTab(p.get('tab'), p.get('sub'), true);
+  });
+  // Intercept admin form submissions inside the content area. If an inline
+  // onsubmit="return confirm(...)" already cancelled the event (user clicked
+  // Cancel), defaultPrevented is true and we leave it alone.
+  $(document).on('submit', '#content form', function (e) {
+    if (e.isDefaultPrevented()) { return; }
+    e.preventDefault();
+    return submitAdminForm(this);
+  });
+  // Back/forward navigation.
+  window.addEventListener('popstate', function () {
+    var p = new URLSearchParams(window.location.search);
+    loadAdminTab(p.get('tab') || 'dashboard', p.get('sub'), false);
+  });
+});
+
 function submitWhitelist(WLtype, WLtext) {
   console.log('add to whitelist: '+WLtext+', '+WLtype);
   document.getElementById("ignoreHealthType").value = WLtype;
   document.getElementById("ignoreHealthName").value = WLtext;
-  document.getElementById('updateWhitelist').submit();
+  // Use trigger() (not the native .submit()) so the delegated AJAX submit
+  // handler runs instead of a full page reload.
+  $('#updateWhitelist').trigger('submit');
 }
 
 function updateHealthDetails() {
@@ -527,7 +631,7 @@ function pollSync(prefix, progressUrl, subTab) {
           var reloadBtn = document.getElementById(prefix + 'ReloadBtn');
           if (reloadBtn) {
             reloadBtn.style.display = 'inline-flex';
-            reloadBtn.onclick = function() { window.location.href = '?tab=ldap&sub=' + subTab; };
+            reloadBtn.onclick = function() { loadAdminTab('ldap', subTab, true); };
           }
         }
       },
@@ -758,7 +862,7 @@ function matchAdminNames() {
     .then(function (res) {
       if (status) status.textContent = res.message || 'Done.';
       if (btn) { btn.disabled = false; btn.textContent = 'Match names from directory'; }
-      if (res.updated > 0) setTimeout(function () { location.reload(); }, 1200);
+      if (res.updated > 0) setTimeout(function () { loadAdminTab('users', null, false); }, 1200);
     })
     .catch(function () {
       if (status) status.textContent = 'Matching failed.';
