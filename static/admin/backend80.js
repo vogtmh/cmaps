@@ -351,6 +351,16 @@ function showSyncSub(name) {
     if (content) content.style.display = (s === name) ? 'block' : 'none';
     if (nav) nav.classList.toggle('active', s === name);
   });
+  // Persist the active subtab in the URL so a full page reload restores it.
+  if (name) {
+    try {
+      var p = new URLSearchParams(window.location.search);
+      if (p.get('sub') !== name) {
+        p.set('sub', name);
+        history.replaceState(history.state, '', '?' + p.toString());
+      }
+    } catch (e) { /* history API unavailable: ignore */ }
+  }
 }
 
 function showLdapDebug() {
