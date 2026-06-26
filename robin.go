@@ -931,13 +931,16 @@ type robinOccupant struct {
 	Title  string
 	Mobile string
 	Userid string // LDAP userid (for the avatar); empty when resolved via Robin
+	UserID int    // Robin reservee user id (for diagnostics)
+	Source string // how Name was resolved (for diagnostics)
 }
 
 // resolveOccupant resolves a Robin reservee to a display identity. The local
 // LDAP mirror is the primary source (richest data + avatar); the Robin user API
-// is a cached fallback for people not in the mirror.
-func (app *App) resolveOccupant(email string, userID int, emailUser map[string]LdapUser) robinOccupant {
-	occ := robinOccupant{Mail: email}
+// is a cached fallback for people not in the mirror. When capture is non-nil
+// (diagnostic mode) a live Robin /users lookup also captures its raw reply.
+func (app *App) resolveOccupant(email string, userID int, emailUser map[string]LdapUser, capture func(name string, raw []byte)) robinOccupant {
+	occ := robinOccupant{Mail: email, UserID: userID}
 	if email != "" {
 		if u, ok := emailUser[strings.ToLower(email)]; ok {
 			full := strings.TrimSpace(u.Givenname + " " + u.Surname)
@@ -949,19 +952,32 @@ func (app *App) resolveOccupant(email string, userID int, emailUser map[string]L
 			occ.Title = u.Description
 			occ.Mobile = u.Mobile
 			occ.Userid = u.Userid
+			occ.Source = "LDAP mirror (email match)"
 			return occ
 		}
 	}
 	if userID > 0 {
-		if name, ok := app.robinUserName(userID, email); ok && name != "" {
+		name, source, raw, ok := app.robinUserName(userID, email)
+		if source == "robin-api" && capture != nil && len(raw) > 0 {
+			capture(fmt.Sprintf("users/user_%d.json", userID), raw)
+		}
+		if ok && name != "" {
 			occ.Name = name
+			switch source {
+			case "robin-cache":
+				occ.Source = "Robin API (cached)"
+			default:
+				occ.Source = "Robin API (live lookup)"
+			}
 		}
 	}
 	if occ.Name == "" {
 		if email != "" {
 			occ.Name = email
+			occ.Source = "fallback (raw email — no match)"
 		} else if userID > 0 {
 			occ.Name = fmt.Sprintf("user #%d", userID)
+			occ.Source = "fallback (user id — no match)"
 		}
 	}
 	return occ
@@ -971,26 +987,28 @@ func (app *App) resolveOccupant(email string, userID int, emailUser map[string]L
 // cache when fresh and falling back to a live Robin lookup. The cache is keyed
 // by user id (stable in Robin); the stored email is a sanity check — when a new
 // reservation reports a different email for the same id the entry is refreshed.
-func (app *App) robinUserName(userID int, email string) (string, bool) {
+// It also reports how the name was resolved ("robin-cache" | "robin-api") and,
+// for a live lookup, the raw /users reply (for diagnostics).
+func (app *App) robinUserName(userID int, email string) (name, source string, raw []byte, ok bool) {
 	lc := strings.ToLower(strings.TrimSpace(email))
-	if cached, ok := app.db.GetRobinUser(userID); ok {
+	if cached, found := app.db.GetRobinUser(userID); found {
 		if lc == "" || strings.ToLower(cached.Email) == lc {
-			return cached.Name, true
+			return cached.Name, "robin-cache", nil, true
 		}
 	}
-	name, fetchedEmail, ok := app.robinFetchUser(userID)
-	if !ok {
-		return "", false
+	fetchedName, fetchedEmail, raw, fok := app.robinFetchUser(userID)
+	if !fok {
+		return "", "robin-api", raw, false
 	}
 	storeEmail := fetchedEmail
 	if storeEmail == "" {
 		storeEmail = email
 	}
 	_ = app.db.PutRobinUser(RobinUser{
-		UserID: userID, Email: storeEmail, Name: name,
+		UserID: userID, Email: storeEmail, Name: fetchedName,
 		FetchedAt: time.Now().Format("2006-01-02 15:04:05"),
 	})
-	return name, true
+	return fetchedName, "robin-api", raw, true
 }
 
 // robinUserResp is the (tolerant) shape of a Robin /users/{id} response.
@@ -1002,17 +1020,21 @@ type robinUserResp struct {
 	} `json:"data"`
 }
 
-// robinFetchUser performs a live Robin user lookup.
-func (app *App) robinFetchUser(userID int) (name, email string, ok bool) {
+// robinFetchUser performs a live Robin user lookup, returning the raw reply too.
+func (app *App) robinFetchUser(userID int) (name, email string, raw []byte, ok bool) {
+	raw, _, err := app.robinGetRaw(fmt.Sprintf("/users/%d", userID))
+	if err != nil {
+		return "", "", raw, false
+	}
 	var resp robinUserResp
-	if err := app.robinGet(fmt.Sprintf("/users/%d", userID), &resp); err != nil {
-		return "", "", false
+	if json.Unmarshal(raw, &resp) != nil {
+		return "", "", raw, false
 	}
 	em := resp.Data.Email
 	if em == "" {
 		em = resp.Data.PrimaryEmail
 	}
-	return strings.TrimSpace(resp.Data.Name), em, strings.TrimSpace(resp.Data.Name) != ""
+	return strings.TrimSpace(resp.Data.Name), em, raw, strings.TrimSpace(resp.Data.Name) != ""
 }
 
 // collectRobinOccupancy walks all configured locations and returns the matched
@@ -1188,7 +1210,7 @@ func (app *App) collectRobinOccupancy(prog *syncProgress, capture func(name stri
 				res.OccupiedNow++
 
 				nm := seatName[rv.SeatID]
-				occ := app.resolveOccupant(rv.Reservee.Email, rv.Reservee.UserID, emailUser)
+				occ := app.resolveOccupant(rv.Reservee.Email, rv.Reservee.UserID, emailUser, cap)
 				who := occ.Name
 				if occ.Name != "" && occ.Mail != "" && !strings.EqualFold(occ.Name, occ.Mail) {
 					who = occ.Name + " <" + occ.Mail + ">"
@@ -1204,6 +1226,8 @@ func (app *App) collectRobinOccupancy(prog *syncProgress, capture func(name stri
 					})
 					add("  ✓ %s → desk #%d on %s — occupied now by %s (%s, until %s)",
 						nm, d.ID, s.MapName(), who, rv.Type, en.Format("15:04"))
+					add("      ↳ name resolved via %s — reservee email \"%s\", Robin user_id %d, resolved name \"%s\"",
+						occ.Source, rv.Reservee.Email, rv.Reservee.UserID, occ.Name)
 				} else {
 					res.Unmatched++
 					seatLabel := nm
@@ -1212,6 +1236,8 @@ func (app *App) collectRobinOccupancy(prog *syncProgress, capture func(name stri
 					}
 					add("  – %s (in \"%s\") occupied now by %s — no matching desk on %s",
 						seatLabel, sp.Name, who, s.MapName())
+					add("      ↳ name resolved via %s — reservee email \"%s\", Robin user_id %d, resolved name \"%s\"",
+						occ.Source, rv.Reservee.Email, rv.Reservee.UserID, occ.Name)
 				}
 			}
 
