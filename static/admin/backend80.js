@@ -65,6 +65,11 @@ function submitAdminForm(form) {
   var tab = m ? decodeURIComponent(m[1]) : ($(form).find('input[name=tab]').val() || 'dashboard');
   var subM = action.match(/[?&]sub=([^&]+)/);
   var sub = subM ? decodeURIComponent(subM[1]) : '';
+  // Fall back to the subtab currently shown (tracked in the URL) so saving a
+  // Sync-tab form keeps the user on their subtab instead of resetting to LDAP.
+  if (!sub) {
+    try { sub = new URLSearchParams(window.location.search).get('sub') || ''; } catch (e) { sub = ''; }
+  }
   var q = '?tab=' + encodeURIComponent(tab);
   if (sub) { q += '&sub=' + encodeURIComponent(sub); }
   $.ajax({
