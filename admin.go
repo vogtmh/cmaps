@@ -1,6 +1,8 @@
 package main
 
 import (
+	"archive/zip"
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"html/template"
@@ -1088,6 +1090,96 @@ func (app *App) handleRestRobinProgress(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	writeJSON(w, app.robinProg.snapshot())
+}
+
+// handleRestRobinDeskTest runs the read-only Robin desk-data diagnostic. It
+// walks every configured location's full sync surface (spaces → state, events,
+// seats, seat reservations for today), captures the raw JSON, caches that bundle
+// in memory for download, and returns a short log. It never writes to the
+// meeting cache, the booking feature, or the map.
+func (app *App) handleRestRobinDeskTest(w http.ResponseWriter, r *http.Request) {
+	sess, ok := app.currentSession(r)
+	if !ok || app.permLevel(sess, "ldap") < 1 {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	_ = app.db.AuditLog("LDAP", sess.Username, "Robin desk-data diagnostic run")
+
+	logs, files := app.RunRobinDeskDump()
+
+	app.robinDumpMu.Lock()
+	app.robinDumpFiles = files
+	app.robinDumpTime = time.Now().Format("2006-01-02 15:04:05")
+	app.robinDumpMu.Unlock()
+
+	writeJSON(w, map[string]interface{}{
+		"log":   logs,
+		"files": len(files),
+	})
+}
+
+// handleRestRobinDeskDump streams the most recently captured desk-data
+// diagnostic bundle as a zip. If no bundle has been captured yet (or it is
+// empty) it runs a fresh diagnostic first.
+func (app *App) handleRestRobinDeskDump(w http.ResponseWriter, r *http.Request) {
+	sess, ok := app.currentSession(r)
+	if !ok || app.permLevel(sess, "ldap") < 1 {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+
+	app.robinDumpMu.Lock()
+	files := app.robinDumpFiles
+	when := app.robinDumpTime
+	app.robinDumpMu.Unlock()
+
+	var logs []string
+	if len(files) == 0 {
+		logs, files = app.RunRobinDeskDump()
+		when = time.Now().Format("2006-01-02 15:04:05")
+		app.robinDumpMu.Lock()
+		app.robinDumpFiles = files
+		app.robinDumpTime = when
+		app.robinDumpMu.Unlock()
+	}
+	_ = app.db.AuditLog("LDAP", sess.Username, "Robin desk-data diagnostic download")
+
+	var buf bytes.Buffer
+	zw := zip.NewWriter(&buf)
+
+	// summary.json: metadata plus the run log (if we have one).
+	summary := map[string]interface{}{
+		"generated":    time.Now().Format(time.RFC3339),
+		"captured_at":  when,
+		"organisation": app.db.GetRobinSetting("robinOrganisation"),
+		"file_count":   len(files),
+	}
+	if logs != nil {
+		summary["log"] = logs
+	}
+	if sb, err := json.MarshalIndent(summary, "", "  "); err == nil {
+		if fw, err := zw.Create("summary.json"); err == nil {
+			_, _ = fw.Write(sb)
+		}
+	}
+
+	for _, f := range files {
+		fw, err := zw.Create(f.Name)
+		if err != nil {
+			continue
+		}
+		_, _ = fw.Write(f.Data)
+	}
+	if err := zw.Close(); err != nil {
+		http.Error(w, "could not build zip", http.StatusInternalServerError)
+		return
+	}
+
+	fname := "robin-desk-dump-" + time.Now().Format("20060102-150405") + ".zip"
+	w.Header().Set("Content-Type", "application/zip")
+	w.Header().Set("Content-Disposition", "attachment; filename=\""+fname+"\"")
+	w.Header().Set("Content-Length", strconv.Itoa(buf.Len()))
+	_, _ = w.Write(buf.Bytes())
 }
 
 // handleRestLdapSync starts an AD sync of all sources in the background so the

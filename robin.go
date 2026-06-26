@@ -58,6 +58,7 @@ type robinSpaceList struct {
 type robinSpaceEntry struct {
 	ID   int    `json:"id"`
 	Name string `json:"name"`
+	Type string `json:"type"`
 }
 
 type robinState struct {
@@ -570,4 +571,222 @@ func (app *App) LastRobinSyncResult() (RobinSyncResult, bool) {
 		return RobinSyncResult{}, false
 	}
 	return res, true
+}
+
+// --- Robin desk-data diagnostic dump ---
+//
+// This is a read-only diagnostic that walks the entire Robin sync surface
+// (every configured location → every space → state/events/seats/reservations)
+// and captures the RAW JSON of every response into a bundle. It does NOT write
+// anything to the meeting cache, the booking feature, or the map; it only reads
+// from Robin so the captured JSON can be inspected later. "Today" is the time
+// window used for events and seat reservations.
+
+// robinDumpFile is a single captured raw-JSON response in the diagnostic bundle.
+type robinDumpFile struct {
+	Name string
+	Data []byte
+}
+
+// robinGetRaw performs an authenticated GET and returns the raw response body
+// (plus HTTP status) without unmarshalling, so the diagnostic can capture
+// exactly what Robin sent.
+func (app *App) robinGetRaw(path string) ([]byte, int, error) {
+	token := app.db.GetRobinSetting("robintoken")
+	if token == "" {
+		return nil, 0, fmt.Errorf("robin token not configured")
+	}
+	req, err := http.NewRequest(http.MethodGet, robinAPIBase+path, nil)
+	if err != nil {
+		return nil, 0, err
+	}
+	req.Header.Set("Authorization", "Access-Token "+token)
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 32<<20))
+	if err != nil {
+		return body, resp.StatusCode, err
+	}
+	if resp.StatusCode >= 300 {
+		return body, resp.StatusCode, fmt.Errorf("status %d", resp.StatusCode)
+	}
+	return body, resp.StatusCode, nil
+}
+
+// robinDataCount counts the elements in a Robin {"data":[...]} envelope without
+// assuming the shape of each element (used for concise log lines).
+func robinDataCount(raw []byte) int {
+	var env struct {
+		Data []json.RawMessage `json:"data"`
+	}
+	if json.Unmarshal(raw, &env) != nil {
+		return -1
+	}
+	return len(env.Data)
+}
+
+// sanitizeDumpSegment makes a string safe to use as a file-path segment inside
+// the diagnostic zip.
+func sanitizeDumpSegment(s string) string {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return "unnamed"
+	}
+	var b strings.Builder
+	for _, r := range s {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9', r == '-', r == '_':
+			b.WriteRune(r)
+		case r == ' ' || r == '/' || r == '\\' || r == '.':
+			b.WriteRune('_')
+		}
+	}
+	out := b.String()
+	if out == "" {
+		return "unnamed"
+	}
+	if len(out) > 60 {
+		out = out[:60]
+	}
+	return out
+}
+
+// RunRobinDeskDump walks every configured Robin location and captures the raw
+// JSON of the full sync surface (spaces, and for each space its state, events,
+// seats and seat reservations for today). It returns a short human-readable log
+// and the captured raw-JSON files. Nothing is persisted to the app.
+func (app *App) RunRobinDeskDump() ([]string, []robinDumpFile) {
+	var logs []string
+	add := func(format string, args ...interface{}) {
+		logs = append(logs, fmt.Sprintf(format, args...))
+	}
+	var files []robinDumpFile
+	capture := func(name string, raw []byte) {
+		if raw == nil {
+			raw = []byte{}
+		}
+		files = append(files, robinDumpFile{Name: name, Data: raw})
+	}
+
+	if app.db.GetRobinSetting("robintoken") == "" {
+		add("ERROR: Robin access token is not configured. Enter it on the Credentials card and save first.")
+		return logs, files
+	}
+
+	// Today's window (local day → UTC), used for events and seat reservations.
+	now := time.Now()
+	startLocal := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	endLocal := startLocal.Add(24 * time.Hour)
+	after := startLocal.UTC().Format("2006-01-02T15:04:05Z")
+	before := endLocal.UTC().Format("2006-01-02T15:04:05Z")
+	add("Window (today): %s → %s (UTC)", after, before)
+
+	spaces, _ := app.db.ListRobinSpaces()
+	sort.Slice(spaces, func(i, j int) bool { return spaces[i].Spacename < spaces[j].Spacename })
+	add("Configured location(s): %d", len(spaces))
+	if len(spaces) == 0 {
+		add("No Robin locations configured. Add at least one mapping first.")
+		return logs, files
+	}
+
+	totalSpaces, totalSeats, totalResv, totalErrs := 0, 0, 0, 0
+
+	for _, s := range spaces {
+		dir := fmt.Sprintf("location_%d_%s", s.Spaceid, sanitizeDumpSegment(s.Spacename))
+		add("")
+		add("== %s (location id %d) → map %s ==", s.Spacename, s.Spaceid, s.MapName())
+
+		rawSpaces, status, err := app.robinGetRaw(fmt.Sprintf("/locations/%d/spaces?page=1&per_page=200", s.Spaceid))
+		capture(dir+"/spaces.json", rawSpaces)
+		if err != nil {
+			totalErrs++
+			add("  ERROR fetching spaces (HTTP %d): %v", status, err)
+			continue
+		}
+		var list robinSpaceList
+		if jerr := json.Unmarshal(rawSpaces, &list); jerr != nil {
+			add("  WARNING: could not parse spaces list: %v", jerr)
+		}
+		add("  %d space(s) in this location.", len(list.Data))
+
+		for _, sp := range list.Data {
+			totalSpaces++
+			base := fmt.Sprintf("%s/space_%d_%s", dir, sp.ID, sanitizeDumpSegment(sp.Name))
+			typeLabel := sp.Type
+			if typeLabel == "" {
+				typeLabel = "unknown"
+			}
+
+			// State.
+			if raw, st, e := app.robinGetRaw(fmt.Sprintf("/spaces/%d/state", sp.ID)); true {
+				capture(base+"_state.json", raw)
+				if e != nil {
+					totalErrs++
+					add("    [%s] \"%s\" (#%d): state ERROR (HTTP %d)", typeLabel, sp.Name, sp.ID, st)
+				}
+			}
+
+			// Events (today).
+			if raw, _, e := app.robinGetRaw(fmt.Sprintf("/spaces/%d/events?after=%s&before=%s&page=1&per_page=200", sp.ID, after, before)); true {
+				capture(base+"_events.json", raw)
+				if e != nil {
+					totalErrs++
+				}
+			}
+
+			// Seats (paginated).
+			seatCount := 0
+			for page := 1; page <= 50; page++ {
+				raw, st, e := app.robinGetRaw(fmt.Sprintf("/spaces/%d/seats?page=%d&per_page=200", sp.ID, page))
+				capture(fmt.Sprintf("%s_seats_p%d.json", base, page), raw)
+				if e != nil {
+					totalErrs++
+					add("    [%s] \"%s\" (#%d): seats ERROR (HTTP %d)", typeLabel, sp.Name, sp.ID, st)
+					break
+				}
+				n := robinDataCount(raw)
+				if n > 0 {
+					seatCount += n
+				}
+				if n < 200 { // last page
+					break
+				}
+			}
+			totalSeats += seatCount
+
+			// Seat reservations for today (paginated).
+			resvCount := 0
+			for page := 1; page <= 50; page++ {
+				raw, st, e := app.robinGetRaw(fmt.Sprintf("/reservations/seats?space_ids=%d&after=%s&before=%s&page=%d&per_page=200", sp.ID, after, before, page))
+				capture(fmt.Sprintf("%s_reservations_p%d.json", base, page), raw)
+				if e != nil {
+					totalErrs++
+					add("    [%s] \"%s\" (#%d): reservations ERROR (HTTP %d)", typeLabel, sp.Name, sp.ID, st)
+					break
+				}
+				n := robinDataCount(raw)
+				if n > 0 {
+					resvCount += n
+				}
+				if n < 200 { // last page
+					break
+				}
+			}
+			totalResv += resvCount
+
+			add("    [%s] \"%s\" (#%d): %d seat(s), %d reservation(s) today", typeLabel, sp.Name, sp.ID, seatCount, resvCount)
+		}
+	}
+
+	add("")
+	add("Done. %d space(s) across %d location(s): %d seat(s), %d reservation(s) today, %d error(s).",
+		totalSpaces, len(spaces), totalSeats, totalResv, totalErrs)
+	add("Captured %d raw JSON file(s). Use \"Download JSON bundle (zip)\" to export everything.", len(files))
+	return logs, files
 }

@@ -648,6 +648,34 @@ function startLdapSync() {
   startSync('ldap', '../rest/ldap/sync', '../rest/ldap/progress', 'ldap');
 }
 
+// ── Robin desk-data diagnostic (read-only) ───────────────────
+function runRobinDeskTest() {
+  var btn = document.getElementById('robinDeskTestBtn');
+  var log = document.getElementById('robinDeskLog');
+  if (!log) return;
+  var orig = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = 'Running\u2026'; }
+  log.style.display = 'block';
+  log.textContent = 'Running desk diagnostic\u2026 this can take a while for large organisations.';
+  fetch('../rest/robin/desktest', { credentials: 'same-origin' })
+    .then(function (r) { if (!r.ok) throw new Error('request failed'); return r.json(); })
+    .then(function (res) {
+      var lines = (res && res.log) ? res.log : [];
+      log.textContent = lines.length ? lines.join('\n') : 'No output.';
+    })
+    .catch(function () {
+      log.textContent = 'Diagnostic failed. Check that the Robin token is configured and the server is reachable.';
+    })
+    .then(function () {
+      if (btn) { btn.disabled = false; btn.textContent = orig; }
+    });
+}
+
+function downloadRobinDeskDump() {
+  // Stream the zip via a hidden navigation so the browser triggers a download.
+  window.location.href = '../rest/robin/deskdump';
+}
+
 // ── Admin add-user directory autocomplete ───────────────────
 var _dirSearchTimer = null;
 var _dirResults = [];
@@ -1194,55 +1222,4 @@ function initAuditLog() {
 }
 
 // --- Superadmin one-time audit-log re-import (legacy MySQL) ---
-
-function toggleAuditReimport() {
-  var p = document.getElementById('auditReimportPanel');
-  if (!p) { return; }
-  p.style.display = (p.style.display === 'none' || !p.style.display) ? 'block' : 'none';
-}
-
-function runAuditReimport() {
-  var btn = document.getElementById('auditReimportRun');
-  var statusEl = document.getElementById('auditReimportStatus');
-  var database = (document.getElementById('arDatabase') || {}).value || '';
-  var user = (document.getElementById('arUser') || {}).value || '';
-  if (!database.trim() || !user.trim()) {
-    if (statusEl) { statusEl.textContent = 'Database and user are required.'; }
-    return;
-  }
-  if (!confirm('This will permanently clear the current audit log and replace it with the legacy history. Continue?')) {
-    return;
-  }
-  if (btn) { btn.disabled = true; }
-  if (statusEl) { statusEl.textContent = 'Importing\u2026'; }
-  $.ajax({
-    url: '../admin/audit-reimport',
-    type: 'post',
-    dataType: 'JSON',
-    data: {
-      host: (document.getElementById('arHost') || {}).value || 'localhost',
-      port: (document.getElementById('arPort') || {}).value || '3306',
-      database: database,
-      user: user,
-      password: (document.getElementById('arPassword') || {}).value || ''
-    },
-    success: function (res) {
-      if (btn) { btn.disabled = false; }
-      if (statusEl) { statusEl.textContent = (res && res.message) ? res.message : 'Done.'; }
-      if (res && res.ok) {
-        var pw = document.getElementById('arPassword');
-        if (pw) { pw.value = ''; }
-        // Reload the listing from the top so the imported history shows up.
-        if (typeof auditFilterChanged === 'function') { auditFilterChanged(); }
-      }
-    },
-    error: function (xhr) {
-      if (btn) { btn.disabled = false; }
-      if (statusEl) {
-        statusEl.textContent = (xhr && xhr.status === 403)
-          ? 'Forbidden \u2014 superadmin access required.'
-          : 'Import failed.';
-      }
-    }
-  });
-}
+// (Re-import UI removed; the legacy import was a one-time migration step.)
