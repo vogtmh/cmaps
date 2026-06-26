@@ -16,6 +16,13 @@ type floorButton struct {
 	Employee string
 }
 
+// mapLink is one entry in the location dropdown: Name is the map identifier
+// (used in the ?map= URL), Label is the user-facing display name.
+type mapLink struct {
+	Name  string
+	Label string
+}
+
 // indexData holds everything the index.html template needs. It reproduces the
 // server-side state the legacy index.php computed before handing off to the
 // JavaScript front-end.
@@ -27,7 +34,7 @@ type indexData struct {
 	MapTitle          string
 	MapDefault        string
 	MapList           []string
-	OtherMaps         []string
+	OtherMaps         []mapLink
 	IsOverview        bool
 	Itemscale         string
 	Autozoom          int
@@ -103,8 +110,12 @@ func (app *App) renderIndex(w http.ResponseWriter, r *http.Request, sess Session
 	// Build the published map list (always include "overview").
 	var mapList []string
 	maps, _ := app.db.ListMaps()
+	displayNames := make(map[string]string, len(maps))
 	hasOverview := false
 	for _, m := range maps {
+		if m.DisplayName != "" {
+			displayNames[m.Mapname] = m.DisplayName
+		}
 		if m.Published != "no" {
 			mapList = append(mapList, m.Mapname)
 		}
@@ -122,10 +133,14 @@ func (app *App) renderIndex(w http.ResponseWriter, r *http.Request, sess Session
 	// Persist the selected map in a cookie (matches legacy behaviour).
 	http.SetCookie(w, &http.Cookie{Name: "map", Value: mapName, Path: "/", SameSite: http.SameSiteLaxMode, Expires: time.Now().AddDate(5, 0, 0)})
 
-	otherMaps := make([]string, 0, len(mapList))
+	otherMaps := make([]mapLink, 0, len(mapList))
 	for _, m := range mapList {
 		if m != mapName {
-			otherMaps = append(otherMaps, m)
+			label := displayNames[m]
+			if label == "" {
+				label = ucfirst(m)
+			}
+			otherMaps = append(otherMaps, mapLink{Name: m, Label: label})
 		}
 	}
 
@@ -233,12 +248,17 @@ func (app *App) renderIndex(w http.ResponseWriter, r *http.Request, sess Session
 		findme = ""
 	}
 
+	mapTitle := displayNames[mapName]
+	if mapTitle == "" {
+		mapTitle = ucfirst(mapName)
+	}
+
 	data := indexData{
 		AppTitle:          app.appTitle(),
 		TargetScreenWidth: targetWidth,
 		HalfWidth:         targetWidth / 2,
 		Map:               mapName,
-		MapTitle:          ucfirst(mapName),
+		MapTitle:          mapTitle,
 		MapDefault:        mapDefault,
 		MapList:           mapList,
 		OtherMaps:         otherMaps,

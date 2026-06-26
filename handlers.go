@@ -99,6 +99,42 @@ func (app *App) handleIndex(w http.ResponseWriter, r *http.Request) {
 		app.db.TrackVisit(sess.Username)
 	}
 
+	// Persist the Extras settings panel (POST from index.html). Checkbox values
+	// are only submitted when checked, so each setting cookie is written
+	// explicitly ("1" on / "0" off), then we redirect (PRG) to avoid a resubmit.
+	if r.Method == http.MethodPost && r.FormValue("applysettings") == "1" {
+		_ = r.ParseForm()
+		settings := []string{
+			"setting_nodescription",
+			"setting_printmode",
+			"setting_desknumbers",
+			"setting_shownames",
+			"setting_highlightleaders",
+			"setting_noanimation",
+			"setting_dailyvisitors",
+			"setting_saml",
+		}
+		for _, name := range settings {
+			val := "0"
+			if r.FormValue(name) == "1" {
+				val = "1"
+			}
+			http.SetCookie(w, &http.Cookie{
+				Name:     name,
+				Value:    val,
+				Path:     "/",
+				SameSite: http.SameSiteLaxMode,
+				Expires:  time.Now().AddDate(5, 0, 0),
+			})
+		}
+		dest := "/"
+		if m := r.FormValue("map"); m != "" {
+			dest = "/?map=" + url.QueryEscape(m)
+		}
+		http.Redirect(w, r, dest, http.StatusSeeOther)
+		return
+	}
+
 	app.renderIndex(w, r, sess, ok)
 }
 

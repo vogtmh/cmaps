@@ -133,7 +133,7 @@
   <!-- Maps panel -->
   <div class="headeritem" id="mapspanel" style="width:160px;height:auto;float:left;background-color:#333333;margin-top:0px;left:{{if .NoDescription}}755{{else}}827{{end}}px;padding-bottom: 5px; border-radius: 0px 0px 10px 10px; display:none;">
     {{range .OtherMaps}}
-    <a href="/?map={{.}}" style="text-decoration: none;"><div class="headeritem_maps">{{. | ucfirst}}</div></a>
+    <a href="/?map={{.Name}}" style="text-decoration: none;"><div class="headeritem_maps">{{.Label}}</div></a>
     {{end}}
   </div>
 
