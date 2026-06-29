@@ -3,6 +3,7 @@ package main
 import (
 	"archive/zip"
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"html/template"
@@ -80,6 +81,7 @@ type adminData struct {
 	RobinMapOptions []string
 	RobinOrg        string
 	RobinSet        bool
+	GeoapifySet     bool
 	RobinLastSync   RobinSyncResult
 	RobinHasSync    bool
 	RobinDeskMode   string
@@ -237,6 +239,14 @@ func (app *App) handleAdminPost(w http.ResponseWriter, r *http.Request, sess Ses
 			_ = app.db.SetRobinSetting("robinOrganisation", strings.TrimSpace(r.FormValue("robinOrganisation")))
 			_ = app.db.AuditLog("LDAP", sess.Username, "Robin credentials updated")
 			return "Robin settings saved."
+		}
+		if r.FormValue("saveGeoapify") != "" {
+			if key := strings.TrimSpace(r.FormValue("geoapifyApiKey")); key != "" {
+				_ = app.db.SetGeoSetting("geoapifyApiKey", key)
+				_ = app.db.AuditLog("LDAP", sess.Username, "Geoapify API key updated")
+				return "Geocoding API key saved."
+			}
+			return "Geocoding API key unchanged."
 		}
 		if r.FormValue("saveRobinOptions") != "" {
 			mode := strings.TrimSpace(r.FormValue("robinDeskMode"))
@@ -508,6 +518,16 @@ func (app *App) createMapFromForm(r *http.Request, sess Session) string {
 		MapX:        x,
 		MapY:        y,
 	}
+	if v := strings.TrimSpace(r.FormValue("newMapLat")); v != "" {
+		if f, err := strconv.ParseFloat(v, 64); err == nil {
+			m.Lat = f
+		}
+	}
+	if v := strings.TrimSpace(r.FormValue("newMapLon")); v != "" {
+		if f, err := strconv.ParseFloat(v, 64); err == nil {
+			m.Lon = f
+		}
+	}
 
 	// Save the uploaded map image if present.
 	if r.MultipartForm != nil && len(r.MultipartForm.File["image"]) > 0 {
@@ -593,6 +613,16 @@ func (app *App) updateMapFromForm(r *http.Request, sess Session) string {
 	if v := r.FormValue("editMapY"); v != "" {
 		if y, err := strconv.Atoi(v); err == nil {
 			m.MapY = y
+		}
+	}
+	if v := strings.TrimSpace(r.FormValue("editMapLat")); v != "" {
+		if f, err := strconv.ParseFloat(v, 64); err == nil {
+			m.Lat = f
+		}
+	}
+	if v := strings.TrimSpace(r.FormValue("editMapLon")); v != "" {
+		if f, err := strconv.ParseFloat(v, 64); err == nil {
+			m.Lon = f
 		}
 	}
 
@@ -695,6 +725,7 @@ func (app *App) buildAdminData(r *http.Request, sess Session, tab, msg string) a
 		sort.Slice(d.RobinSpaces, func(i, j int) bool { return d.RobinSpaces[i].Spacename < d.RobinSpaces[j].Spacename })
 		d.RobinOrg = app.db.GetRobinSetting("robinOrganisation")
 		d.RobinSet = app.db.GetRobinSetting("robintoken") != ""
+		d.GeoapifySet = app.db.GetGeoSetting("geoapifyApiKey") != ""
 		// Build the map dropdown: published maps plus any value currently in use
 		// (so every row's selection stays selectable even if it isn't a real map yet).
 		mapSet := map[string]bool{}
@@ -1166,6 +1197,60 @@ func (app *App) handleRestRobinProgress(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	writeJSON(w, app.robinProg.snapshot())
+}
+
+// handleRestGeoTest verifies the saved Geoapify API key by geocoding a single
+// address. If the request supplies an "address" parameter that is used,
+// otherwise it falls back to a well-known sample address. Read-only: it never
+// writes coordinates to any map.
+func (app *App) handleRestGeoTest(w http.ResponseWriter, r *http.Request) {
+	sess, ok := app.currentSession(r)
+	if !ok || app.permLevel(sess, "ldap") < 1 {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	apiKey := app.db.GetGeoSetting("geoapifyApiKey")
+	if strings.TrimSpace(apiKey) == "" {
+		writeJSON(w, map[string]interface{}{"ok": false, "message": "No Geoapify API key configured. Save a key first."})
+		return
+	}
+	text := strings.TrimSpace(r.URL.Query().Get("address"))
+	if text == "" {
+		text = "38 Upper Montagu Street, Westminster W1H 1LJ, United Kingdom"
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
+	defer cancel()
+	lat, lon, formatted, err := geocodeAddress(ctx, apiKey, text)
+	if err != nil {
+		writeJSON(w, map[string]interface{}{"ok": false, "message": err.Error(), "address": text})
+		return
+	}
+	_ = app.db.AuditLog("LDAP", sess.Username, "Geoapify API key tested")
+	writeJSON(w, map[string]interface{}{
+		"ok":        true,
+		"address":   text,
+		"lat":       lat,
+		"lon":       lon,
+		"formatted": formatted,
+	})
+}
+
+// handleRestGeoSync geocodes every map's address and stores the resulting
+// lat/lon. Manual only (no scheduler). Requires ldap permission level 2 since it
+// writes map records.
+func (app *App) handleRestGeoSync(w http.ResponseWriter, r *http.Request) {
+	sess, ok := app.currentSession(r)
+	if !ok || app.permLevel(sess, "ldap") < 2 {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	if strings.TrimSpace(app.db.GetGeoSetting("geoapifyApiKey")) == "" {
+		writeJSON(w, map[string]interface{}{"ok": false, "message": "No Geoapify API key configured. Save a key first."})
+		return
+	}
+	res := app.RunGeoapifySync()
+	_ = app.db.AuditLog("LDAP", sess.Username, fmt.Sprintf("Geoapify batch sync (%d updated, %d skipped, %d failed)", res.Updated, res.Skipped, res.Failed))
+	writeJSON(w, map[string]interface{}{"ok": true, "result": res})
 }
 
 // handleRestRobinDeskTest starts the read-only Robin desk-data diagnostic in

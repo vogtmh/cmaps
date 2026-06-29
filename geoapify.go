@@ -1,0 +1,177 @@
+package main
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"net/url"
+	"strings"
+	"time"
+)
+
+// Geoapify geocoding integration. Converts a postal address into latitude /
+// longitude via the Geoapify Geocoding API so the dynamic world-map overview
+// can place each location at its real geographic position.
+//
+// Endpoint: https://api.geoapify.com/v1/geocode/search?text=<addr>&apiKey=<key>
+// The API key is stored in the hidden geoconfig bucket (it is a secret and must
+// not appear in the visible config_general table). Syncing is always manual.
+
+const geoapifyEndpoint = "https://api.geoapify.com/v1/geocode/search"
+
+// geoapifyResponse is the subset of the Geoapify GeoJSON response we consume.
+type geoapifyResponse struct {
+	Features []struct {
+		Properties struct {
+			Lat       float64 `json:"lat"`
+			Lon       float64 `json:"lon"`
+			Formatted string  `json:"formatted"`
+		} `json:"properties"`
+	} `json:"features"`
+}
+
+// geocodeAddress resolves a free-form address to coordinates using the given
+// API key. Returns the best (first) match. An empty key or address is an error.
+func geocodeAddress(ctx context.Context, apiKey, text string) (lat, lon float64, formatted string, err error) {
+	apiKey = strings.TrimSpace(apiKey)
+	text = strings.TrimSpace(text)
+	if apiKey == "" {
+		return 0, 0, "", fmt.Errorf("no Geoapify API key configured")
+	}
+	if text == "" {
+		return 0, 0, "", fmt.Errorf("address is empty")
+	}
+
+	q := url.Values{}
+	q.Set("text", text)
+	q.Set("limit", "1")
+	q.Set("format", "geojson")
+	q.Set("apiKey", apiKey)
+	reqURL := geoapifyEndpoint + "?" + q.Encode()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
+	if err != nil {
+		return 0, 0, "", err
+	}
+	client := &http.Client{Timeout: 15 * time.Second}
+	res, err := client.Do(req)
+	if err != nil {
+		return 0, 0, "", err
+	}
+	defer res.Body.Close()
+
+	body, err := io.ReadAll(io.LimitReader(res.Body, 1<<20))
+	if err != nil {
+		return 0, 0, "", err
+	}
+	if res.StatusCode != http.StatusOK {
+		msg := strings.TrimSpace(string(body))
+		if len(msg) > 200 {
+			msg = msg[:200]
+		}
+		return 0, 0, "", fmt.Errorf("Geoapify returned HTTP %d: %s", res.StatusCode, msg)
+	}
+
+	var parsed geoapifyResponse
+	if err := json.Unmarshal(body, &parsed); err != nil {
+		return 0, 0, "", fmt.Errorf("could not parse Geoapify response: %v", err)
+	}
+	if len(parsed.Features) == 0 {
+		return 0, 0, "", fmt.Errorf("no match found for address")
+	}
+	p := parsed.Features[0].Properties
+	return p.Lat, p.Lon, p.Formatted, nil
+}
+
+// geoAddressText turns a stored map address (newlines encoded as <br/>) into a
+// single-line query string suitable for geocoding.
+func geoAddressText(stored string) string {
+	plain := stripBR(stored)
+	plain = strings.ReplaceAll(plain, "\r\n", "\n")
+	parts := strings.Split(plain, "\n")
+	cleaned := make([]string, 0, len(parts))
+	for _, p := range parts {
+		if t := strings.TrimSpace(p); t != "" {
+			cleaned = append(cleaned, t)
+		}
+	}
+	return strings.Join(cleaned, ", ")
+}
+
+// GeoSyncMapResult is one location's outcome during a batch geocode run.
+type GeoSyncMapResult struct {
+	Mapname   string  `json:"mapname"`
+	Address   string  `json:"address"`
+	Lat       float64 `json:"lat"`
+	Lon       float64 `json:"lon"`
+	Formatted string  `json:"formatted"`
+	Status    string  `json:"status"` // "ok" | "skipped" | "error"
+	Message   string  `json:"message"`
+}
+
+// GeoSyncResult summarises a batch geocode run.
+type GeoSyncResult struct {
+	Total   int                `json:"total"`
+	Updated int                `json:"updated"`
+	Skipped int                `json:"skipped"`
+	Failed  int                `json:"failed"`
+	Results []GeoSyncMapResult `json:"results"`
+}
+
+// RunGeoapifySync geocodes every map that has an address and stores the
+// resulting lat/lon back onto the map record. The "overview" map is skipped
+// (it is the world map itself, not a physical location). This is only ever
+// invoked manually from the admin Sync panel — there is no scheduler.
+func (app *App) RunGeoapifySync() GeoSyncResult {
+	var res GeoSyncResult
+	apiKey := app.db.GetGeoSetting("geoapifyApiKey")
+
+	maps, _ := app.db.ListMaps()
+	for _, m := range maps {
+		if m.Mapname == "overview" {
+			continue
+		}
+		res.Total++
+		addr := geoAddressText(m.Address)
+		row := GeoSyncMapResult{Mapname: m.Mapname, Address: addr}
+		if addr == "" {
+			row.Status = "skipped"
+			row.Message = "no address set"
+			res.Skipped++
+			res.Results = append(res.Results, row)
+			continue
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+		lat, lon, formatted, err := geocodeAddress(ctx, apiKey, addr)
+		cancel()
+		if err != nil {
+			row.Status = "error"
+			row.Message = err.Error()
+			res.Failed++
+			res.Results = append(res.Results, row)
+			continue
+		}
+
+		m.Lat = lat
+		m.Lon = lon
+		if err := app.db.PutMap(m); err != nil {
+			row.Status = "error"
+			row.Message = "could not save: " + err.Error()
+			res.Failed++
+			res.Results = append(res.Results, row)
+			continue
+		}
+		row.Lat = lat
+		row.Lon = lon
+		row.Formatted = formatted
+		row.Status = "ok"
+		res.Updated++
+		res.Results = append(res.Results, row)
+		// Be polite to the API between requests.
+		time.Sleep(120 * time.Millisecond)
+	}
+	return res
+}

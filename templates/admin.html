@@ -216,6 +216,9 @@
     {{if gt .PermLdap 0}}
     <button type="button" class="sync-tab" id="syncnav_robin" onclick="showSyncSub('robin')"><span class="sync-navdot"></span>Robin</button>
     {{end}}
+    {{if gt .PermLdap 0}}
+    <button type="button" class="sync-tab" id="syncnav_geo" onclick="showSyncSub('geo')"><span class="sync-navdot"></span>Geocoding</button>
+    {{end}}
   </div>
   <div class="sync-pane">
 
@@ -669,6 +672,66 @@
   </div>
   {{end}}
 
+  {{if gt .PermLdap 0}}
+  <div id="syncsub_geo" class="syncsub" style="display:none;">
+
+    <div class="sync-card">
+      <div class="sync-card-head">
+        <h2 class="sync-card-title">Geoapify geocoding</h2>
+        <div style="display:flex; gap:10px; align-items:center;">
+          {{if .GeoapifySet}}<span class="sync-badge sync-badge-ok">API key configured</span>{{else}}<span class="sync-badge sync-badge-warn">No API key</span>{{end}}
+        </div>
+      </div>
+      <p class="sync-card-hint">Convert each location&rsquo;s address into latitude / longitude using the
+        <a href="https://www.geoapify.com/" target="_blank" rel="noopener">Geoapify</a> Geocoding API, so the
+        dynamic world map can place every location at its real geographic position. Syncing is always manual &mdash;
+        there is no scheduler.</p>
+
+      {{if gt .PermLdap 1}}
+      <form onsubmit="return saveGeoapify(event)">
+        <div class="sync-form-grid">
+          <div class="sync-field sync-field-wide"><label class="sync-label">Geocoding API key</label><input class="sync-input" type="password" id="geoapifyApiKey" placeholder="{{if .GeoapifySet}}(configured — leave blank to keep){{else}}Geoapify Geocoding API key{{end}}"></div>
+        </div>
+        <div class="sync-form-actions">
+          <button type="submit" class="sync-btn sync-btn-primary">Save API key</button>
+          <span id="geoSaveStatus" class="sync-status-text"></span>
+        </div>
+      </form>
+      {{end}}
+    </div>
+
+    <div class="sync-card">
+      <div class="sync-card-head"><h2 class="sync-card-title">Test the key</h2></div>
+      <p class="sync-card-hint">Geocode a single address to confirm the key works. Leave the box blank to use a sample address.</p>
+      <div class="sync-import-row">
+        <input class="sync-input" type="text" id="geoTestAddress" placeholder="Optional: an address to test">
+        <button type="button" class="sync-btn sync-btn-primary" onClick="testGeoapify()">Run test</button>
+      </div>
+      <div id="geoTestResult" class="sync-status-text" style="margin-top:10px;"></div>
+    </div>
+
+    {{if gt .PermLdap 1}}
+    <div class="sync-card">
+      <div class="sync-card-head"><h2 class="sync-card-title">Batch sync all locations</h2></div>
+      <p class="sync-card-hint">Geocode every map that has an address and store the resulting coordinates on the map.
+        Runs once on demand and overwrites existing lat/lon values.</p>
+      <div class="sync-form-actions">
+        <button type="button" class="sync-btn sync-btn-primary" id="geoSyncBtn" onClick="runGeoapifySync()">Sync all locations now</button>
+      </div>
+      <div id="geoSyncSummary" class="sync-summary" style="display:none;">
+        <div class="sync-summary-item"><span class="sync-summary-num" id="geoSyncUpdated">0</span><span class="sync-summary-lbl">Updated</span></div>
+        <div class="sync-summary-item"><span class="sync-summary-num" id="geoSyncSkipped">0</span><span class="sync-summary-lbl">Skipped</span></div>
+        <div class="sync-summary-item"><span class="sync-summary-num" id="geoSyncFailed" style="color:var(--sy-danger);">0</span><span class="sync-summary-lbl">Failed</span></div>
+      </div>
+      <table class="sync-table" id="geoSyncTable" style="display:none; margin-top:12px;">
+        <thead><tr><th>Map</th><th>Status</th><th>Lat</th><th>Lon</th><th>Result</th></tr></thead>
+        <tbody id="geoSyncBody"></tbody>
+      </table>
+    </div>
+    {{end}}
+  </div>
+  {{end}}
+
     </div>
   </div>
   <script>
@@ -692,7 +755,7 @@
         <thead>
           <tr>
             <th class="sync-td-min">Status</th><th>Map</th><th>Display name</th><th>Itemscale</th><th>Country</th>
-            <th>Flagsize</th><th>Timezone</th><th>Address</th><th>X</th><th>Y</th>
+            <th>Flagsize</th><th>Timezone</th><th>Address</th><th>X</th><th>Y</th><th>Lat</th><th>Lon</th>
             {{if gt .PermMaps 1}}<th class="sync-td-min">Actions</th>{{end}}
           </tr>
         </thead>
@@ -715,6 +778,8 @@
             <td style="max-width:340px;white-space:normal;">{{.AddressClean}}</td>
             <td style="white-space:nowrap;">{{.MapX}}</td>
             <td style="white-space:nowrap;">{{.MapY}}</td>
+            <td style="white-space:nowrap;">{{.Lat}}</td>
+            <td style="white-space:nowrap;">{{.Lon}}</td>
             {{if gt $.PermMaps 1}}
             <td class="sync-td-min">
               <div style="display:flex;gap:6px;">
@@ -722,6 +787,7 @@
                   data-name="{{.Mapname}}" data-display="{{.DisplayName}}" data-itemscale="{{.Itemscale}}"
                   data-published="{{.Published}}" data-country="{{.Country}}" data-flagsize="{{.Flagsize}}"
                   data-timezone="{{.Timezone}}" data-address="{{.AddressClean}}" data-x="{{.MapX}}" data-y="{{.MapY}}"
+                  data-lat="{{.Lat}}" data-lon="{{.Lon}}"
                   onclick="openEditMap(this)">Edit</button>
                 <form action="?tab=maps" method="post" style="margin:0;" onsubmit="return confirm('Delete map &quot;{{.Mapname}}&quot;? This also removes its desks and image file.');">
                   <input type="hidden" name="tab" value="maps">
@@ -763,6 +829,8 @@
           <div class="sync-field"><label class="sync-label">Timezone</label><select class="sync-select" name="newMapTimezone">{{range .Timezones}}<option value="{{.}}"{{if eq . "Europe/Berlin"}} selected{{end}}>{{.}}</option>{{end}}</select></div>
           <div class="sync-field"><label class="sync-label">X</label><input class="sync-input" type="text" name="newMapX" value="0"></div>
           <div class="sync-field"><label class="sync-label">Y</label><input class="sync-input" type="text" name="newMapY" value="0"></div>
+          <div class="sync-field"><label class="sync-label">Latitude</label><input class="sync-input" type="text" name="newMapLat" placeholder="e.g. 48.7758"></div>
+          <div class="sync-field"><label class="sync-label">Longitude</label><input class="sync-input" type="text" name="newMapLon" placeholder="e.g. 9.1829"></div>
           <div class="sync-field sync-field-wide"><label class="sync-label">Address</label><textarea class="sync-textarea sync-textarea-text" name="newMapAddress" placeholder="One line per row"></textarea></div>
           <div class="sync-field sync-field-wide"><label class="sync-label">Map image</label><input class="sync-input" type="file" name="image" accept="image/*"></div>
         </div>
@@ -791,6 +859,8 @@
           <div class="sync-field"><label class="sync-label">Timezone</label><select class="sync-select" name="editMapTimezone" id="editMapTimezone">{{range .Timezones}}<option value="{{.}}">{{.}}</option>{{end}}</select></div>
           <div class="sync-field"><label class="sync-label">X</label><input class="sync-input" type="text" name="editMapX" id="editMapX"></div>
           <div class="sync-field"><label class="sync-label">Y</label><input class="sync-input" type="text" name="editMapY" id="editMapY"></div>
+          <div class="sync-field"><label class="sync-label">Latitude</label><input class="sync-input" type="text" name="editMapLat" id="editMapLat" placeholder="e.g. 48.7758"></div>
+          <div class="sync-field"><label class="sync-label">Longitude</label><input class="sync-input" type="text" name="editMapLon" id="editMapLon" placeholder="e.g. 9.1829"></div>
           <div class="sync-field sync-field-wide"><label class="sync-label">Address</label><textarea class="sync-textarea sync-textarea-text" name="editMapAddress" id="editMapAddress" placeholder="One line per row"></textarea></div>
           <div class="sync-field sync-field-wide"><label class="sync-label">Replace map image (optional)</label><input class="sync-input" type="file" name="editImage" accept="image/*"></div>
         </div>
@@ -816,6 +886,8 @@
       document.getElementById('editMapAddress').value = d.address || '';
       document.getElementById('editMapX').value = d.x || '0';
       document.getElementById('editMapY').value = d.y || '0';
+      document.getElementById('editMapLat').value = d.lat || '';
+      document.getElementById('editMapLon').value = d.lon || '';
       document.getElementById('editMapOverlay').style.display = 'block';
     }
   </script>

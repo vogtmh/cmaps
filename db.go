@@ -37,13 +37,14 @@ var (
 	bucketLdapSrc   = []byte("ldapsources")     // config_ldap (key = id)
 	bucketAudit     = []byte("auditlog")        // auditlog (key = seq)
 	bucketMeta      = []byte("meta")            // app meta (wizard state, etc.)
+	bucketGeoCfg    = []byte("geoconfig")       // geocoding (geoapify) api key / settings (key = name)
 )
 
 var allBuckets = [][]byte{
 	bucketSettings, bucketMaps, bucketDesks, bucketLdap, bucketBookings, bucketTeams,
 	bucketRoles, bucketUsers, bucketChangelog, bucketStats, bucketTracking, bucketVips,
 	bucketDepts, bucketRobin, bucketMeeting, bucketWhitelist, bucketLdapSrc, bucketAudit,
-	bucketMeta, bucketDirectory, bucketRobinCfg, bucketRobinDesk,
+	bucketMeta, bucketDirectory, bucketRobinCfg, bucketRobinDesk, bucketGeoCfg,
 }
 
 type DB struct {
@@ -65,6 +66,8 @@ type MapInfo struct {
 	Address     string `json:"address"`
 	MapX        int    `json:"mapX"`
 	MapY        int    `json:"mapY"`
+	Lat         float64 `json:"lat"`
+	Lon         float64 `json:"lon"`
 }
 
 // Desk mirrors a row of a desks_<map> table, with the map name attached. Desktype
@@ -432,6 +435,18 @@ func (db *DB) GetRobinSetting(name string) string {
 
 func (db *DB) SetRobinSetting(name, value string) error {
 	return putJSON(db, bucketRobinCfg, []byte(name), value)
+}
+
+// --- Geocoding configuration (geoapify api key, kept out of the visible
+// config_general table since it is a secret) ---
+
+func (db *DB) GetGeoSetting(name string) string {
+	v, _, _ := getJSON[string](db, bucketGeoCfg, []byte(name))
+	return v
+}
+
+func (db *DB) SetGeoSetting(name, value string) error {
+	return putJSON(db, bucketGeoCfg, []byte(name), value)
 }
 
 func (db *DB) AllSettings() (map[string]string, error) {

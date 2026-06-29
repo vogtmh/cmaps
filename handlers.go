@@ -79,6 +79,8 @@ func (app *App) registerRESTRoutes(mux *http.ServeMux) {
 	rest("/rest/robin/suggestions", app.handleRestRobinSuggestions)
 	rest("/rest/robin/suggestions/progress", app.handleRestRobinSuggestionsProgress)
 	rest("/rest/robin/strip/add", app.handleRestRobinStripAdd)
+	rest("/rest/geo/test", app.handleRestGeoTest)
+	rest("/rest/geo/sync", app.handleRestGeoSync)
 }
 
 // handleIndex serves the main client UI (or the setup wizard on first run).

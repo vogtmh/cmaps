@@ -341,7 +341,7 @@ function syncLDAP(ldap_id, adminuser) {
 }
 
 function showSyncSub(name) {
-  var subs = ['ldap', 'saml', 'robin'];
+  var subs = ['ldap', 'saml', 'robin', 'geo'];
   // Fall back to the first available subsection if the requested one is not
   // rendered (e.g. the user lacks the matching permission).
   if (!document.getElementById('syncsub_' + name)) {
@@ -697,6 +697,104 @@ function showRobinResultTab(name) {
 
 function startLdapSync() {
   startSync('ldap', '../rest/ldap/sync', '../rest/ldap/progress', 'ldap');
+}
+
+// ── Geoapify geocoding ───────────────────────────────────────
+// Saves the API key, tests it against a single address, and runs a manual
+// batch geocode of every location. There is no scheduler — syncing is always
+// triggered explicitly here.
+function saveGeoapify(ev) {
+  if (ev && ev.preventDefault) ev.preventDefault();
+  var key = (document.getElementById('geoapifyApiKey') || {}).value || '';
+  var statusEl = document.getElementById('geoSaveStatus');
+  if (statusEl) statusEl.textContent = 'Saving\u2026';
+  var fd = new FormData();
+  fd.append('tab', 'ldap');
+  fd.append('saveGeoapify', '1');
+  fd.append('geoapifyApiKey', key);
+  $.ajax({
+    url: '?tab=ldap&partial=1', type: 'POST', data: fd,
+    processData: false, contentType: false,
+    complete: function () {
+      if (statusEl) statusEl.textContent = 'Saved.';
+      loadAdminTab('ldap', 'geo', false);
+    }
+  });
+  return false;
+}
+
+function testGeoapify() {
+  var addr = (document.getElementById('geoTestAddress') || {}).value || '';
+  var out = document.getElementById('geoTestResult');
+  if (out) { out.textContent = 'Testing\u2026'; out.style.color = ''; }
+  $.ajax({
+    url: '../rest/geo/test' + (addr ? ('?address=' + encodeURIComponent(addr)) : ''),
+    type: 'GET', dataType: 'JSON',
+    success: function (d) {
+      if (!out) return;
+      if (d && d.ok) {
+        out.style.color = 'var(--sy-ok)';
+        out.textContent = 'OK \u2014 ' + (d.formatted || d.address) +
+          ' \u2192 lat ' + Number(d.lat).toFixed(5) + ', lon ' + Number(d.lon).toFixed(5);
+      } else {
+        out.style.color = 'var(--sy-danger)';
+        out.textContent = 'Failed: ' + ((d && d.message) || 'unknown error');
+      }
+    },
+    error: function () {
+      if (out) { out.style.color = 'var(--sy-danger)'; out.textContent = 'Request failed (forbidden or server error).'; }
+    }
+  });
+}
+
+function runGeoapifySync() {
+  var btn = document.getElementById('geoSyncBtn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Syncing\u2026'; }
+  $.ajax({
+    url: '../rest/geo/sync', type: 'POST', dataType: 'JSON',
+    success: function (d) {
+      if (!d || !d.ok) {
+        alert((d && d.message) || 'Sync failed.');
+        return;
+      }
+      renderGeoSyncResult(d.result || {});
+    },
+    error: function () { alert('Sync request failed (forbidden or server error).'); },
+    complete: function () {
+      if (btn) { btn.disabled = false; btn.textContent = 'Sync all locations now'; }
+    }
+  });
+}
+
+function renderGeoSyncResult(res) {
+  var summary = document.getElementById('geoSyncSummary');
+  var table = document.getElementById('geoSyncTable');
+  var body = document.getElementById('geoSyncBody');
+  if (summary) summary.style.display = 'flex';
+  document.getElementById('geoSyncUpdated').textContent = res.updated || 0;
+  document.getElementById('geoSyncSkipped').textContent = res.skipped || 0;
+  document.getElementById('geoSyncFailed').textContent = res.failed || 0;
+  if (!body) return;
+  body.innerHTML = '';
+  var rows = res.results || [];
+  for (var i = 0; i < rows.length; i++) {
+    var r = rows[i];
+    var tr = document.createElement('tr');
+    var badge = r.status === 'ok' ? 'sync-badge-ok'
+      : (r.status === 'skipped' ? 'sync-badge-warn' : 'sync-badge-danger');
+    var latTxt = r.status === 'ok' ? Number(r.lat).toFixed(5) : '';
+    var lonTxt = r.status === 'ok' ? Number(r.lon).toFixed(5) : '';
+    var msg = r.status === 'ok' ? (r.formatted || '') : (r.message || '');
+    tr.innerHTML = '<td></td><td><span class="sync-badge"></span></td><td></td><td></td><td></td>';
+    tr.children[1].firstChild.className = 'sync-badge ' + badge;
+    tr.children[0].textContent = r.mapname || '';
+    tr.children[1].firstChild.textContent = r.status || '';
+    tr.children[2].textContent = latTxt;
+    tr.children[3].textContent = lonTxt;
+    tr.children[4].textContent = msg;
+    body.appendChild(tr);
+  }
+  if (table) table.style.display = '';
 }
 
 // ── Robin desk-data diagnostic (read-only) ───────────────────

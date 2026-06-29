@@ -79,6 +79,8 @@ func (app *App) handleRestConfig(w http.ResponseWriter, r *http.Request) {
 				"address":     m.Address,
 				"x":           m.MapX,
 				"y":           m.MapY,
+				"lat":         m.Lat,
+				"lon":         m.Lon,
 			})
 		}
 		writeJSON(w, map[string]interface{}{"maps": items})
