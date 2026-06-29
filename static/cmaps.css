@@ -686,9 +686,9 @@
     box-sizing: border-box;
 }
 
-/* Sit the badge just past the copy icon on each mirrored plate. */
-.leftnameplate .robinbadge { left: 200px; }
-.rightnameplate .robinbadge { right: 200px; }
+/* Sit the badge just past the desk-number badge on each mirrored plate. */
+.leftnameplate .robinbadge { left: 168px; }
+.rightnameplate .robinbadge { right: 168px; }
 
 /* Footer action row on sticky nameplates: copy, optional report and the Robin
    badge share one flex row next to the desk-number badge. The row is anchored
@@ -701,8 +701,8 @@
     align-items: center;
     gap: 8px;
 }
-.leftnameplate .nameplate_actions { left: 158px; flex-direction: row; }
-.rightnameplate .nameplate_actions { right: 158px; flex-direction: row-reverse; }
+.leftnameplate .nameplate_actions { left: 168px; flex-direction: row; }
+.rightnameplate .nameplate_actions { right: 168px; flex-direction: row-reverse; }
 
 .nameplate_action {
     width: 30px;
