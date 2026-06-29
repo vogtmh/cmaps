@@ -1693,8 +1693,9 @@ function buildSidebarLocalRow(r) {
   //  - Facilities (printer, ...): description (empl), falling back to the type.
   if (r.desktype === 'meeting') {
     sub.textContent = meetingNow ? meetingNow : 'free';
-    // Colour the subtitle with the meeting-room status colour (busy vs free).
-    sub.style.color = meetingBusy ? 'rgb(0, 0, 136)' : '#008800';
+    // Colour the subtitle with the meeting-room status colour: the pulse blue
+    // when in use, the available green when free.
+    sub.style.color = meetingBusy ? 'rgb(0, 187, 255)' : '#008800';
   }
   else if (isPerson) {
     sub.textContent = (r.title && r.title.trim() !== '') ? r.title : r.dsk;
