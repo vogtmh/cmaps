@@ -1591,11 +1591,6 @@ function renderSearchSidebar() {
   if (!inner) { return; }
   inner.innerHTML = '';
 
-  var head = document.createElement('div');
-  head.className = 'searchsidebar_header';
-  head.textContent = 'Search results';
-  inner.appendChild(head);
-
   // Current map results first
   if (map != 'overview') {
     var lh = document.createElement('div');
