@@ -1633,10 +1633,54 @@ function buildSidebarLocalRow(r) {
   row.setAttribute('data-deskid', r.id);
   row.onclick = function () { selectSearchResult(r.id, row); };
 
+  // Desk types that represent a real person (show their avatar). Everything else
+  // is a facility/marker that uses its own icon image instead.
+  var personTypes = ['addesk', 'localdesk', 'shareddesk', 'occupied', 'occupiedldap', 'hotseat', 'booking', 'booking_booked', 'hotseat_booked'];
+  // Background colours for facility icons, matching the on-map item colours.
+  var itemBg = {
+    printer: 'rgba(50,50,50,0.7)',
+    firstaid: 'rgba(220,50,50,0.7)',
+    restroom: 'rgba(78, 81, 100, 0.7)',
+    food: 'rgba(215, 125, 40, 0.7)',
+    service: 'rgba(70, 190, 190, 0.7)',
+    exit: 'rgba(84, 185, 72, 0.7)',
+    keycardlock: 'rgba(240, 220, 0, 0.7)',
+    keylock: 'rgba(240, 220, 0, 0.7)',
+    floor: '#d017a8b3',
+    blocked: 'rgba(180, 180, 180, 0.7)'
+  };
+  var isPerson = personTypes.indexOf(r.desktype) !== -1;
+
+  // Meeting room live status (current event + busy colour), looked up by desk id.
+  var meetingNow = null, meetingBusy = false;
+  if (r.desktype === 'meeting') {
+    var rs = (meetingstatus || []).filter(function (e) { return e.deskid == r.id; });
+    if (rs.length) {
+      var av = rs[0].availability;
+      meetingBusy = (av === 'booked' || av === 'in_use');
+      if (meetingBusy && rs[0].now_title) { meetingNow = rs[0].now_title; }
+    }
+  }
+
   var img = document.createElement('img');
   img.className = 'searchsidebar_avatar';
-  img.src = avatarUrl(r.avtr, r.hasavatar);
-  img.onerror = function () { this.onerror = null; this.src = 'images/noavatar.png'; };
+  if (isPerson) {
+    img.src = avatarUrl(r.avtr, r.hasavatar);
+    img.onerror = function () { this.onerror = null; this.src = 'images/noavatar.png'; };
+  }
+  else {
+    // Facility/marker: use its own icon, fitted inside the round badge.
+    img.src = 'images/' + r.desktype + '.png';
+    img.style.objectFit = 'contain';
+    img.style.padding = '6px';
+    img.style.boxSizing = 'border-box';
+    if (r.desktype === 'meeting') {
+      img.style.background = meetingBusy ? 'rgba(0, 0, 136)' : '#008800';
+    }
+    else if (itemBg[r.desktype]) {
+      img.style.background = itemBg[r.desktype];
+    }
+  }
   row.appendChild(img);
 
   var txt = document.createElement('div');
@@ -1647,10 +1691,13 @@ function buildSidebarLocalRow(r) {
   var sub = document.createElement('div');
   sub.className = 'searchsidebar_sub';
   // Subtitle:
+  //  - Meeting rooms: current event title, or "free" when not in use.
   //  - People (desk types): job title, falling back to the desk name.
-  //  - Facilities (printer, meeting, ...): description (empl), falling back to the type.
-  var personTypes = ['addesk', 'occupied', 'occupiedldap', 'shareddesk', 'free', 'hotseat', 'booking_booked', 'hotseat_booked'];
-  if (personTypes.indexOf(r.desktype) !== -1) {
+  //  - Facilities (printer, ...): description (empl), falling back to the type.
+  if (r.desktype === 'meeting') {
+    sub.textContent = meetingNow ? meetingNow : 'free';
+  }
+  else if (isPerson) {
     sub.textContent = (r.title && r.title.trim() !== '') ? r.title : r.dsk;
   }
   else {
