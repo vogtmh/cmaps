@@ -166,9 +166,11 @@ function loginForm (showform) {
 
 function showMapplate (mapname) {
   var mapinfo = overviewmaps.find(o => Object.entries(o).find(([k, value]) => k === 'mapname' && value === mapname) !== undefined);
-  
-  var plateX = Number(mapinfo.x)+(Number(mapinfo.flagsize)/2)-100;
-  var plateY = Number(mapinfo.y)+(Number(mapinfo.flagsize)/2)-100;
+
+  // Classic mapflags are 30px and anchored by their top-left corner, so their
+  // centre sits at x+15 / y+15. Offset the plate to that centre, minus 100.
+  var plateX = Number(mapinfo.x)+15-100;
+  var plateY = Number(mapinfo.y)+15-100;
 
   if (plateY < 0) {
     var y_nameplate = 0;
@@ -1382,15 +1384,32 @@ function updateOverview() {
         var allmaps = result.maps;
         var mapout = '';
         var scriptout = '<script>';
+        // Projection used to place locations that have lat/lon but no stored
+        // X/Y onto the classic background (assumed geographic). See
+        // worldProjection for the shared formula.
+        var proj = worldProjection();
         for (var i = 0; i < allmaps.length; i++) {
           var onemap = allmaps[i];
           if (onemap.mapname != 'overview' && onemap.published == 'yes') {
+            // Use the stored pixel position; if it is missing (0,0) but the
+            // location has lat/lon, derive an approximate X/Y from the geo
+            // coordinates so the marker still appears.
+            var fx = Number(onemap.x), fy = Number(onemap.y);
+            if ((!isFinite(fx) || !isFinite(fy) || (fx === 0 && fy === 0))) {
+              var flat = Number(onemap.lat), flon = Number(onemap.lon);
+              if (isFinite(flat) && isFinite(flon) && (flat !== 0 || flon !== 0)) {
+                var fxy = proj.toXY(flat, flon);
+                fx = Math.round(fxy.x); fy = Math.round(fxy.y);
+              }
+            }
+            onemap.x = fx;
+            onemap.y = fy;
             mapout += '' //<a href="'+root+'?map='+onemap.mapname+'" id="link_'+onemap.mapname+'">
-                  + '<div class="mapflag" id="mapflag_'+onemap.mapname+'" style="left: '+onemap.x+'px; top: '+onemap.y+'px;' 
-                  + 'width:'+onemap.flagsize+'px; height:'+onemap.flagsize+'px; background-image: url(countryflags/'+onemap.country+'.svg);" '
+                  + '<div class="mapflag" id="mapflag_'+onemap.mapname+'" style="left: '+fx+'px; top: '+fy+'px;'
+                  + 'width:30px; height:30px; background-image: url(countryflags/'+onemap.country+'.svg);" '
                   + 'onclick="showMapplate(\''+onemap.mapname+'\')">'
                   + '<div style="position:relative; height:100%; text-align: center;color:white;">'
-                  + '<span style="line-height:'+onemap.flagsize+'px;font-size:'+(Number(onemap.flagsize)/100*16)+'px; background: rgba(50,50,50,0.8);">'+(onemap.displayname ? onemap.displayname : ucWords(onemap.mapname))+'</span>'
+                  + '<span style="line-height:30px;font-size:4.8px; background: rgba(50,50,50,0.8);">'+(onemap.displayname ? onemap.displayname : ucWords(onemap.mapname))+'</span>'
                   + '</div>'
                   + '</div>';
                   //+ '<div class="mapflag_results" id="mapresults_'+onemap.mapname+'"></div>  </div>';
@@ -1404,6 +1423,424 @@ function updateOverview() {
         overviewmaps = allmaps;
         if ($('#searchtext').val() != '') {$("#search_button").click()}
       }
+    });
+}
+
+// Cached Natural Earth country geometry (loaded once per page).
+var worldGeo = null;
+
+// worldProjection is the single source of truth for converting between the
+// equirectangular world map and screen pixels. Both overview renderers
+// (updateWorldMap and updateOverview) and the classic<->modern coordinate
+// derivation use it so the map background, the markers and any back/forward
+// projected coordinates always stay in agreement.
+//   forward:  {lat,lon} -> {x,y}px
+//   inverse:  {x,y}px   -> {lat,lon}
+// The map is cropped to lon -180..180 and lat 90..-60 (Antarctica removed),
+// drawn at targetScreenWidth with a 2.4:1 base aspect ratio, vertically
+// exaggerated by vStretch and offset topOffset px down to match index.html.
+function worldProjection() {
+  var latTop = 90, latBottom = -60, vStretch = 1.3, topOffset = 20;
+  var W = targetScreenWidth;
+  var H = W * (latTop - latBottom) / 360 * vStretch;
+  return {
+    latTop: latTop, latBottom: latBottom, topOffset: topOffset, W: W, H: H,
+    toXY: function (lat, lon) {
+      return {
+        x: (lon + 180) / 360 * W,
+        y: (latTop - lat) / (latTop - latBottom) * H + topOffset
+      };
+    },
+    toLatLon: function (x, y) {
+      return {
+        lon: x / W * 360 - 180,
+        lat: latTop - (y - topOffset) / H * (latTop - latBottom)
+      };
+    }
+  };
+}
+
+// loadWorldGeo fetches the country polygons (GeoJSON) and caches them, then runs
+// the callback. The data is the Natural Earth 1:110m admin-0 countries set, a
+// small (~250 KB) low-detail vector of every country as [lon,lat] polygons.
+function loadWorldGeo(cb) {
+  if (worldGeo) { cb(); return; }
+  $.ajax({
+    url: 'worldmap.geojson',
+    async: true,
+    type: 'get',
+    dataType: 'JSON',
+    success: function(result) { worldGeo = result; cb(); },
+    error: function() { worldGeo = { features: [] }; cb(); }
+  });
+}
+
+// renderWorldCountries projects every country polygon to screen pixels with the
+// same equirectangular projection used for the location markers and returns an
+// <svg> string of one <path> per country. Each path carries data-iso/data-name
+// so individual countries can be styled or coloured (e.g. on hover) — the whole
+// reason for rendering the map from raw data instead of a flat PNG.
+function renderWorldCountries(W, H, topOffset, latTop, latBottom) {
+  function projX(lon) { return (lon + 180) / 360 * W; }
+  function projY(lat) { return (latTop - lat) / (latTop - latBottom) * H + topOffset; }
+  function ringPath(ring) {
+    var d = '';
+    for (var i = 0; i < ring.length; i++) {
+      var lon = ring[i][0], lat = ring[i][1];
+      // Clamp to the cropped southern edge so the few southern tips that dip
+      // just below the visible area don't stretch the shape.
+      if (lat < latBottom) { lat = latBottom; }
+      d += (i === 0 ? 'M' : 'L') + projX(lon).toFixed(1) + ',' + projY(lat).toFixed(1);
+    }
+    return d + 'Z';
+  }
+  var paths = '';
+  var maskPaths = '';
+  var feats = (worldGeo && worldGeo.features) ? worldGeo.features : [];
+  for (var f = 0; f < feats.length; f++) {
+    var feat = feats[f];
+    var props = feat.properties || {};
+    var name = props.NAME || props.name || '';
+    // Antarctica is below the cropped southern edge; skip it like the old map.
+    if (name === 'Antarctica') { continue; }
+    var geom = feat.geometry;
+    if (!geom) { continue; }
+    var polys = geom.type === 'Polygon' ? [geom.coordinates]
+              : geom.type === 'MultiPolygon' ? geom.coordinates : [];
+    var d = '';
+    for (var p = 0; p < polys.length; p++) {
+      for (var r = 0; r < polys[p].length; r++) {
+        d += ringPath(polys[p][r]);
+      }
+    }
+    if (!d) { continue; }
+    var iso = (props.ISO_A2 || props.iso_a2 || '').toLowerCase();
+    paths += '<path class="worldcountry" data-iso="' + iso + '" '
+           + 'data-name="' + name.replace(/"/g, '') + '" d="' + d + '"></path>';
+    // Same geometry for the border mask: filled white (land kept) and stroked
+    // black (border pixels punched out to full transparency).
+    maskPaths += '<path d="' + d + '"></path>';
+  }
+  var svgH = topOffset + H;
+  // A mask renders the land white (visible) but strokes every country outline in
+  // black, so the shared borders become genuinely transparent (alpha 0) pixels
+  // that let whatever is behind the map show through — exactly like the old PNG,
+  // while each country stays an individually colourable <path> for hover. The
+  // mask only hides border pixels, so changing a country's fill (e.g. on hover)
+  // still shows through everywhere except the thin border lines.
+  return '<svg class="worldcountries" width="' + W + '" height="' + svgH + '" '
+       + 'viewBox="0 0 ' + W + ' ' + svgH + '" '
+       + 'style="position:absolute; left:0; top:0;">'
+       + '<defs><mask id="worldbordermask" maskUnits="userSpaceOnUse" '
+       + 'x="0" y="0" width="' + W + '" height="' + svgH + '">'
+       + '<g fill="#fff" stroke="#000" stroke-width="1" stroke-linejoin="round">'
+       + maskPaths + '</g></mask></defs>'
+       + '<g mask="url(#worldbordermask)">' + paths + '</g></svg>';
+}
+
+// updateWorldMap renders the overview as a real world map: each location is
+// placed by its geocoded latitude/longitude (equirectangular projection) over
+// the world-map background image, instead of by the static MapX/MapY pixels.
+// It reuses showMapplate() for the location popup by writing the projected pixel
+// position back into each map's x/y.
+function updateWorldMap() {
+    loadWorldGeo(function() {
+    $.ajax({
+      url: 'rest/config?mode=maps',
+      async: true,
+      type: 'get',
+      dataType: 'JSON',
+      success: function(result){
+        var allmaps = result.maps;
+        // Projection shared with the country layer, the classic overview and the
+        // coordinate derivation (see worldProjection).
+        var proj = worldProjection();
+        var latTop = proj.latTop, latBottom = proj.latBottom;
+        var W = proj.W, H = proj.H, topOffset = proj.topOffset;
+
+        // Render the country layer (vector, from raw GeoJSON) into the overview
+        // container, beneath the location markers added further below.
+        var omap = document.getElementById('overviewmap');
+        if (omap) { omap.innerHTML = renderWorldCountries(W, H, topOffset, latTop, latBottom); }
+
+        // First pass: project every published location to a pixel position (the
+        // exact pin spot). Locations missing lat/lon (never geocoded) but with a
+        // stored X/Y are back-projected from those pixels, so the modern map can
+        // still show them approximately without requiring geo data.
+        var pts = [];
+        for (var i = 0; i < allmaps.length; i++) {
+          var onemap = allmaps[i];
+          if (onemap.mapname == 'overview' || onemap.published != 'yes') { continue; }
+          var lat = Number(onemap.lat);
+          var lon = Number(onemap.lon);
+          // Approximate missing coordinates by back-projecting the stored X/Y
+          // (only meaningful when the classic background was a geographic map,
+          // but harmless otherwise and editable by the admin).
+          if ((!isFinite(lat) || !isFinite(lon) || (lat === 0 && lon === 0))) {
+            var sx = Number(onemap.x), sy = Number(onemap.y);
+            if (isFinite(sx) && isFinite(sy) && (sx !== 0 || sy !== 0)) {
+              var ll = proj.toLatLon(sx, sy);
+              lat = ll.lat; lon = ll.lon;
+            }
+          }
+          // Skip locations with no usable position at all, or that fall below
+          // the cropped southern edge.
+          if (!isFinite(lat) || !isFinite(lon) || (lat === 0 && lon === 0) || lat < latBottom) { continue; }
+          var pxy = proj.toXY(lat, lon);
+          var px = pxy.x;
+          var py = pxy.y;
+          // The name sits on top of the flag circle; strip the "-nomap" marker
+          // suffix some maps use so it never shows in the label.
+          var label = (onemap.displayname ? onemap.displayname : ucWords(onemap.mapname)).replace(/-nomap/gi, '');
+          // The label is overlaid on the flag, so the footprint is just the
+          // circular flag itself.
+          var flagSize = 66;
+          var w = flagSize;
+          var h = flagSize;
+          pts.push({ map: onemap, ax: px, ay: py, x: px, y: py, w: w, h: h, label: label });
+        }
+
+        // --- Cluster nearby locations -------------------------------------
+        // Group locations whose flag circles would actually overlap if drawn on
+        // their exact spots (e.g. the European cities). The test uses only the
+        // round flag footprint, NOT the (sometimes long) text label, so two
+        // locations whose circles are clearly apart stay separate even if their
+        // labels are wide (e.g. Shanghai / Tokyo, Mumbai / Singapore). Such
+        // singletons keep their flag on the exact spot and never get a pin.
+        var clusterPad = 16;
+        var clusterReach = flagSize + clusterPad;
+        var cluster = new Array(pts.length);
+        for (var i = 0; i < pts.length; i++) { cluster[i] = i; }
+        function findRoot(x) { while (cluster[x] !== x) { cluster[x] = cluster[cluster[x]]; x = cluster[x]; } return x; }
+        for (var a = 0; a < pts.length; a++) {
+          for (var b = a + 1; b < pts.length; b++) {
+            var cdx = pts[a].ax - pts[b].ax;
+            var cdy = pts[a].ay - pts[b].ay;
+            // Use the true centre-to-centre distance: two flag circles only
+            // overlap when their centres are closer than one flag diameter
+            // (plus padding). A bounding-box test would wrongly group diagonal
+            // neighbours like Shanghai / Tokyo.
+            if (Math.sqrt(cdx * cdx + cdy * cdy) < clusterReach) {
+              cluster[findRoot(a)] = findRoot(b);
+            }
+          }
+        }
+        var groups = {};
+        for (var i = 0; i < pts.length; i++) {
+          var r = findRoot(i);
+          if (!groups[r]) { groups[r] = []; }
+          groups[r].push(i);
+        }
+
+        // --- Fan each multi-member cluster into rows -----------------------
+        // The cluster's dominant country (the one with the most locations, e.g.
+        // Germany) fans into a row above the cluster; every other country
+        // (Spain, Portugal, Austria, Greece...) fans into a row below. Each row
+        // is ordered west-to-east so leader lines stay in geographic order.
+        // Members of a fanned cluster get a pin + leader line; singletons keep
+        // their flag on the exact spot with no pin.
+        var bubbleGap = 96;  // horizontal spacing between bubbles in a row
+        var rowGap = 130;    // vertical distance of a row from the cluster centre
+        for (var key in groups) {
+          var idx = groups[key];
+          if (idx.length < 2) { continue; } // singletons stay on their spot
+          // Cluster centre.
+          var ccx = 0, ccy = 0;
+          for (var j = 0; j < idx.length; j++) {
+            ccx += pts[idx[j]].ax; ccy += pts[idx[j]].ay;
+            pts[idx[j]].fanned = true;
+          }
+          ccx /= idx.length; ccy /= idx.length;
+
+          // Find the dominant country in this cluster.
+          var counts = {};
+          for (var j = 0; j < idx.length; j++) {
+            var c = pts[idx[j]].map.country || '';
+            counts[c] = (counts[c] || 0) + 1;
+          }
+          var primary = '', best = -1;
+          for (var c in counts) { if (counts[c] > best) { best = counts[c]; primary = c; } }
+
+          // Upper row = dominant country, lower row = everyone else.
+          var upper = [], lower = [];
+          for (var j = 0; j < idx.length; j++) {
+            ((pts[idx[j]].map.country || '') === primary ? upper : lower).push(idx[j]);
+          }
+          upper.sort(function(p, q) { return pts[p].ax - pts[q].ax; });
+          lower.sort(function(p, q) { return pts[p].ax - pts[q].ax; });
+
+          // Place a band of bubbles in an evenly-spaced horizontal row, centred
+          // on the cluster. A flat row (rather than a curved arc) keeps every
+          // bubble at the same height so the leader lines stay in left-to-right
+          // order and don't cross.
+          function placeBand(band, dirY) {
+            var n = band.length;
+            var spread = (n - 1) * bubbleGap;
+            var startX = ccx - spread / 2;
+            for (var k = 0; k < n; k++) {
+              pts[band[k]].x = n === 1 ? ccx : startX + spread * k / (n - 1);
+              pts[band[k]].y = ccy + dirY * rowGap;
+            }
+          }
+          placeBand(upper, -1);
+          placeBand(lower, 1);
+
+          // Leader lines can still cross when two cities in the same row share a
+          // similar longitude but differ a lot in latitude (e.g. Bremen vs
+          // Stuttgart). Greedily swap adjacent same-row bubbles whenever it
+          // reduces the number of crossings, which removes those cases while
+          // keeping the rows broadly west-to-east.
+          function segCross(p, q) {
+            var a = pts[p], b = pts[q];
+            function ccw(ax, ay, bx, by, cx, cy) { return (cy - ay) * (bx - ax) > (by - ay) * (cx - ax); }
+            return ccw(a.ax, a.ay, b.ax, b.ay, b.x, b.y) !== ccw(a.x, a.y, b.ax, b.ay, b.x, b.y) &&
+                   ccw(a.ax, a.ay, a.x, a.y, b.ax, b.ay) !== ccw(a.ax, a.ay, a.x, a.y, b.x, b.y);
+          }
+          function clusterCross() {
+            var c = 0;
+            for (var x = 0; x < idx.length; x++) {
+              for (var y = x + 1; y < idx.length; y++) { if (segCross(idx[x], idx[y])) c++; }
+            }
+            return c;
+          }
+          function optimizeRow(band) {
+            var improved = true, guard = 0;
+            while (improved && guard++ < 50) {
+              improved = false;
+              for (var k = 0; k < band.length - 1; k++) {
+                var before = clusterCross();
+                var tmp = pts[band[k]].x; pts[band[k]].x = pts[band[k + 1]].x; pts[band[k + 1]].x = tmp;
+                if (clusterCross() < before) {
+                  var t = band[k]; band[k] = band[k + 1]; band[k + 1] = t; improved = true;
+                } else {
+                  var t2 = pts[band[k]].x; pts[band[k]].x = pts[band[k + 1]].x; pts[band[k + 1]].x = t2;
+                }
+              }
+            }
+          }
+          optimizeRow(upper);
+          optimizeRow(lower);
+        }
+
+        // --- Collision cleanup --------------------------------------------
+        // After fanning, relax positions so nothing overlaps. Singletons stay
+        // pinned to their exact spot (they act as fixed obstacles); only fanned
+        // bubbles move, springing toward their row target while pairwise
+        // separation pushes overlaps apart.
+        var pad = 12;
+        var spring = 0.05;
+        var minX = 60, maxX = W - 60;
+        var minY = topOffset + 40, maxY = topOffset + H + 200;
+        for (var i = 0; i < pts.length; i++) { pts[i].tx = pts[i].x; pts[i].ty = pts[i].y; }
+        for (var it = 0; it < 300; it++) {
+          for (var i = 0; i < pts.length; i++) {
+            if (!pts[i].fanned) { continue; }
+            pts[i].x += (pts[i].tx - pts[i].x) * spring;
+            pts[i].y += (pts[i].ty - pts[i].y) * spring;
+          }
+          for (var pass = 0; pass < 6; pass++) {
+            for (var a = 0; a < pts.length; a++) {
+              for (var b = a + 1; b < pts.length; b++) {
+                var pa = pts[a], pb = pts[b];
+                if (!pa.fanned && !pb.fanned) { continue; }
+                var ddx = pb.x - pa.x, ddy = pb.y - pa.y;
+                var ox = (pa.w + pb.w) / 2 + pad - Math.abs(ddx);
+                var oy = (pa.h + pb.h) / 2 + pad - Math.abs(ddy);
+                if (ox > 0 && oy > 0) {
+                  // A fixed (singleton) bubble doesn't move; the fanned one
+                  // takes the full push.
+                  var wa = pa.fanned ? (pb.fanned ? 0.5 : 1) : 0;
+                  var wb = pb.fanned ? (pa.fanned ? 0.5 : 1) : 0;
+                  if (ox < oy) {
+                    var sgnx = ddx === 0 ? (a < b ? -1 : 1) : (ddx < 0 ? -1 : 1);
+                    pa.x -= sgnx * ox * wa; pb.x += sgnx * ox * wb;
+                  } else {
+                    var sgny = ddy === 0 ? (a < b ? -1 : 1) : (ddy < 0 ? -1 : 1);
+                    pa.y -= sgny * oy * wa; pb.y += sgny * oy * wb;
+                  }
+                }
+              }
+            }
+          }
+          // Keep fanned flag footprints clear of every other location's exact
+          // pin spot, so a pin is never hidden underneath a neighbouring flag.
+          var pinHalf = 9;
+          for (var a = 0; a < pts.length; a++) {
+            if (!pts[a].fanned) { continue; }
+            for (var b = 0; b < pts.length; b++) {
+              if (a === b) { continue; }
+              var pa = pts[a];
+              var adx = pts[b].ax - pa.x, ady = pts[b].ay - pa.y;
+              var aox = pa.w / 2 + pinHalf - Math.abs(adx);
+              var aoy = pa.h / 2 + pinHalf - Math.abs(ady);
+              if (aox > 0 && aoy > 0) {
+                if (aox < aoy) {
+                  pa.x += (adx < 0 ? 1 : -1) * aox;
+                } else {
+                  pa.y += (ady < 0 ? 1 : -1) * aoy;
+                }
+              }
+            }
+          }
+          for (var i = 0; i < pts.length; i++) {
+            if (!pts[i].fanned) { continue; }
+            if (pts[i].x < minX) pts[i].x = minX;
+            if (pts[i].x > maxX) pts[i].x = maxX;
+            if (pts[i].y < minY) pts[i].y = minY;
+            if (pts[i].y > maxY) pts[i].y = maxY;
+          }
+        }
+
+        var lines = '';
+        var markers = '';
+        for (var i = 0; i < pts.length; i++) {
+          var pt = pts[i];
+
+          // Round the bubble position to whole pixels. The flag is centred with
+          // translate(-50%,-50%), so a fractional left/top would land the
+          // overlaid text on a sub-pixel boundary and render it blurry.
+          pt.x = Math.round(pt.x);
+          pt.y = Math.round(pt.y);
+
+          // Feed the bubble position to showMapplate via x/y.
+          pt.map.x = pt.x;
+          pt.map.y = pt.y;
+
+          // Only fanned bubbles (members of a dense cluster) are displaced from
+          // their true spot, so only they get a small (non-clickable) pin at the
+          // exact location plus a leader line. Singletons sit on their spot.
+          if (pt.fanned) {
+            lines += '<line x1="' + pt.ax + '" y1="' + pt.ay + '" x2="' + pt.x + '" y2="' + pt.y + '" '
+                   + 'stroke="#555555" stroke-width="2" />';
+            markers += '<div class="worldpin" style="left:' + pt.ax + 'px; top:' + pt.ay + 'px;"></div>';
+          }
+
+          var hasFlag = pt.map.country && pt.map.country != 'none' && pt.map.country != '';
+          var flagStyle = hasFlag
+            ? 'background-image:url(countryflags/' + pt.map.country + '.svg);'
+            : 'background-image:none; background-color:#FF7F00;';
+          markers += '<div class="worldflag" id="mapflag_' + pt.map.mapname + '" '
+                  + 'style="left:' + pt.x + 'px; top:' + pt.y + 'px;" '
+                  + 'onclick="showMapplate(\'' + pt.map.mapname + '\')">'
+                  + '<div class="worldflag_img" style="' + flagStyle + '"></div>'
+                  + '<span class="worldflag_label">' + pt.label + '</span>'
+                  + '</div>';
+        }
+
+        var svgH = topOffset + H + 200;
+        var mapout = '<svg class="worldlines" width="' + W + '" height="' + svgH + '" '
+                   + 'style="position:absolute; left:0; top:0; pointer-events:none;">' + lines + '</svg>'
+                   + markers;
+
+        var p = document.getElementById('content');
+        var newElement = document.createElement('div');
+        newElement.setAttribute('id', 'mapOverview');
+        newElement.innerHTML = mapout;
+        p.appendChild(newElement);
+        overviewmaps = allmaps;
+        if ($('#searchtext').val() != '') {$("#search_button").click()}
+      }
+    });
     });
 }
 

@@ -150,7 +150,9 @@ func (app *App) ImportFromMySQL(c MySQLConfig, report func(stage string, res Imp
 	if rows, err := sqldb.Query("SELECT `mapname`,`itemscale`,`published`,`country`,`flagsize`,`timezone`,`address`,`mapX`,`mapY` FROM `config_maplist`"); err == nil {
 		for rows.Next() {
 			var m MapInfo
-			if rows.Scan(&m.Mapname, &m.Itemscale, &m.Published, &m.Country, &m.Flagsize, &m.Timezone, &m.Address, &m.MapX, &m.MapY) == nil {
+			// flagsize is a legacy column we no longer store; scan and discard it.
+			var legacyFlagsize string
+			if rows.Scan(&m.Mapname, &m.Itemscale, &m.Published, &m.Country, &legacyFlagsize, &m.Timezone, &m.Address, &m.MapX, &m.MapY) == nil {
 				if db.PutMap(m) == nil {
 					res.Maps++
 					mapNames = append(mapNames, m.Mapname)

@@ -1194,9 +1194,256 @@ function saveSetting(name, btn) {
   });
 }
 
+// Toggle the dynamic world map setting (stored as "1"/"" under "worldmap").
+// Enabling first checks that every published location has lat/lon; if some are
+// missing it opens the coordinate review dialog instead of enabling immediately.
+function saveWorldMap(cb) {
+  if (cb.checked) {
+    cb.disabled = true;
+    fetch('../rest/config?mode=maps', { credentials: 'same-origin' })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        var maps = (d && d.maps) || [];
+        var missing = maps.filter(function (m) {
+          return String(m.mapname).toLowerCase() !== 'overview'
+            && String(m.published).toLowerCase() === 'yes'
+            && Number(m.lat) === 0 && Number(m.lon) === 0;
+        });
+        cb.disabled = false;
+        if (missing.length === 0) { persistWorldMap(cb, '1'); return; }
+        cb.checked = false; // keep disabled until coordinates are saved
+        openWorldCoords(cb, missing, maps);
+      })
+      .catch(function () { cb.disabled = false; persistWorldMap(cb, '1'); });
+    return;
+  }
+  persistWorldMap(cb, '');
+}
+
+// persistWorldMap writes the worldmap setting and updates the inline status text.
+function persistWorldMap(cb, value) {
+  var status = document.getElementById('worldmapStatus');
+  cb.checked = value === '1';
+  cb.disabled = true;
+  if (status) { status.style.color = ''; status.textContent = 'Saving\u2026'; }
+  var body = 'name=worldmap&value=' + encodeURIComponent(value);
+  return fetch('../rest/setting', {
+    method: 'POST',
+    credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: body
+  }).then(function (r) {
+    if (!r.ok) throw new Error('save failed');
+    return r.json();
+  }).then(function () {
+    cb.disabled = false;
+    if (status) {
+      status.style.color = 'var(--sy-ok)';
+      status.textContent = cb.checked ? 'Enabled' : 'Disabled';
+      setTimeout(function () { status.textContent = ''; }, 1500);
+    }
+  }).catch(function () {
+    cb.disabled = false;
+    cb.checked = !cb.checked;
+    if (status) { status.style.color = 'var(--sy-danger)'; status.textContent = 'Failed'; }
+    throw new Error('save failed');
+  });
+}
+
+// ── World map coordinate review dialog (classic -> modern switch) ─────────────
+// Holds the pending enable while the dialog is open.
+var _worldCoordsPending = null; // { cb, rows:[{mapname,address}], imgW, imgH }
+
+// cleanWorldAddr turns a stored address (with <br>) into a single geocodable line.
+function cleanWorldAddr(a) {
+  return String(a == null ? '' : a)
+    .replace(/<br\s*\/?>/gi, ', ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+// approxWorldLatLon roughly maps an X/Y pixel on the classic overview image to
+// lat/lon, treating that image as a full equirectangular world map. Values are
+// approximate and meant to be reviewed/edited before saving.
+function approxWorldLatLon(x, y, imgW, imgH) {
+  if (!imgW || !imgH) return null;
+  var lon = (Number(x) / imgW) * 360 - 180;
+  var lat = 90 - (Number(y) / imgH) * 180;
+  if (lon < -180) lon = -180; if (lon > 180) lon = 180;
+  if (lat < -90) lat = -90; if (lat > 90) lat = 90;
+  return { lat: lat, lon: lon };
+}
+
+// calibrateWorldFit builds a linear X->lon / Y->lat mapping from the maps that
+// already have both pixel (X/Y) and geographic (lat/lon) coordinates. Because
+// the classic overview image is an equirectangular projection, lon is linear in
+// X and lat is linear in Y, so a least-squares fit over the known points yields
+// accurate offline estimates for the locations that are still missing. Returns
+// {ax,bx,ay,by} or null when there are too few reference points.
+function calibrateWorldFit(maps) {
+  var px = [], plon = [], py = [], plat = [];
+  (maps || []).forEach(function (m) {
+    var x = Number(m.x), y = Number(m.y), lat = Number(m.lat), lon = Number(m.lon);
+    if (lat === 0 && lon === 0) return;       // no geographic reference
+    if (x === 0 && y === 0) return;           // no pixel reference
+    if (isFinite(x) && isFinite(lon)) { px.push(x); plon.push(lon); }
+    if (isFinite(y) && isFinite(lat)) { py.push(y); plat.push(lat); }
+  });
+  function fit(xs, ys) {
+    var n = xs.length;
+    if (n < 2) return null;
+    var sx = 0, sy = 0, sxx = 0, sxy = 0;
+    for (var i = 0; i < n; i++) { sx += xs[i]; sy += ys[i]; sxx += xs[i] * xs[i]; sxy += xs[i] * ys[i]; }
+    var denom = n * sxx - sx * sx;
+    if (denom === 0) return null;
+    var slope = (n * sxy - sx * sy) / denom;
+    var intercept = (sy - slope * sx) / n;
+    return { slope: slope, intercept: intercept };
+  }
+  var fx = fit(px, plon), fy = fit(py, plat);
+  if (!fx || !fy) return null;
+  return { ax: fx.slope, bx: fx.intercept, ay: fy.slope, by: fy.intercept };
+}
+
+function openWorldCoords(cb, missing, allMaps) {
+  _worldCoordsPending = { cb: cb, rows: missing, imgW: 0, imgH: 0, fit: calibrateWorldFit(allMaps) };
+  var hint = document.getElementById('worldcoordsGeoHint');
+  var geoActions = document.getElementById('worldcoordsGeoActions');
+  var configured = (typeof ADMIN_GEOAPIFY_CONFIGURED !== 'undefined') && ADMIN_GEOAPIFY_CONFIGURED;
+  if (hint) hint.style.display = configured ? 'none' : 'block';
+  if (geoActions) geoActions.style.display = configured ? 'flex' : 'none';
+  var result = document.getElementById('worldcoordsResult');
+  if (result) { result.textContent = ''; result.style.color = ''; }
+  // Load the overview image so the offline approximation has real dimensions.
+  var img = new Image();
+  img.onload = function () {
+    _worldCoordsPending.imgW = img.naturalWidth;
+    _worldCoordsPending.imgH = img.naturalHeight;
+    renderWorldCoords();
+  };
+  img.onerror = function () { renderWorldCoords(); };
+  img.src = '../maps/overview.png?ts=' + Date.now();
+  document.getElementById('worldcoordsOverlay').style.display = 'block';
+  renderWorldCoords();
+}
+
+function renderWorldCoords() {
+  var pend = _worldCoordsPending;
+  if (!pend) return;
+  var configured = (typeof ADMIN_GEOAPIFY_CONFIGURED !== 'undefined') && ADMIN_GEOAPIFY_CONFIGURED;
+  var body = document.getElementById('worldcoordsBody');
+  if (!body) return;
+  var html = '';
+  pend.rows.forEach(function (m, i) {
+    var addr = cleanWorldAddr(m.address);
+    var lat = '', lon = '', source = '\u2014';
+    if (pend.fit && (Number(m.x) !== 0 || Number(m.y) !== 0)) {
+      var flon = pend.fit.ax * Number(m.x) + pend.fit.bx;
+      var flat = pend.fit.ay * Number(m.y) + pend.fit.by;
+      lat = flat.toFixed(4); lon = flon.toFixed(4); source = '~from X/Y';
+    } else {
+      var approx = approxWorldLatLon(m.x, m.y, pend.imgW, pend.imgH);
+      if (approx) { lat = approx.lat.toFixed(4); lon = approx.lon.toFixed(4); source = '~approx'; }
+    }
+    var label = m.displayname || m.mapname;
+    html += '<tr data-mapname="' + esc(m.mapname) + '">'
+      + '<td style="white-space:nowrap;">' + esc(label) + '</td>'
+      + '<td>' + (addr ? esc(addr) : '<span style="color:var(--sy-muted);">no address</span>') + '</td>'
+      + '<td><input class="sync-input wc-lat" type="text" value="' + esc(lat) + '" style="width:90px;"></td>'
+      + '<td><input class="sync-input wc-lon" type="text" value="' + esc(lon) + '" style="width:90px;"></td>'
+      + '<td class="wc-source" style="white-space:nowrap;color:var(--sy-muted);">' + esc(source) + '</td>'
+      + '<td>' + (configured && addr ? '<button type="button" class="sync-btn sync-btn-sm" onclick="worldCoordsGeocodeRow(' + i + ')">Geocode</button>' : '') + '</td>'
+      + '</tr>';
+  });
+  body.innerHTML = html;
+}
+
+function worldCoordsGeocodeRow(i) {
+  var pend = _worldCoordsPending;
+  if (!pend) return Promise.resolve();
+  var m = pend.rows[i];
+  var addr = cleanWorldAddr(m.address);
+  if (!addr) return Promise.resolve();
+  var tr = document.querySelector('#worldcoordsBody tr[data-mapname="' + (window.CSS && CSS.escape ? CSS.escape(m.mapname) : m.mapname) + '"]');
+  if (!tr) return Promise.resolve();
+  var srcCell = tr.querySelector('.wc-source');
+  if (srcCell) srcCell.textContent = 'geocoding\u2026';
+  return fetch('../rest/geo/test?address=' + encodeURIComponent(addr), { credentials: 'same-origin' })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      if (d && d.ok) {
+        tr.querySelector('.wc-lat').value = Number(d.lat).toFixed(4);
+        tr.querySelector('.wc-lon').value = Number(d.lon).toFixed(4);
+        if (srcCell) { srcCell.textContent = 'geocoded'; srcCell.style.color = 'var(--sy-ok)'; }
+      } else if (srcCell) {
+        srcCell.textContent = 'failed'; srcCell.style.color = 'var(--sy-danger)';
+      }
+    })
+    .catch(function () { if (srcCell) { srcCell.textContent = 'failed'; srcCell.style.color = 'var(--sy-danger)'; } });
+}
+
+function worldCoordsGeocodeAll() {
+  var pend = _worldCoordsPending;
+  if (!pend) return;
+  var btn = document.getElementById('worldcoordsGeocodeAll');
+  if (btn) btn.disabled = true;
+  // Geocode rows one at a time to keep API usage predictable.
+  var chain = Promise.resolve();
+  pend.rows.forEach(function (m, i) {
+    if (!cleanWorldAddr(m.address)) return;
+    chain = chain.then(function () { return worldCoordsGeocodeRow(i); });
+  });
+  chain.then(function () { if (btn) btn.disabled = false; });
+}
+
+function cancelWorldCoords() {
+  document.getElementById('worldcoordsOverlay').style.display = 'none';
+  if (_worldCoordsPending && _worldCoordsPending.cb) {
+    _worldCoordsPending.cb.checked = false;
+    _worldCoordsPending.cb.disabled = false;
+  }
+  _worldCoordsPending = null;
+}
+
+function saveWorldCoords() {
+  var pend = _worldCoordsPending;
+  if (!pend) return;
+  var btn = document.getElementById('worldcoordsSaveBtn');
+  var result = document.getElementById('worldcoordsResult');
+  var rows = document.querySelectorAll('#worldcoordsBody tr');
+  var posts = [];
+  rows.forEach(function (tr) {
+    var mapname = tr.getAttribute('data-mapname');
+    var lat = tr.querySelector('.wc-lat').value.trim();
+    var lon = tr.querySelector('.wc-lon').value.trim();
+    if (lat === '' || lon === '') return; // skip rows the user left blank
+    var b = 'mapname=' + encodeURIComponent(mapname)
+      + '&lat=' + encodeURIComponent(lat)
+      + '&lon=' + encodeURIComponent(lon);
+    posts.push(fetch('../rest/maps/coords', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: b
+    }).then(function (r) { if (!r.ok) throw new Error('save failed'); return r.json(); }));
+  });
+  if (btn) btn.disabled = true;
+  if (result) { result.style.color = ''; result.textContent = 'Saving\u2026'; }
+  Promise.all(posts).then(function () {
+    var cb = pend.cb;
+    document.getElementById('worldcoordsOverlay').style.display = 'none';
+    _worldCoordsPending = null;
+    return persistWorldMap(cb, '1');
+  }).then(function () {
+    if (btn) btn.disabled = false;
+  }).catch(function () {
+    if (btn) btn.disabled = false;
+    if (result) { result.style.color = 'var(--sy-danger)'; result.textContent = 'Failed to save coordinates.'; }
+  });
+}
+
 // ── VIP desk border categories (chips) ───────────────────────
 var _vipEditable = false;
-
 function loadVips(editable) {
   _vipEditable = !!editable;
   fetch('../rest/vips', { credentials: 'same-origin' })

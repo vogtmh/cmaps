@@ -36,6 +36,7 @@ type indexData struct {
 	MapList           []string
 	OtherMaps         []mapLink
 	IsOverview        bool
+	WorldMap          bool
 	Itemscale         string
 	Autozoom          int
 	Zoom              int
@@ -263,6 +264,7 @@ func (app *App) renderIndex(w http.ResponseWriter, r *http.Request, sess Session
 		MapList:           mapList,
 		OtherMaps:         otherMaps,
 		IsOverview:        mapName == "overview",
+		WorldMap:          app.db.GetSetting("worldmap") == "1",
 		Itemscale:         itemscale,
 		Autozoom:          autozoom,
 		Zoom:              zoom,

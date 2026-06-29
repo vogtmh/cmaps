@@ -260,6 +260,13 @@
 .sync-avail.unknown .dot  { background: var(--sy-off); }
 .sync-table td.sync-col-avail, .sync-table td.sync-col-match { white-space: nowrap; }
 
+/* Coordinate columns/fields that are not authoritative in the current overview
+   mode (X/Y in modern world-map mode, lat/lon in classic mode). They are still
+   shown because they may be auto-derived, just visually de-emphasised. */
+.coord-muted, .sync-table th.coord-muted, .sync-table td.coord-muted { color: var(--sy-muted); }
+.sync-field.coord-muted .sync-label { color: var(--sy-muted); }
+.sync-field.coord-muted .sync-input { color: var(--sy-muted); opacity: 0.7; }
+
 /* Now / Next meeting columns: stacked title + time. */
 .sync-table td.sync-col-meet { vertical-align: top; line-height: 1.3; }
 .sync-meet-title { display: block; }

@@ -65,9 +65,9 @@ func (app *App) seedDemoData() error {
 		return err
 	}
 	maps := []MapInfo{
-		{Mapname: "overview", Itemscale: "1", Published: "yes", Country: "none", Flagsize: "0", Timezone: "Europe/Berlin", Address: "none", MapX: 0, MapY: 0},
-		{Mapname: "germany", Itemscale: "2", Published: "yes", Country: "de", Flagsize: "30", Timezone: "Europe/Berlin", Address: "CompanyMaps Demo GmbH<br/>Musterstraße 1<br/>12345 Musterstadt<br/>Germany", MapX: 760, MapY: 158},
-		{Mapname: "usa", Itemscale: "2", Published: "yes", Country: "us", Flagsize: "80", Timezone: "America/New_York", Address: "CompanyMaps Demo Inc.<br/>123 Sample Street<br/>Anytown, CA 90210<br/>USA", MapX: 280, MapY: 250},
+		{Mapname: "overview", Itemscale: "1", Published: "yes", Country: "none", Timezone: "Europe/Berlin", Address: "none", MapX: 0, MapY: 0},
+		{Mapname: "germany", Itemscale: "2", Published: "yes", Country: "de", Timezone: "Europe/Berlin", Address: "CompanyMaps Demo GmbH<br/>Musterstraße 1<br/>12345 Musterstadt<br/>Germany", MapX: 760, MapY: 158},
+		{Mapname: "usa", Itemscale: "2", Published: "yes", Country: "us", Timezone: "America/New_York", Address: "CompanyMaps Demo Inc.<br/>123 Sample Street<br/>Anytown, CA 90210<br/>USA", MapX: 280, MapY: 250},
 	}
 	for _, m := range maps {
 		if err := db.PutMap(m); err != nil {

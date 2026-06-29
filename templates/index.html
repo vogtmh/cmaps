@@ -158,9 +158,13 @@
 <!-- Content -->
 <div id="content" class="page_content" style="zoom:{{.ContentScale}};left:{{.ContentLeft}}px;top:{{.ContentTop}}px;">
   {{if .IsOverview}}
+  {{if .WorldMap}}
+  <div id="overviewmap" style="text-align:center;position:absolute;width:{{.TargetScreenWidth}}px;" onclick="hideMapplate();"></div>
+  {{else}}
   <div id="overviewmap" style="text-align:center;position:absolute;width:{{.TargetScreenWidth}}px;">
     <img src="maps/{{.Map}}.png" style="opacity:0.7;position:absolute; top:20px; left:0px; width: {{.TargetScreenWidth}}px;{{if .Printmode}} -webkit-filter: invert(1);filter: invert(1);{{end}}" alt="" onclick="hideMapplate();" />
   </div>
+  {{end}}
   {{else}}
   <img src="maps/{{.Map}}.png" style="opacity:0.7;position:absolute; left:0px; width: {{.TargetScreenWidth}}px;{{if .Printmode}} -webkit-filter: invert(1);filter: invert(1);{{end}}" alt="" />
   <div id="deskitems"></div>
@@ -193,6 +197,7 @@
     var setting_desknumbers = {{if .Desknumbers}}1{{else}}0{{end}};
     var setting_printmode = {{if .Printmode}}1{{else}}0{{end}};
     var setting_noanimation = {{if .NoAnimation}}1{{else}}0{{end}};
+    var setting_worldmap = {{if .WorldMap}}1{{else}}0{{end}};
     var region = "{{.Region}}";
     var tzOffset = "{{.TzOffset}}";
 
@@ -216,7 +221,11 @@
     var offset = tzDifference * 60 * 1000;
 
     if (map == "overview") {
-      updateOverview();
+      if (setting_worldmap == 1) {
+        updateWorldMap();
+      } else {
+        updateOverview();
+      }
     } else {
       StartClock();
       updateDesks();

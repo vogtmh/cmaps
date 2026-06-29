@@ -102,10 +102,9 @@ func (app *App) handleRestUpdate(w http.ResponseWriter, r *http.Request) {
 		itemscale := get("itemscale")
 		published := get("published")
 		mapflag := get("mapflag")
-		flagsize := get("flagsize")
 		timezone := get("timezone")
 		address := get("address")
-		if mapName == "" || itemscale == "" || published == "" || mapflag == "" || flagsize == "" || timezone == "" || address == "" || get("x") == "" || get("y") == "" {
+		if mapName == "" || itemscale == "" || published == "" || mapflag == "" || timezone == "" || address == "" || get("x") == "" || get("y") == "" {
 			http.Error(w, "parameters missing", http.StatusBadRequest)
 			return
 		}
@@ -116,7 +115,7 @@ func (app *App) handleRestUpdate(w http.ResponseWriter, r *http.Request) {
 		}
 		_ = app.db.PutMap(MapInfo{
 			Mapname: mapName, Itemscale: itemscale, Published: published, Country: mapflag,
-			Flagsize: flagsize, Timezone: timezone, Address: address, MapX: x, MapY: y,
+			Timezone: timezone, Address: address, MapX: x, MapY: y,
 		})
 		_ = app.db.AuditLog("Maps", user, "Map has been created ("+mapName+")")
 		http.Redirect(w, r, "/?map=overview", http.StatusSeeOther)

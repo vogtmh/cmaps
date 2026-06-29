@@ -160,8 +160,27 @@
         {{end}}
       </div>
 
-      <!-- Right column: Logos + Backup stacked -->
+      <!-- Right column: Dynamic world map + Logos + Backup stacked -->
       <div class="sync-col">
+      {{if gt .PermConfig 1}}
+      <!-- Dynamic world map -->
+      <div class="sync-card">
+        <div class="sync-card-head">
+          <h2 class="sync-card-title">Dynamic world map</h2>
+        </div>
+        <p class="sync-card-hint">Render the overview as a real world map, placing each location by its geocoded
+          latitude/longitude instead of the static overview image. Run the Geoapify batch sync first so locations have
+          coordinates.</p>
+        <div class="sync-toggle-row">
+          <label class="sync-toggle">
+            <input type="checkbox" id="worldmapToggle" {{if .WorldMap}}checked{{end}} onchange="saveWorldMap(this)">
+            <span class="sync-toggle-slider"></span>
+          </label>
+          <span class="sync-toggle-label">Enable dynamic world map on the overview</span>
+          <span id="worldmapStatus" class="sync-status-text" style="margin-left:10px;"></span>
+        </div>
+      </div>
+      {{end}}
       <!-- Logos -->
       <form action="?tab=config" method="post" enctype="multipart/form-data">
         <input type="hidden" name="tab" value="config">
@@ -276,10 +295,42 @@
       </div>
     </div>
   </div>
+
+  <!-- World map coordinate review modal (classic -> modern switch) -->
+  <div id="worldcoordsOverlay" class="sync-modal">
+    <div class="sync-modal-box">
+      <div class="sync-modal-head">
+        <h2>Set location coordinates</h2>
+        <button type="button" class="sync-btn sync-btn-sm" onClick="cancelWorldCoords()">Cancel</button>
+      </div>
+      <div class="sync-modal-content">
+        <p class="sync-card-hint">The dynamic world map places each location by its latitude/longitude. The
+          locations below are missing coordinates. Review the proposed values (edit any cell), then save to enable
+          the world map.</p>
+        <p id="worldcoordsGeoHint" class="sync-card-hint" style="display:none;color:var(--sy-muted);">
+          No Geoapify API key configured &mdash; values are approximated from each map's X/Y position. Enable Geoapify
+          (Sync &rsaquo; Geocoding) for accurate address lookup.</p>
+        <div id="worldcoordsGeoActions" class="sync-form-actions" style="display:none;">
+          <button type="button" class="sync-btn sync-btn-sm" id="worldcoordsGeocodeAll" onClick="worldCoordsGeocodeAll()">Geocode all from address</button>
+        </div>
+        <table class="sync-table" style="margin-top:10px;">
+          <thead>
+            <tr><th>Location</th><th>Address</th><th>Latitude</th><th>Longitude</th><th>Source</th><th></th></tr>
+          </thead>
+          <tbody id="worldcoordsBody"></tbody>
+        </table>
+        <div class="sync-form-actions" style="margin-top:14px;">
+          <button type="button" class="sync-btn sync-btn-primary" id="worldcoordsSaveBtn" onClick="saveWorldCoords()">Save &amp; enable world map</button>
+        </div>
+        <div id="worldcoordsResult" class="sync-status-text" style="margin-top:10px;"></div>
+      </div>
+    </div>
+  </div>
   {{end}}
 
   </div>
   <script>loadVips({{if gt .PermConfig 1}}true{{else}}false{{end}});</script>
+  <script>var ADMIN_GEOAPIFY_CONFIGURED = {{if .GeoapifyConfigured}}true{{else}}false{{end}};</script>
 
   {{if gt .PermConfig 1}}
   <script>
@@ -862,7 +913,9 @@
         <thead>
           <tr>
             <th class="sync-td-min">Status</th><th>Map</th><th>Display name</th><th>Itemscale</th><th>Country</th>
-            <th>Flagsize</th><th>Timezone</th><th>Address</th><th>X</th><th>Y</th><th>Lat</th><th>Lon</th>
+            <th>Timezone</th><th>Address</th>
+            <th class="{{if .WorldMap}}coord-muted{{end}}">X</th><th class="{{if .WorldMap}}coord-muted{{end}}">Y</th>
+            <th class="{{if not .WorldMap}}coord-muted{{end}}">Lat</th><th class="{{if not .WorldMap}}coord-muted{{end}}">Lon</th>
             {{if gt .PermMaps 1}}<th class="sync-td-min">Actions</th>{{end}}
           </tr>
         </thead>
@@ -880,19 +933,18 @@
             <td>{{if .DisplayName}}{{.DisplayName}}{{else}}&mdash;{{end}}</td>
             <td>{{.Itemscale}}</td>
             <td>{{.Country}}</td>
-            <td>{{.Flagsize}}</td>
             <td>{{.Timezone}}</td>
             <td style="max-width:340px;white-space:normal;">{{.AddressClean}}</td>
-            <td style="white-space:nowrap;">{{.MapX}}</td>
-            <td style="white-space:nowrap;">{{.MapY}}</td>
-            <td style="white-space:nowrap;">{{.Lat}}</td>
-            <td style="white-space:nowrap;">{{.Lon}}</td>
+            <td style="white-space:nowrap;" class="{{if $.WorldMap}}coord-muted{{end}}">{{.MapX}}</td>
+            <td style="white-space:nowrap;" class="{{if $.WorldMap}}coord-muted{{end}}">{{.MapY}}</td>
+            <td style="white-space:nowrap;" class="{{if not $.WorldMap}}coord-muted{{end}}">{{.Lat}}</td>
+            <td style="white-space:nowrap;" class="{{if not $.WorldMap}}coord-muted{{end}}">{{.Lon}}</td>
             {{if gt $.PermMaps 1}}
             <td class="sync-td-min">
               <div style="display:flex;gap:6px;">
                 <button type="button" class="sync-btn sync-btn-sm"
                   data-name="{{.Mapname}}" data-display="{{.DisplayName}}" data-itemscale="{{.Itemscale}}"
-                  data-published="{{.Published}}" data-country="{{.Country}}" data-flagsize="{{.Flagsize}}"
+                  data-published="{{.Published}}" data-country="{{.Country}}"
                   data-timezone="{{.Timezone}}" data-address="{{.AddressClean}}" data-x="{{.MapX}}" data-y="{{.MapY}}"
                   data-lat="{{.Lat}}" data-lon="{{.Lon}}"
                   onclick="openEditMap(this)">Edit</button>
@@ -932,12 +984,11 @@
           <div class="sync-field"><label class="sync-label">Itemscale</label><input class="sync-input" type="text" name="newMapItemscale" value="1"></div>
           <div class="sync-field"><label class="sync-label">Published</label><select class="sync-select" name="newMapPublished"><option value="yes" selected>Yes</option><option value="no">No</option></select></div>
           <div class="sync-field"><label class="sync-label">Country</label><select class="sync-select" name="newMapCountry">{{range .Countryflags}}<option value="{{.}}">{{.}}</option>{{end}}</select></div>
-          <div class="sync-field"><label class="sync-label">Flagsize</label><input class="sync-input" type="text" name="newMapFlagsize" value="0"></div>
           <div class="sync-field"><label class="sync-label">Timezone</label><select class="sync-select" name="newMapTimezone">{{range .Timezones}}<option value="{{.}}"{{if eq . "Europe/Berlin"}} selected{{end}}>{{.}}</option>{{end}}</select></div>
-          <div class="sync-field"><label class="sync-label">X</label><input class="sync-input" type="text" name="newMapX" value="0"></div>
-          <div class="sync-field"><label class="sync-label">Y</label><input class="sync-input" type="text" name="newMapY" value="0"></div>
-          <div class="sync-field"><label class="sync-label">Latitude</label><input class="sync-input" type="text" name="newMapLat" placeholder="e.g. 48.7758"></div>
-          <div class="sync-field"><label class="sync-label">Longitude</label><input class="sync-input" type="text" name="newMapLon" placeholder="e.g. 9.1829"></div>
+          <div class="sync-field {{if .WorldMap}}coord-muted{{end}}"><label class="sync-label">X</label><input class="sync-input" type="text" name="newMapX" value="0"></div>
+          <div class="sync-field {{if .WorldMap}}coord-muted{{end}}"><label class="sync-label">Y</label><input class="sync-input" type="text" name="newMapY" value="0"></div>
+          <div class="sync-field {{if not .WorldMap}}coord-muted{{end}}"><label class="sync-label">Latitude</label><input class="sync-input" type="text" name="newMapLat" placeholder="e.g. 48.7758"></div>
+          <div class="sync-field {{if not .WorldMap}}coord-muted{{end}}"><label class="sync-label">Longitude</label><input class="sync-input" type="text" name="newMapLon" placeholder="e.g. 9.1829"></div>
           <div class="sync-field sync-field-wide"><label class="sync-label">Address</label><textarea class="sync-textarea sync-textarea-text" name="newMapAddress" placeholder="One line per row"></textarea></div>
           <div class="sync-field sync-field-wide"><label class="sync-label">Map image</label><input class="sync-input" type="file" name="image" accept="image/*"></div>
         </div>
@@ -962,12 +1013,11 @@
           <div class="sync-field"><label class="sync-label">Itemscale</label><input class="sync-input" type="text" name="editMapItemscale" id="editMapItemscale"></div>
           <div class="sync-field"><label class="sync-label">Published</label><select class="sync-select" name="editMapPublished" id="editMapPublished"><option value="yes">Yes</option><option value="no">No</option></select></div>
           <div class="sync-field"><label class="sync-label">Country</label><select class="sync-select" name="editMapCountry" id="editMapCountry">{{range .Countryflags}}<option value="{{.}}">{{.}}</option>{{end}}</select></div>
-          <div class="sync-field"><label class="sync-label">Flagsize</label><input class="sync-input" type="text" name="editMapFlagsize" id="editMapFlagsize"></div>
           <div class="sync-field"><label class="sync-label">Timezone</label><select class="sync-select" name="editMapTimezone" id="editMapTimezone">{{range .Timezones}}<option value="{{.}}">{{.}}</option>{{end}}</select></div>
-          <div class="sync-field"><label class="sync-label">X</label><input class="sync-input" type="text" name="editMapX" id="editMapX"></div>
-          <div class="sync-field"><label class="sync-label">Y</label><input class="sync-input" type="text" name="editMapY" id="editMapY"></div>
-          <div class="sync-field"><label class="sync-label">Latitude</label><input class="sync-input" type="text" name="editMapLat" id="editMapLat" placeholder="e.g. 48.7758"></div>
-          <div class="sync-field"><label class="sync-label">Longitude</label><input class="sync-input" type="text" name="editMapLon" id="editMapLon" placeholder="e.g. 9.1829"></div>
+          <div class="sync-field {{if .WorldMap}}coord-muted{{end}}"><label class="sync-label">X</label><input class="sync-input" type="text" name="editMapX" id="editMapX"></div>
+          <div class="sync-field {{if .WorldMap}}coord-muted{{end}}"><label class="sync-label">Y</label><input class="sync-input" type="text" name="editMapY" id="editMapY"></div>
+          <div class="sync-field {{if not .WorldMap}}coord-muted{{end}}"><label class="sync-label">Latitude</label><input class="sync-input" type="text" name="editMapLat" id="editMapLat" placeholder="e.g. 48.7758"></div>
+          <div class="sync-field {{if not .WorldMap}}coord-muted{{end}}"><label class="sync-label">Longitude</label><input class="sync-input" type="text" name="editMapLon" id="editMapLon" placeholder="e.g. 9.1829"></div>
           <div class="sync-field sync-field-wide"><label class="sync-label">Address</label><textarea class="sync-textarea sync-textarea-text" name="editMapAddress" id="editMapAddress" placeholder="One line per row"></textarea></div>
           <div class="sync-field sync-field-wide"><label class="sync-label">Replace map image (optional)</label><input class="sync-input" type="file" name="editImage" accept="image/*"></div>
         </div>
@@ -988,7 +1038,6 @@
       document.getElementById('editMapItemscale').value = d.itemscale || '1';
       document.getElementById('editMapPublished').value = d.published || 'yes';
       document.getElementById('editMapCountry').value = d.country || '';
-      document.getElementById('editMapFlagsize').value = d.flagsize || '0';
       document.getElementById('editMapTimezone').value = d.timezone || '';
       document.getElementById('editMapAddress').value = d.address || '';
       document.getElementById('editMapX').value = d.x || '0';

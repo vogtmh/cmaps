@@ -74,7 +74,6 @@ func (app *App) handleRestConfig(w http.ResponseWriter, r *http.Request) {
 				"itemscale":   m.Itemscale,
 				"published":   m.Published,
 				"country":     m.Country,
-				"flagsize":    m.Flagsize,
 				"timezone":    m.Timezone,
 				"address":     m.Address,
 				"x":           m.MapX,
@@ -159,7 +158,7 @@ func (app *App) handleRestChanges(w http.ResponseWriter, r *http.Request) {
 	cutoff := time.Now().AddDate(-2, 0, 0)
 	out := struct {
 		Changes []map[string]interface{} `json:"changes"`
-		HasMore bool                      `json:"hasMore"`
+		HasMore bool                     `json:"hasMore"`
 	}{Changes: []map[string]interface{}{}}
 
 	matched := 0 // count of rows passing all filters (across the whole set)

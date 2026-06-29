@@ -73,20 +73,20 @@ type adminData struct {
 	PermAuditlog   int
 	PermAdminpanel int
 
-	GeneralVars     []kv
-	LogoRegular     string
-	LogoHover       string
-	LdapSources     []LdapSource
-	RobinSpaces     []RobinSpace
-	RobinMapOptions []string
-	RobinOrg        string
-	RobinSet        bool
-	GeoapifySet     bool
-	GeoUsageMonth   string
-	GeoUsageCount   int
-	RobinLastSync   RobinSyncResult
-	RobinHasSync    bool
-	RobinDeskMode   string
+	GeneralVars             []kv
+	LogoRegular             string
+	LogoHover               string
+	LdapSources             []LdapSource
+	RobinSpaces             []RobinSpace
+	RobinMapOptions         []string
+	RobinOrg                string
+	RobinSet                bool
+	GeoapifySet             bool
+	GeoUsageMonth           string
+	GeoUsageCount           int
+	RobinLastSync           RobinSyncResult
+	RobinHasSync            bool
+	RobinDeskMode           string
 	RobinStripPrefixEnabled bool
 	RobinStripPrefixList    string
 	RobinStripSuffixEnabled bool
@@ -97,18 +97,20 @@ type adminData struct {
 	RobinDeskHasSync        bool
 	RobinDeskLastSyncTime   string
 	RobinDeskCount          int
-	Maps            []mapRow
-	DeskMaps        []string
-	Mapadmins       []adminUserRow
-	Roles           []Role
-	Teams           []Team
-	AuditEntries    []AuditEntry
-	AuditFilter     string
-	AuditTypes      []string
-	Countryflags    []string
-	Timezones       []string
-	DepartmentsJSON template.JS
-	BackupGroups    []backupGroup
+	Maps                    []mapRow
+	DeskMaps                []string
+	Mapadmins               []adminUserRow
+	Roles                   []Role
+	Teams                   []Team
+	AuditEntries            []AuditEntry
+	AuditFilter             string
+	AuditTypes              []string
+	Countryflags            []string
+	Timezones               []string
+	DepartmentsJSON         template.JS
+	BackupGroups            []backupGroup
+	WorldMap                bool
+	GeoapifyConfigured      bool
 }
 
 // commonTimezones is the curated timezone list offered when creating a map. The
@@ -515,7 +517,6 @@ func (app *App) createMapFromForm(r *http.Request, sess Session) string {
 		Itemscale:   orDefaultStr(r.FormValue("newMapItemscale"), "1"),
 		Published:   orDefaultStr(r.FormValue("newMapPublished"), "yes"),
 		Country:     strings.ToLower(r.FormValue("newMapCountry")),
-		Flagsize:    orDefaultStr(r.FormValue("newMapFlagsize"), "0"),
 		Timezone:    orDefaultStr(r.FormValue("newMapTimezone"), "Europe/Berlin"),
 		Address:     addBR(r.FormValue("newMapAddress")),
 		MapX:        x,
@@ -605,7 +606,6 @@ func (app *App) updateMapFromForm(r *http.Request, sess Session) string {
 	m.Itemscale = orDefaultStr(r.FormValue("editMapItemscale"), "1")
 	m.Published = orDefaultStr(r.FormValue("editMapPublished"), "yes")
 	m.Country = strings.ToLower(r.FormValue("editMapCountry"))
-	m.Flagsize = orDefaultStr(r.FormValue("editMapFlagsize"), "0")
 	m.Timezone = orDefaultStr(r.FormValue("editMapTimezone"), "Europe/Berlin")
 	m.Address = addBR(r.FormValue("editMapAddress"))
 	if v := r.FormValue("editMapX"); v != "" {
@@ -722,6 +722,7 @@ func (app *App) buildAdminData(r *http.Request, sess Session, tab, msg string) a
 		d.LogoRegular = app.settingOr("logo_regular", "/static/images/cmaps-regular.png")
 		d.LogoHover = app.settingOr("logo_hover", "/static/images/cmaps-hover.png")
 		d.BackupGroups = backupGroups
+		d.WorldMap = app.db.GetSetting("worldmap") == "1"
 
 	case "ldap":
 		d.LdapSources, _ = app.db.ListLdapSources()
@@ -799,6 +800,11 @@ func (app *App) buildAdminData(r *http.Request, sess Session, tab, msg string) a
 		}
 		d.Countryflags = app.listCountryflags()
 		d.Timezones = commonTimezones
+		// Drives which coordinate pair the maps tab treats as authoritative
+		// (modern/world map -> lat/lon; classic -> X/Y) and whether the geocode
+		// helper is offered when switching.
+		d.WorldMap = app.db.GetSetting("worldmap") == "1"
+		d.GeoapifyConfigured = app.db.GetGeoSetting("geoapifyApiKey") != ""
 
 	case "desks":
 		maps, _ := app.db.ListMaps()
@@ -1034,6 +1040,53 @@ func (app *App) handleRestSetting(w http.ResponseWriter, r *http.Request) {
 	_ = app.db.SetSetting(name, value)
 	_ = app.db.AuditLog("Settings", sess.Username, "Base variable updated ("+name+")")
 	writeJSON(w, map[string]string{"name": name, "value": value})
+}
+
+// handleRestMapCoords persists lat/lon (and optionally X/Y) for a single map.
+// Used by the classic->modern switch review dialog to fill in coordinates that
+// the world map needs. Requires maps permission level 2 (writes a map record).
+func (app *App) handleRestMapCoords(w http.ResponseWriter, r *http.Request) {
+	sess, ok := app.currentSession(r)
+	if !ok || app.permLevel(sess, "maps") < 2 {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	mapname := strings.ToLower(strings.TrimSpace(r.FormValue("mapname")))
+	if mapname == "" {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	m, found, _ := app.db.GetMap(mapname)
+	if !found {
+		writeJSON(w, map[string]interface{}{"ok": false, "message": "map not found"})
+		return
+	}
+	if v := strings.TrimSpace(r.FormValue("lat")); v != "" {
+		if f, err := strconv.ParseFloat(v, 64); err == nil {
+			m.Lat = f
+		}
+	}
+	if v := strings.TrimSpace(r.FormValue("lon")); v != "" {
+		if f, err := strconv.ParseFloat(v, 64); err == nil {
+			m.Lon = f
+		}
+	}
+	if v := strings.TrimSpace(r.FormValue("x")); v != "" {
+		if x, err := strconv.Atoi(v); err == nil {
+			m.MapX = x
+		}
+	}
+	if v := strings.TrimSpace(r.FormValue("y")); v != "" {
+		if y, err := strconv.Atoi(v); err == nil {
+			m.MapY = y
+		}
+	}
+	if err := app.db.PutMap(m); err != nil {
+		writeJSON(w, map[string]interface{}{"ok": false, "message": err.Error()})
+		return
+	}
+	_ = app.db.AuditLog("Maps", sess.Username, "Map coordinates set ("+mapname+")")
+	writeJSON(w, map[string]interface{}{"ok": true, "mapname": mapname, "lat": m.Lat, "lon": m.Lon})
 }
 
 // vipCategoryList defines the fixed VIP categories and the border colors the
@@ -1572,7 +1625,6 @@ func (app *App) handleAuditReimport(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]interface{}{"ok": true, "count": count,
 		"message": fmt.Sprintf("Imported %d historical audit entries.", count)})
 }
-
 
 // orDefaultStr returns v trimmed, or def when empty.
 func orDefaultStr(v, def string) string {

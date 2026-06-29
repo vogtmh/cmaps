@@ -56,16 +56,15 @@ type DB struct {
 
 // MapInfo mirrors a row of config_maplist.
 type MapInfo struct {
-	Mapname     string `json:"mapname"`
-	DisplayName string `json:"displayname"`
-	Itemscale   string `json:"itemscale"`
-	Published   string `json:"published"`
-	Country     string `json:"country"`
-	Flagsize    string `json:"flagsize"`
-	Timezone    string `json:"timezone"`
-	Address     string `json:"address"`
-	MapX        int    `json:"mapX"`
-	MapY        int    `json:"mapY"`
+	Mapname     string  `json:"mapname"`
+	DisplayName string  `json:"displayname"`
+	Itemscale   string  `json:"itemscale"`
+	Published   string  `json:"published"`
+	Country     string  `json:"country"`
+	Timezone    string  `json:"timezone"`
+	Address     string  `json:"address"`
+	MapX        int     `json:"mapX"`
+	MapY        int     `json:"mapY"`
 	Lat         float64 `json:"lat"`
 	Lon         float64 `json:"lon"`
 }
