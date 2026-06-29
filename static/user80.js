@@ -1636,6 +1636,7 @@ function buildSidebarLocalRow(r) {
   var personTypes = ['addesk', 'localdesk', 'shareddesk', 'occupied', 'occupiedldap', 'hotseat', 'booking', 'booking_booked', 'hotseat_booked'];
   // Background colours for facility icons, matching the on-map item colours.
   var itemBg = {
+    meeting: 'rgba(137, 26, 183, 0.7)',
     printer: 'rgba(50,50,50,0.7)',
     firstaid: 'rgba(220,50,50,0.7)',
     restroom: 'rgba(78, 81, 100, 0.7)',
@@ -1667,15 +1668,13 @@ function buildSidebarLocalRow(r) {
     img.onerror = function () { this.onerror = null; this.src = 'images/noavatar.png'; };
   }
   else {
-    // Facility/marker: use its own icon, fitted inside the round badge.
+    // Facility/marker: use its own icon, fitted inside the round badge. The
+    // badge always uses the item's default colour, regardless of state.
     img.src = 'images/' + r.desktype + '.png';
     img.style.objectFit = 'contain';
     img.style.padding = '6px';
     img.style.boxSizing = 'border-box';
-    if (r.desktype === 'meeting') {
-      img.style.background = meetingBusy ? 'rgba(0, 0, 136)' : '#008800';
-    }
-    else if (itemBg[r.desktype]) {
+    if (itemBg[r.desktype]) {
       img.style.background = itemBg[r.desktype];
     }
   }
@@ -1694,6 +1693,8 @@ function buildSidebarLocalRow(r) {
   //  - Facilities (printer, ...): description (empl), falling back to the type.
   if (r.desktype === 'meeting') {
     sub.textContent = meetingNow ? meetingNow : 'free';
+    // Colour the subtitle with the meeting-room status colour (busy vs free).
+    sub.style.color = meetingBusy ? 'rgb(0, 0, 136)' : '#008800';
   }
   else if (isPerson) {
     sub.textContent = (r.title && r.title.trim() !== '') ? r.title : r.dsk;
