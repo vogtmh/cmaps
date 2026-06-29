@@ -247,6 +247,8 @@ function hideSticky () {
 }
 
 function highlightManagers() {
+    var scale = Number(itemscale);
+    if (!(scale > 0)) { scale = 1; }
     var managers = result_old.desks.filter(element => element.color !="");
     $.each( managers, function( t, manager ){
       // Create highlightmarker
@@ -254,15 +256,21 @@ function highlightManagers() {
       var newElement = document.createElement('div');
       newElement.setAttribute('id', 'manager' + manager.id);
       p.appendChild(newElement);
-      //newElement.innerHTML = output;
+      // Build the ring exactly like a deskball: position in pre-zoom
+      // coordinates (manager.x / scale) and give the element its own
+      // zoom:itemscale. Without an integer zoom of its own, the rounded
+      // border gets clipped flat on one side by Chromium's border-radius
+      // rendering when an ancestor (#content) carries a fractional zoom -
+      // that was the long-standing "not a full circle" bug.
       $('#manager' + manager.id).css('position','absolute');
-      $('#manager' + manager.id).css('left',(manager.x-(12*itemscale)) + 'px');
-      $('#manager' + manager.id).css('top',(manager.y-(12*itemscale)) + 'px');
-      $('#manager' + manager.id).css('width',(18*itemscale)+'px');
-      $('#manager' + manager.id).css('height',(18*itemscale)+'px');
-      $('#manager' + manager.id).css('border',(3*itemscale)+'px solid '+manager.color);
+      $('#manager' + manager.id).css('left',((manager.x/scale)-12) + 'px');
+      $('#manager' + manager.id).css('top',((manager.y/scale)-12) + 'px');
+      $('#manager' + manager.id).css('width','18px');
+      $('#manager' + manager.id).css('height','18px');
+      $('#manager' + manager.id).css('border','3px solid '+manager.color);
       $('#manager' + manager.id).css('background-color', 'transparent');
       $('#manager' + manager.id).css('border-radius','50%');
+      $('#manager' + manager.id).css('zoom', scale);
       $('#manager' + manager.id).css('z-index','9');
     });
 }
