@@ -250,40 +250,29 @@ function highlightManagers() {
     var managers = result_old.desks.filter(element => element.color !="");
     var ringWidth = 3; // ring thickness in the ball's own (pre-zoom) px
     $.each( managers, function( t, manager ){
-      // Draw the VIP/manager ring as a SEPARATE "fake" deskball: a fully
-      // transparent div that is a clone of the real ball's geometry (same
-      // position, size and zoom), enlarged by the border width and offset so
-      // it stays concentric, then placed BEHIND the real ball. Because it is
-      // an exact sibling clone in the same coordinate/zoom context, its
-      // border-radius:50% border renders as a ring perfectly centred on the
-      // real ball at every zoom level.
+      // Draw the VIP/manager ring as a "fake" deskball placed right behind the
+      // real one. We CLONE the actual ball node (shallow) so the ring inherits
+      // the ball's EXACT geometry: the same inline left/top/zoom AND the same
+      // CSS class (hence identical width/height/border-radius/zoom). No size
+      // math is done by hand, so there is nothing to drift under autozoom.
+      // We then strip its fill, give it a coloured border, and nudge it out by
+      // the border width so the ring sits concentrically around the real ball.
       var ball = document.getElementById(manager.id);
       if (!ball) { return; }
       var existing = document.getElementById('manager' + manager.id);
       if (existing) { existing.remove(); }
-      // Real ball geometry (inline style coords are in pre-zoom px).
-      var ballLeft = parseFloat(ball.style.left) || 0;
-      var ballTop  = parseFloat(ball.style.top)  || 0;
-      var ballZoom = parseFloat(ball.style.zoom) || itemscale || 1;
-      var ballW = ball.offsetWidth;
-      var ballH = ball.offsetHeight;
-      var ring = document.createElement('div');
+      var ring = ball.cloneNode(false); // shallow clone -> no caption children
       ring.id = 'manager' + manager.id;
-      ring.className = 'managerring';
-      ring.style.position = 'absolute';
+      // Keep the ball's content box size; let the border grow it outward and
+      // shift the origin by the border width to stay centred (content-box).
       ring.style.boxSizing = 'content-box';
-      // Same size as the ball; the border grows it outward by ringWidth on
-      // every side, so shift the origin by ringWidth to keep it concentric.
-      ring.style.width  = ballW + 'px';
-      ring.style.height = ballH + 'px';
-      ring.style.left = (ballLeft - ringWidth) + 'px';
-      ring.style.top  = (ballTop  - ringWidth) + 'px';
-      ring.style.zoom = ballZoom;
-      ring.style.borderRadius = '50%';
+      ring.style.left = (parseFloat(ball.style.left) - ringWidth) + 'px';
+      ring.style.top  = (parseFloat(ball.style.top)  - ringWidth) + 'px';
       ring.style.border = ringWidth + 'px solid ' + manager.color;
-      ring.style.background = 'transparent';
+      ring.style.background = 'transparent';      // drop any background-color
+      ring.style.backgroundImage = 'none';        // drop dot.png/icon images
+      ring.style.zIndex = '98';                   // just below ball (.deskball:99)
       ring.style.pointerEvents = 'none';
-      ring.style.zIndex = '98'; // just below the real ball (.deskball z-index:99)
       // Insert as a sibling right before the ball so it paints behind it.
       ball.parentNode.insertBefore(ring, ball);
     });
@@ -1856,9 +1845,12 @@ function isolateDeskOnMap(id) {
   $('#caption' + id).attr('style', 'visibility: visible');
 }
 
-// Hover preview: isolate the hovered desk without touching the click selection.
+// Hover preview: isolate the hovered desk without touching the click selection,
+// and pan the map to it just like a click does (but without the pulse, so it
+// doesn't fire repeatedly while scanning down the result list).
 function hoverSearchResult(id) {
   isolateDeskOnMap(id);
+  jumpToDesk(id, true);
   showSearchFog(id);
 }
 
@@ -1925,7 +1917,7 @@ function closeSearchAndClear() {
   searchDesks();
 }
 
-function jumpToDesk(id) {
+function jumpToDesk(id, skipPulse) {
   var el = document.getElementById(id);
   if (!el) { return; }
   // Center the desk in the visible map area (the region right of the sidebar),
@@ -1937,7 +1929,7 @@ function jumpToDesk(id) {
   var dx = (rect.left + rect.width / 2) - visCenterX;
   var dy = (rect.top + rect.height / 2) - visCenterY;
   window.scrollBy({ left: dx, top: dy, behavior: 'smooth' });
-  pulseSearchResult(id);
+  if (!skipPulse) { pulseSearchResult(id); }
 }
 
 function pulseSearchResult(id) {
