@@ -322,9 +322,7 @@
     box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.55);
     pointer-events: none;
     opacity: 0;
-    transition: opacity 200ms ease-in-out, left 250ms ease-in-out,
-                top 250ms ease-in-out, width 250ms ease-in-out,
-                height 250ms ease-in-out;
+    transition: opacity 200ms ease-in-out;
 }
 
 .search_fog.visible {
