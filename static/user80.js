@@ -1695,7 +1695,7 @@ function buildSidebarLocalRow(r) {
     sub.textContent = meetingNow ? meetingNow : 'free';
     // Colour the subtitle with the meeting-room status colour: the pulse blue
     // when in use, the available green when free.
-    sub.style.color = meetingBusy ? 'rgb(0, 187, 255)' : '#008800';
+    sub.style.color = meetingBusy ? 'rgb(0, 187, 255)' : 'rgb(0, 210, 0)';
   }
   else if (isPerson) {
     sub.textContent = (r.title && r.title.trim() !== '') ? r.title : r.dsk;
