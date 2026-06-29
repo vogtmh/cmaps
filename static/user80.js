@@ -1483,7 +1483,9 @@ function searchLocaldesks() {
               title: localdesk.title,
               desktype: localdesk.desktype,
               avtr: localdesk.avtr,
-              hasavatar: localdesk.hasavatar
+              hasavatar: localdesk.hasavatar,
+              x: Number(localdesk.x),
+              y: Number(localdesk.y)
             });
           }
           // show labels if no teamsearch has been triggered
@@ -1607,6 +1609,11 @@ function renderSearchSidebar() {
       inner.appendChild(none);
     }
     else {
+      // Sort by position on the map: top-to-bottom (y), then left-to-right (x).
+      searchLocalResults.sort(function (a, b) {
+        if (a.y !== b.y) { return a.y - b.y; }
+        return a.x - b.x;
+      });
       for (var i = 0; i < searchLocalResults.length; i++) {
         inner.appendChild(buildSidebarLocalRow(searchLocalResults[i]));
       }
