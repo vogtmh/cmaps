@@ -248,41 +248,44 @@ function hideSticky () {
 
 function highlightManagers() {
     var managers = result_old.desks.filter(element => element.color !="");
-    var svgns = 'http://www.w3.org/2000/svg';
+    var ringWidth = 3; // ring thickness in the ball's own (pre-zoom) px
     $.each( managers, function( t, manager ){
-      // Draw the VIP/manager ring as an SVG <circle> appended INSIDE the
-      // deskball element. Two reasons:
-      //  1) SVG is vector-rendered, so it is immune to Chromium's raster
-      //     border-radius bug that clipped a div ring flat on one side when an
-      //     ancestor (#content) has a fractional zoom.
-      //  2) As a child of the deskball it shares the ball's exact transform
-      //     context and is centred with percentages, which avoids the
-      //     sub-pixel coordinate drift that left small rings misaligned when
-      //     zoomed back out to normal size.
+      // Draw the VIP/manager ring as a SEPARATE "fake" deskball: a fully
+      // transparent div that is a clone of the real ball's geometry (same
+      // position, size and zoom), enlarged by the border width and offset so
+      // it stays concentric, then placed BEHIND the real ball. Because it is
+      // an exact sibling clone in the same coordinate/zoom context, its
+      // border-radius:50% border renders as a ring perfectly centred on the
+      // real ball at every zoom level.
       var ball = document.getElementById(manager.id);
       if (!ball) { return; }
       var existing = document.getElementById('manager' + manager.id);
       if (existing) { existing.remove(); }
-      var svg = document.createElementNS(svgns, 'svg');
-      svg.setAttribute('id', 'manager' + manager.id);
-      svg.setAttribute('viewBox', '0 0 24 24');
-      svg.style.position = 'absolute';
-      svg.style.left = '-20%';
-      svg.style.top = '-20%';
-      svg.style.width = '140%';
-      svg.style.height = '140%';
-      svg.style.overflow = 'visible';
-      svg.style.pointerEvents = 'none';
-      svg.style.zIndex = '9';
-      var circle = document.createElementNS(svgns, 'circle');
-      circle.setAttribute('cx', '12');
-      circle.setAttribute('cy', '12');
-      circle.setAttribute('r', '10.5');
-      circle.setAttribute('fill', 'none');
-      circle.setAttribute('stroke', manager.color);
-      circle.setAttribute('stroke-width', '3');
-      svg.appendChild(circle);
-      ball.appendChild(svg);
+      // Real ball geometry (inline style coords are in pre-zoom px).
+      var ballLeft = parseFloat(ball.style.left) || 0;
+      var ballTop  = parseFloat(ball.style.top)  || 0;
+      var ballZoom = parseFloat(ball.style.zoom) || itemscale || 1;
+      var ballW = ball.offsetWidth;
+      var ballH = ball.offsetHeight;
+      var ring = document.createElement('div');
+      ring.id = 'manager' + manager.id;
+      ring.className = 'managerring';
+      ring.style.position = 'absolute';
+      ring.style.boxSizing = 'content-box';
+      // Same size as the ball; the border grows it outward by ringWidth on
+      // every side, so shift the origin by ringWidth to keep it concentric.
+      ring.style.width  = ballW + 'px';
+      ring.style.height = ballH + 'px';
+      ring.style.left = (ballLeft - ringWidth) + 'px';
+      ring.style.top  = (ballTop  - ringWidth) + 'px';
+      ring.style.zoom = ballZoom;
+      ring.style.borderRadius = '50%';
+      ring.style.border = ringWidth + 'px solid ' + manager.color;
+      ring.style.background = 'transparent';
+      ring.style.pointerEvents = 'none';
+      ring.style.zIndex = '98'; // just below the real ball (.deskball z-index:99)
+      // Insert as a sibling right before the ball so it paints behind it.
+      ball.parentNode.insertBefore(ring, ball);
     });
 }
 
