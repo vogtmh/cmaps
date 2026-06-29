@@ -20,6 +20,8 @@ var searchSidebarWidth = 0;
 var searchLocalResults = [];
 var searchGlobalResults = [];
 var searchSelectedId = null;
+// Id of the desk currently spotlighted by the search fog (null = no fog).
+var searchFogId = null;
 
 function toggleUsermode() {
   if (setting_usermode == 'edit') {
@@ -1420,6 +1422,9 @@ function resetColors() {
   document.getElementById("addressbook_img").src="images/addressbook.png";
   // Reset search box
   $('#searchtext').val('')
+  // Clear any search dimming / fog spotlight from a previous search.
+  clearSearchDimming();
+  hideSearchFog();
 }
 
 function searchDesks() {    
@@ -1524,6 +1529,8 @@ function searchLocaldesks() {
   if (gotoY != 0) {
     window.scrollTo(0, (gotoY-150)*autozoom*zoom)
   }
+  // Dim non-matching desks so the results stand out on the map.
+  applySearchDimming();
 }
 
 function searchGlobaldesks() {
@@ -1758,6 +1765,7 @@ function selectSearchResult(id, row) {
       for (var a = 0; a < allrows.length; a++) { allrows[a].classList.remove('selected'); }
     }
     showAllSearchResultsOnMap();
+    hideSearchFog();
     return;
   }
   // Switch selection: highlight just this row in the list.
@@ -1770,16 +1778,9 @@ function selectSearchResult(id, row) {
     }
   }
   // On the map: hide every other match, keep only this desk orange + caption.
-  for (var k = 0; k < searchLocalResults.length; k++) {
-    var oid = searchLocalResults[k].id;
-    if (oid != id) {
-      $('#' + oid).css('background-color', '');
-      $('#caption' + oid).attr('style', 'visibility: hidden');
-    }
-  }
-  $('#' + id).css('background-color', 'rgba(255, 127, 0, 1)');
-  $('#caption' + id).attr('style', 'visibility: visible');
+  isolateDeskOnMap(id);
   jumpToDesk(id);
+  showSearchFog(id);
 }
 
 // Re-apply the orange highlight + caption to all current local matches.
@@ -1789,6 +1790,28 @@ function showAllSearchResultsOnMap() {
     $('#' + oid).css('background-color', 'rgba(255, 127, 0, 1)');
     $('#caption' + oid).attr('style', 'visibility: visible');
   }
+  // Dim everything that is not a match so the results stand out.
+  applySearchDimming();
+}
+
+// Dim all deskballs that are not current search matches (grey + faded), and
+// restore matches to full strength. Re-applied after each desk refresh because
+// the desk list is re-rendered when its data changes.
+function applySearchDimming() {
+  var matchIds = {};
+  for (var i = 0; i < searchLocalResults.length; i++) { matchIds[searchLocalResults[i].id] = true; }
+  if (searchLocalResults.length === 0) { clearSearchDimming(); return; }
+  var balls = document.querySelectorAll('#deskitems .deskball');
+  for (var b = 0; b < balls.length; b++) {
+    if (matchIds[balls[b].id]) { balls[b].classList.remove('searchdim'); }
+    else { balls[b].classList.add('searchdim'); }
+  }
+}
+
+// Remove the search dimming from every desk.
+function clearSearchDimming() {
+  var balls = document.querySelectorAll('#deskitems .deskball.searchdim');
+  for (var b = 0; b < balls.length; b++) { balls[b].classList.remove('searchdim'); }
 }
 
 // On the map: keep only the given desk highlighted (orange + caption) and hide
@@ -1808,6 +1831,7 @@ function isolateDeskOnMap(id) {
 // Hover preview: isolate the hovered desk without touching the click selection.
 function hoverSearchResult(id) {
   isolateDeskOnMap(id);
+  showSearchFog(id);
 }
 
 // Mouse leaves a row: restore the persistent state — keep the clicked result
@@ -1815,9 +1839,57 @@ function hoverSearchResult(id) {
 function unhoverSearchResult() {
   if (searchSelectedId != null) {
     isolateDeskOnMap(searchSelectedId);
+    showSearchFog(searchSelectedId);
   } else {
     showAllSearchResultsOnMap();
+    hideSearchFog();
   }
+}
+
+// --- Search fog spotlight ---------------------------------------------------
+// A dark veil over the map with a single round hole over the focused desk, to
+// guide the eye. The veil lives INSIDE the map content layer (#content) so it
+// scrolls and zooms together with the desks automatically — no scroll/resize
+// tracking needed. It sits above the map image but below the deskballs, so the
+// matched desks stay visible. The transparent hole + huge box-shadow form the
+// surrounding fog. The opaque header and sidebar paint above #content, so the
+// veil never darkens them.
+function showSearchFog(id) {
+  var desk = result_old && result_old.desks
+    ? result_old.desks.filter(function (e) { return e.id == id; })[0]
+    : null;
+  if (!desk) { hideSearchFog(); return; }
+  searchFogId = id;
+  var deskitems = document.getElementById('deskitems');
+  if (!deskitems) { return; }
+  var scale = Number(itemscale);
+  if (!(scale > 0)) { scale = 1; }
+  var fog = document.getElementById('searchfog');
+  if (!fog) {
+    fog = document.createElement('div');
+    fog.id = 'searchfog';
+    fog.className = 'search_fog';
+    // Insert as the first child so the veil paints below the deskballs (which
+    // come after it in #deskitems) but above the map image behind #deskitems.
+    deskitems.insertBefore(fog, deskitems.firstChild);
+  }
+  // Position the fog hole exactly like a deskball: coordinates are in the
+  // pre-zoom space (counter.x / itemscale) and the element itself carries
+  // zoom:itemscale, so it shares the desks' coordinate transform and stays
+  // aligned through scroll and rescale automatically.
+  var rPre = 110; // hole radius in pre-zoom units
+  fog.style.zoom = scale;
+  fog.style.left = (Number(desk.x) / scale - rPre) + 'px';
+  fog.style.top = (Number(desk.y) / scale - rPre) + 'px';
+  fog.style.width = (2 * rPre) + 'px';
+  fog.style.height = (2 * rPre) + 'px';
+  fog.classList.add('visible');
+}
+
+function hideSearchFog() {
+  searchFogId = null;
+  var fog = document.getElementById('searchfog');
+  if (fog) { fog.classList.remove('visible'); }
 }
 
 function closeSearchAndClear() {

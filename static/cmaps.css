@@ -304,6 +304,33 @@
     text-overflow: ellipsis;
 }
 
+/* Search: dim non-matching desks so the results stand out on the map. */
+.deskball.searchdim {
+    opacity: 0.2;
+    filter: grayscale(0.85);
+    transition: opacity 200ms ease-in-out, filter 200ms ease-in-out;
+}
+
+/* Search: fog spotlight that darkens the map except the focused desk. The
+   element lives inside the zoomed map content (so it tracks scroll/zoom with
+   the desks) and is itself the transparent circular hole; its huge box-shadow
+   forms the surrounding fog. It paints above the map image but below the
+   deskballs, and the opaque header/sidebar paint above it. */
+.search_fog {
+    position: absolute;
+    border-radius: 50%;
+    box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.55);
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 200ms ease-in-out, left 250ms ease-in-out,
+                top 250ms ease-in-out, width 250ms ease-in-out,
+                height 250ms ease-in-out;
+}
+
+.search_fog.visible {
+    opacity: 1;
+}
+
 /* Right mapplate */
 
 .rightmapplate {
