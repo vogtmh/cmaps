@@ -797,6 +797,88 @@ function renderGeoSyncResult(res) {
   if (table) table.style.display = '';
 }
 
+// ── Backup: export / import ──────────────────────────────────
+// Export builds a zip server-side (with a progress bar) and auto-downloads it.
+// Import uploads a zip and restores the selected data sets, overwriting them.
+function startExport() {
+  var btn = document.getElementById('exportSyncBtn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Building\u2026'; }
+  $.ajax({
+    url: '../rest/export/start', type: 'POST', dataType: 'JSON',
+    complete: function () { pollExport(); }
+  });
+}
+
+function pollExport() {
+  var timer = setInterval(function () {
+    $.ajax({
+      url: '../rest/export/progress', type: 'GET', dataType: 'JSON',
+      success: function (snap) {
+        renderSyncProgress('export', snap);
+        if (!snap.running && snap.done) {
+          clearInterval(timer);
+          var fill = document.getElementById('exportProgFill');
+          var stage = document.getElementById('exportProgStage');
+          var btn = document.getElementById('exportSyncBtn');
+          if (btn) { btn.disabled = false; btn.textContent = 'Create export'; }
+          if (snap.error) {
+            if (fill) { fill.classList.remove('indeterminate'); fill.style.width = '100%'; fill.style.background = 'var(--sy-danger)'; }
+            if (stage) stage.textContent = 'Error: ' + snap.error;
+            return;
+          }
+          if (fill) { fill.classList.remove('indeterminate'); fill.style.width = '100%'; }
+          if (stage) stage.textContent = 'Download starting\u2026';
+          window.location = '../rest/export/download';
+        }
+      },
+      error: function () { clearInterval(timer); }
+    });
+  }, 700);
+}
+
+function runImport() {
+  var fileInput = document.getElementById('importFile');
+  var out = document.getElementById('importResult');
+  if (!fileInput || !fileInput.files || !fileInput.files.length) {
+    if (out) { out.style.color = 'var(--sy-danger)'; out.textContent = 'Choose an export zip first.'; }
+    return;
+  }
+  var groups = document.querySelectorAll('#importGroups .import-group:checked');
+  if (!groups.length) {
+    if (out) { out.style.color = 'var(--sy-danger)'; out.textContent = 'Select at least one data set.'; }
+    return;
+  }
+  if (!confirm('Importing overwrites the selected data sets with the archive contents. Continue?')) return;
+  var fd = new FormData();
+  fd.append('archive', fileInput.files[0]);
+  for (var i = 0; i < groups.length; i++) { fd.append('group_' + groups[i].value, '1'); }
+  var btn = document.getElementById('importBtn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Importing\u2026'; }
+  if (out) { out.style.color = ''; out.textContent = 'Importing\u2026'; }
+  $.ajax({
+    url: '../rest/import', type: 'POST', data: fd,
+    processData: false, contentType: false, dataType: 'JSON',
+    success: function (d) {
+      if (!d || !d.ok) {
+        if (out) { out.style.color = 'var(--sy-danger)'; out.textContent = (d && d.message) || 'Import failed.'; }
+        return;
+      }
+      var parts = [];
+      (d.results || []).forEach(function (r) {
+        var detail = r.files ? (r.files + ' file(s)') : (r.records + ' record(s)');
+        parts.push(r.label + ': ' + (r.status === 'ok' ? detail : ('failed \u2014 ' + (r.message || ''))));
+      });
+      if (out) { out.style.color = 'var(--sy-ok)'; out.innerHTML = esc('Import complete.') + '<br>' + parts.map(esc).join('<br>'); }
+    },
+    error: function () {
+      if (out) { out.style.color = 'var(--sy-danger)'; out.textContent = 'Import request failed (forbidden or server error).'; }
+    },
+    complete: function () {
+      if (btn) { btn.disabled = false; btn.textContent = 'Import selected'; }
+    }
+  });
+}
+
 // ── Robin desk-data diagnostic (read-only) ───────────────────
 function runRobinDeskTest() {
   var btn = document.getElementById('robinDeskTestBtn');

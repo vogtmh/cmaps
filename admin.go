@@ -106,6 +106,7 @@ type adminData struct {
 	Countryflags    []string
 	Timezones       []string
 	DepartmentsJSON template.JS
+	BackupGroups    []backupGroup
 }
 
 // commonTimezones is the curated timezone list offered when creating a map. The
@@ -718,6 +719,7 @@ func (app *App) buildAdminData(r *http.Request, sess Session, tab, msg string) a
 		sort.Slice(d.GeneralVars, func(i, j int) bool { return d.GeneralVars[i].Variable < d.GeneralVars[j].Variable })
 		d.LogoRegular = app.settingOr("logo_regular", "/static/images/cmaps-regular.png")
 		d.LogoHover = app.settingOr("logo_hover", "/static/images/cmaps-hover.png")
+		d.BackupGroups = backupGroups
 
 	case "ldap":
 		d.LdapSources, _ = app.db.ListLdapSources()

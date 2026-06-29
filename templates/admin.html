@@ -191,6 +191,22 @@
 
     </div>
 
+    {{if gt .PermConfig 1}}
+    <!-- Backup & restore -->
+    <div class="sync-card">
+      <div class="sync-card-head">
+        <h2 class="sync-card-title">Backup &amp; restore</h2>
+      </div>
+      <p class="sync-card-hint">Export the entire data set (database, map images, logos and avatar cache) as a single
+        zip &mdash; the <code>config.json</code> file is never included. Import lets you choose exactly which data sets to
+        restore; imported data overwrites the matching existing data.</p>
+      <div class="sync-form-actions">
+        <button type="button" class="sync-btn sync-btn-primary" onClick="openExportModal()">Export&hellip;</button>
+        <button type="button" class="sync-btn" onClick="openImportModal()">Import&hellip;</button>
+      </div>
+    </div>
+    {{end}}
+
     <!-- VIP desk borders -->
     <div class="sync-card">
       <div class="sync-card-head">
@@ -202,6 +218,82 @@
 
   </div>
   <script>loadVips({{if gt .PermConfig 1}}true{{else}}false{{end}});</script>
+
+  {{if gt .PermConfig 1}}
+  <!-- Export modal -->
+  <div id="exportOverlay" class="sync-modal">
+    <div class="sync-modal-box">
+      <div class="sync-modal-head">
+        <h2>Export data</h2>
+        <button type="button" class="sync-btn sync-btn-sm" onClick="closeBackupModal('exportOverlay')">Close</button>
+      </div>
+      <div class="sync-modal-body">
+        <p class="sync-card-hint">Builds a zip of the whole data set. When it is ready the download starts automatically.</p>
+        <div class="sync-form-actions">
+          <button type="button" class="sync-btn sync-btn-primary" id="exportSyncBtn" onClick="startExport()">Create export</button>
+        </div>
+        <div class="sync-progress" id="exportProgress">
+          <div class="sync-progress-head"><span id="exportProgStage">Working&hellip;</span><span id="exportProgCount"></span></div>
+          <div class="sync-progress-track"><div class="sync-progress-fill" id="exportProgFill"></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Import modal -->
+  <div id="importOverlay" class="sync-modal">
+    <div class="sync-modal-box">
+      <div class="sync-modal-head">
+        <h2>Import data</h2>
+        <button type="button" class="sync-btn sync-btn-sm" onClick="closeBackupModal('importOverlay')">Close</button>
+      </div>
+      <div class="sync-modal-body">
+        <p class="sync-card-hint">Select an export zip, choose which data sets to restore, then import. Imported data
+          <strong>overwrites</strong> the matching existing data &mdash; it is not merged.</p>
+        <div class="sync-field sync-field-wide">
+          <label class="sync-label">Export zip file</label>
+          <input class="sync-input" type="file" id="importFile" accept=".zip,application/zip">
+        </div>
+        <div class="sync-field sync-field-wide">
+          <label class="sync-label">Data sets to import</label>
+          <div style="margin-bottom:8px;">
+            <button type="button" class="sync-btn sync-btn-sm" onClick="toggleImportGroups(true)">Select all</button>
+            <button type="button" class="sync-btn sync-btn-sm" onClick="toggleImportGroups(false)">Select none</button>
+          </div>
+          <div id="importGroups" class="vip-cats">
+            {{range .BackupGroups}}
+            <label style="display:block; margin:4px 0;"><input type="checkbox" class="import-group" value="{{.Key}}"> {{.Label}}</label>
+            {{end}}
+          </div>
+        </div>
+        <div class="sync-form-actions">
+          <button type="button" class="sync-btn sync-btn-primary" id="importBtn" onClick="runImport()">Import selected</button>
+        </div>
+        <div id="importResult" class="sync-status-text" style="margin-top:10px;"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function openExportModal() {
+      var bar = document.getElementById('exportProgress');
+      if (bar) bar.classList.remove('show');
+      var btn = document.getElementById('exportSyncBtn');
+      if (btn) { btn.disabled = false; btn.textContent = 'Create export'; }
+      document.getElementById('exportOverlay').style.display = 'block';
+    }
+    function openImportModal() {
+      var out = document.getElementById('importResult');
+      if (out) { out.textContent = ''; out.style.color = ''; }
+      document.getElementById('importOverlay').style.display = 'block';
+    }
+    function closeBackupModal(id) { document.getElementById(id).style.display = 'none'; }
+    function toggleImportGroups(on) {
+      var boxes = document.querySelectorAll('#importGroups .import-group');
+      for (var i = 0; i < boxes.length; i++) { boxes[i].checked = on; }
+    }
+  </script>
+  {{end}}
 
 {{else if eq .ActiveTab "ldap"}}
   {{if .IsEditor}}<script>token = "{{.Token}}"; username = "{{.Username}}"; console.log("Token: " + token);</script>{{end}}

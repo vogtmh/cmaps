@@ -42,6 +42,14 @@ type App struct {
 	robinDumpMu    sync.Mutex
 	robinDumpFiles []robinDumpFile
 	robinDumpTime  string
+
+	// exportProg tracks the background build of a full data export so the admin
+	// Backup dialog can show a determinate progress bar. exportPath/exportName
+	// point at the finished zip awaiting download.
+	exportProg syncProgress
+	exportMu   sync.Mutex
+	exportPath string
+	exportName string
 }
 
 // Session holds the authenticated user's identity, mirroring the PHP $_SESSION
