@@ -2,7 +2,10 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
+	"html"
 	"io"
+	"log"
 	"net"
 	"net/http"
 	"net/url"
@@ -332,6 +335,78 @@ func (app *App) handleRestAccount(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/auth/saml/login", http.StatusSeeOther)
 	default:
 		sess, ok := app.currentSession(r)
+
+		// --- TEMP DEBUG (remove once the MyApps SSO flow is confirmed working) ---
+		// The Entra "MyApps" tile / sign-on URL points at /rest/account/. The
+		// legacy PHP endpoint initiated SSO here and redirected to the app; the Go
+		// rewrite previously just returned JSON, leaving users on a raw
+		// {"loggedin":false,...} page. We log the decision and, with ?debug=1,
+		// render it so an admin can diagnose the flow from a browser.
+		accept := r.Header.Get("Accept")
+		wantsHTML := strings.Contains(accept, "text/html")
+		_, hasCookie := func() (string, bool) {
+			c, err := r.Cookie(sessionCookie)
+			if err != nil {
+				return "", false
+			}
+			return c.Value, true
+		}()
+		samlEnabled := app.cfg.SAML.Enabled
+		samlConfigured := app.cfg.SAML.EntraLoginURL != "" && app.cfg.SAML.EntraX509Certificate != ""
+
+		action := "json-status"
+		switch {
+		case ok && wantsHTML:
+			action = "redirect-index (already logged in)"
+		case !ok && wantsHTML && samlEnabled:
+			action = "redirect-saml-login"
+		case !ok && wantsHTML && !samlEnabled:
+			action = "redirect-local-login"
+		}
+
+		log.Printf("ACCOUNT-DEBUG: %s %s accept=%q wantsHTML=%v hasCookie=%v loggedin=%v user=%q samlEnabled=%v samlConfigured=%v -> %s",
+			r.Method, r.URL.Path, accept, wantsHTML, hasCookie, ok, sess.Username, samlEnabled, samlConfigured, action)
+
+		if r.URL.Query().Get("debug") == "1" {
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			fmt.Fprintf(w, `<!DOCTYPE html><html><head><title>account debug</title>
+<style>body{font-family:monospace;background:#111;color:#ddd;padding:24px;line-height:1.6}
+b{color:#a81f6b}a{color:#5db1ff}</style></head><body>
+<h2>/rest/account/ debug</h2>
+<p><b>method</b>: %s</p>
+<p><b>Accept</b>: %s</p>
+<p><b>wantsHTML</b>: %v</p>
+<p><b>session cookie present</b>: %v</p>
+<p><b>loggedin</b>: %v</p>
+<p><b>user</b>: %s</p>
+<p><b>fullname</b>: %s</p>
+<p><b>SAML enabled</b>: %v</p>
+<p><b>SAML configured</b>: %v</p>
+<p><b>chosen action</b>: %s</p>
+<hr><p><a href="/auth/saml/login">Start SSO manually</a> &middot; <a href="/">Go to map</a></p>
+</body></html>`,
+				html.EscapeString(r.Method), html.EscapeString(accept), wantsHTML, hasCookie, ok,
+				html.EscapeString(sess.Username), html.EscapeString(sess.Fullname), samlEnabled, samlConfigured, action)
+			return
+		}
+		// --- END TEMP DEBUG ---
+
+		// Mirror the legacy PHP behaviour: a browser navigation to /rest/account/
+		// (e.g. the Entra MyApps tile) should land the user in the app, initiating
+		// SSO first if they are not yet authenticated. Only AJAX/JSON callers get
+		// the status payload.
+		if wantsHTML {
+			switch {
+			case ok:
+				http.Redirect(w, r, "/", http.StatusSeeOther)
+			case samlEnabled:
+				http.Redirect(w, r, "/auth/saml/login", http.StatusSeeOther)
+			default:
+				http.Redirect(w, r, "/login", http.StatusSeeOther)
+			}
+			return
+		}
+
 		writeJSON(w, map[string]interface{}{
 			"status":   "ok",
 			"loggedin": ok,
