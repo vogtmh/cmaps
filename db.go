@@ -413,6 +413,16 @@ func (db *DB) SetSetting(name, value string) error {
 	return putJSON(db, bucketSettings, []byte(name), value)
 }
 
+// EnsureSetting creates the setting with the given default only if it does not
+// already exist, leaving any existing value untouched. Used to surface newer
+// optional settings in the admin panel on upgraded installations.
+func (db *DB) EnsureSetting(name, def string) error {
+	if _, ok, _ := getJSON[string](db, bucketSettings, []byte(name)); ok {
+		return nil
+	}
+	return db.SetSetting(name, def)
+}
+
 // --- Robin configuration (org, token, last-sync) ---
 
 func (db *DB) GetRobinSetting(name string) string {

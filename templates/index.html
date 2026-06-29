@@ -185,6 +185,7 @@
     var setting_usermode = "{{.UserMode}}";
     var teamsContact = "{{.TeamsContact}}";
     var domain = "{{.Domain}}";
+    var reportURL = "{{.ReportURL}}";
     {{if .LoggedIn}}username = "{{.Username}}";{{end}}
     {{if .IsEditor}}token = {{.Token}}; username = "{{.Username}}"; console.log("Token: " + token);{{end}}
     var setting_highlightleaders = {{if .HighlightLeaders}}1{{else}}0{{end}};

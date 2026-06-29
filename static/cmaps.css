@@ -690,6 +690,38 @@
 .leftnameplate .robinbadge { left: 200px; }
 .rightnameplate .robinbadge { right: 200px; }
 
+/* Footer action row on sticky nameplates: copy, optional report and the Robin
+   badge share one flex row next to the desk-number badge. The row is anchored
+   at the inner edge and the buttons flow outward, mirrored per plate side. */
+.nameplate_actions {
+    position: absolute;
+    bottom: 2px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.leftnameplate .nameplate_actions { left: 158px; flex-direction: row; }
+.rightnameplate .nameplate_actions { right: 158px; flex-direction: row-reverse; }
+
+.nameplate_action {
+    width: 30px;
+    height: 30px;
+    opacity: 0.7;
+    cursor: pointer;
+}
+.nameplate_action:hover {
+    opacity: 1.0;
+}
+
+/* Inside the action row the badge is a normal flex item, not absolute. */
+.nameplate_actions .robinbadge {
+    position: static;
+    bottom: auto;
+    left: auto;
+    right: auto;
+}
+
 /* Used by both nameplates */
 .nameplate_edit {
     position: absolute; 

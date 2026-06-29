@@ -89,6 +89,12 @@ func main() {
 		staticFS: staticSub,
 	}
 
+	// Backfill newer optional settings so they appear in the admin panel on
+	// installations created before the setting existed.
+	if err := db.EnsureSetting("reportURL", ""); err != nil {
+		log.Fatalf("ensure settings: %v", err)
+	}
+
 	mux := http.NewServeMux()
 	app.routes(mux)
 

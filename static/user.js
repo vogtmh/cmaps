@@ -1082,6 +1082,14 @@ function showSticky (deskid, desktype, caption) {
     copylink_full = 'https://'+window.location.hostname+root+'?map='+map+'&findme='+copylink;
     copylink_full = encodeURI(copylink_full);
     //console.log(copylink_full);
+    // Footer action buttons: copy link, an optional report button (only when a
+    // report URL is configured in the admin panel) and the Robin badge. They
+    // share one flex row so the layout reflows cleanly when buttons are absent.
+    var copyBtn = '<img class="nameplate_action" src="images/copy.png" title="Copy link" onclick="copyToClipboard(\''+copylink_full+'\')" />';
+    var reportBtn = '';
+    if (typeof reportURL !== 'undefined' && reportURL) {
+      reportBtn = '<img class="nameplate_action" src="images/report.png" title="Report" onclick="openReportURL()" />';
+    }
     if (attr.y < 100) {
       var y_nameplate = 100;
     }
@@ -1096,8 +1104,7 @@ function showSticky (deskid, desktype, caption) {
                           + '<img src="' + avatar + '" class="leftnameplate_avatar" id="stickyavatar" style="background:' + avatarcolor + '" onerror="this.src=\'images/noavatar.png\'">'
                           + '<img src="images/close2.png" class="leftnameplate_close" onclick=hideSticky() />'
                           + '<div class="leftnameplate_number">' + attr.dsk + '</div>'
-                          + '<img class="leftnameplate_copy" src="images/copy.png" onclick="copyToClipboard(\''+copylink_full+'\')" />'
-                          + robinBadge
+                          + '<div class="nameplate_actions">' + copyBtn + reportBtn + robinBadge + '</div>'
                           + '</div>'
                           + '<div id="caption' + attr.id + '" class="caption">' + attr.empl + '</div>'
                           + '</div>'
@@ -1112,8 +1119,7 @@ function showSticky (deskid, desktype, caption) {
                           + '<img src="' + avatar + '" class="rightnameplate_avatar" id="stickyavatar" style="background:' + avatarcolor + '" onerror="this.src=\'images/noavatar.png\'">'
                           + '<img src="images/close2.png" class="rightnameplate_close" onclick=hideSticky() />'
                           + '<div class="rightnameplate_number">' + attr.dsk + '</div>'
-                          + '<img class="rightnameplate_copy" src="images/copy.png" onclick="copyToClipboard(\''+copylink_full+'\')" />'
-                          + robinBadge
+                          + '<div class="nameplate_actions">' + copyBtn + reportBtn + robinBadge + '</div>'
                           + '</div>'
                           + '<div id="caption' + attr.id + '" class="caption">' + attr.empl + '</div>'
                           + '</div>'
@@ -2243,6 +2249,14 @@ function copyToClipboard (str) {
   document.body.removeChild(el);
   //alert("Link copied to clipboard");
   showInfo('Copied to clipboard');
+}
+
+// Open the admin-configured report URL in a new tab. The button that calls this
+// is only rendered when reportURL is set, but guard anyway.
+function openReportURL() {
+  if (typeof reportURL !== 'undefined' && reportURL) {
+    window.open(reportURL, '_blank', 'noopener');
+  }
 }
 
 function setUserdate(selectdate) {
