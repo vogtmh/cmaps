@@ -449,6 +449,42 @@ func (db *DB) SetGeoSetting(name, value string) error {
 	return putJSON(db, bucketGeoCfg, []byte(name), value)
 }
 
+// geoUsage tracks how many Geoapify API requests this server has made in a
+// given calendar month, so the admin panel can show a running estimate of
+// monthly consumption (Geoapify has no public quota-query endpoint).
+type geoUsage struct {
+	Month string `json:"month"` // "2006-01"
+	Count int    `json:"count"`
+}
+
+// GetGeoUsage returns the request count for the current calendar month. If the
+// stored counter belongs to an earlier month it reports zero (a new month has
+// begun and the estimate resets).
+func (db *DB) GetGeoUsage() (month string, count int) {
+	now := time.Now().Format("2006-01")
+	u, _, _ := getJSON[geoUsage](db, bucketGeoCfg, []byte("usage"))
+	if u.Month != now {
+		return now, 0
+	}
+	return u.Month, u.Count
+}
+
+// IncrGeoUsage adds n to the current month's request counter, resetting it when
+// the month rolls over, and returns the updated month and total.
+func (db *DB) IncrGeoUsage(n int) (month string, count int, err error) {
+	now := time.Now().Format("2006-01")
+	u, _, _ := getJSON[geoUsage](db, bucketGeoCfg, []byte("usage"))
+	if u.Month != now {
+		u.Month = now
+		u.Count = 0
+	}
+	u.Count += n
+	if err := putJSON(db, bucketGeoCfg, []byte("usage"), u); err != nil {
+		return u.Month, u.Count, err
+	}
+	return u.Month, u.Count, nil
+}
+
 func (db *DB) AllSettings() (map[string]string, error) {
 	out := map[string]string{}
 	err := db.bolt.View(func(tx *bolt.Tx) error {

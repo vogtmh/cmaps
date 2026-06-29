@@ -82,6 +82,8 @@ type adminData struct {
 	RobinOrg        string
 	RobinSet        bool
 	GeoapifySet     bool
+	GeoUsageMonth   string
+	GeoUsageCount   int
 	RobinLastSync   RobinSyncResult
 	RobinHasSync    bool
 	RobinDeskMode   string
@@ -728,6 +730,7 @@ func (app *App) buildAdminData(r *http.Request, sess Session, tab, msg string) a
 		d.RobinOrg = app.db.GetRobinSetting("robinOrganisation")
 		d.RobinSet = app.db.GetRobinSetting("robintoken") != ""
 		d.GeoapifySet = app.db.GetGeoSetting("geoapifyApiKey") != ""
+		d.GeoUsageMonth, d.GeoUsageCount = app.db.GetGeoUsage()
 		// Build the map dropdown: published maps plus any value currently in use
 		// (so every row's selection stays selectable even if it isn't a real map yet).
 		mapSet := map[string]bool{}
@@ -1223,23 +1226,29 @@ func (app *App) handleRestGeoTest(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
 	defer cancel()
 	lat, lon, formatted, err := geocodeAddress(ctx, apiKey, text)
+	// The test issues one real API request, so count it toward the monthly estimate.
+	_, _, _ = app.db.IncrGeoUsage(1)
 	if err != nil {
 		writeJSON(w, map[string]interface{}{"ok": false, "message": err.Error(), "address": text})
 		return
 	}
 	_ = app.db.AuditLog("LDAP", sess.Username, "Geoapify API key tested")
+	month, count := app.db.GetGeoUsage()
 	writeJSON(w, map[string]interface{}{
-		"ok":        true,
-		"address":   text,
-		"lat":       lat,
-		"lon":       lon,
-		"formatted": formatted,
+		"ok":         true,
+		"address":    text,
+		"lat":        lat,
+		"lon":        lon,
+		"formatted":  formatted,
+		"usageMonth": month,
+		"usageCount": count,
 	})
 }
 
 // handleRestGeoSync geocodes every map's address and stores the resulting
 // lat/lon. Manual only (no scheduler). Requires ldap permission level 2 since it
-// writes map records.
+// writes map records. The work runs in the background so the admin panel can
+// poll handleRestGeoProgress for a live progress bar.
 func (app *App) handleRestGeoSync(w http.ResponseWriter, r *http.Request) {
 	sess, ok := app.currentSession(r)
 	if !ok || app.permLevel(sess, "ldap") < 2 {
@@ -1250,9 +1259,41 @@ func (app *App) handleRestGeoSync(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, map[string]interface{}{"ok": false, "message": "No Geoapify API key configured. Save a key first."})
 		return
 	}
-	res := app.RunGeoapifySync()
-	_ = app.db.AuditLog("LDAP", sess.Username, fmt.Sprintf("Geoapify batch sync (%d updated, %d skipped, %d failed)", res.Updated, res.Skipped, res.Failed))
-	writeJSON(w, map[string]interface{}{"ok": true, "result": res})
+	if !app.geoProg.start(0, "Starting…") {
+		writeJSON(w, map[string]interface{}{"ok": false, "started": false, "running": true, "message": "A geocode sync is already running."})
+		return
+	}
+	go func() {
+		defer func() {
+			if rec := recover(); rec != nil {
+				app.geoProg.finish("", fmt.Sprintf("sync crashed: %v", rec))
+			}
+		}()
+		res := app.RunGeoapifySync(&app.geoProg)
+		app.geoMu.Lock()
+		app.geoResult = res
+		app.geoMu.Unlock()
+		_ = app.db.AuditLog("LDAP", sess.Username, fmt.Sprintf("Geoapify batch sync (%d updated, %d skipped, %d failed)", res.Updated, res.Skipped, res.Failed))
+		app.geoProg.finish(fmt.Sprintf("%d updated, %d skipped, %d failed.", res.Updated, res.Skipped, res.Failed), "")
+	}()
+	writeJSON(w, map[string]interface{}{"ok": true, "started": true})
+}
+
+// handleRestGeoProgress returns the current Geoapify batch-sync progress
+// snapshot, plus the full result set once the run has finished.
+func (app *App) handleRestGeoProgress(w http.ResponseWriter, r *http.Request) {
+	sess, ok := app.currentSession(r)
+	if !ok || app.permLevel(sess, "ldap") < 2 {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	snap := app.geoProg.snapshot()
+	if done, _ := snap["done"].(bool); done {
+		app.geoMu.Lock()
+		snap["result"] = app.geoResult
+		app.geoMu.Unlock()
+	}
+	writeJSON(w, snap)
 }
 
 // handleRestRobinDeskTest starts the read-only Robin desk-data diagnostic in

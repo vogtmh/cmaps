@@ -50,6 +50,13 @@ type App struct {
 	exportMu   sync.Mutex
 	exportPath string
 	exportName string
+
+	// geoProg tracks the background Geoapify batch geocode so the admin Sync
+	// panel can show a live progress bar. geoResult holds the most recent
+	// completed run for rendering once it finishes.
+	geoProg   syncProgress
+	geoMu     sync.Mutex
+	geoResult GeoSyncResult
 }
 
 // Session holds the authenticated user's identity, mirroring the PHP $_SESSION

@@ -736,6 +736,7 @@ function testGeoapify() {
         out.style.color = 'var(--sy-ok)';
         out.textContent = 'OK \u2014 ' + (d.formatted || d.address) +
           ' \u2192 lat ' + Number(d.lat).toFixed(5) + ', lon ' + Number(d.lon).toFixed(5);
+        updateGeoUsage(d.usageMonth, d.usageCount);
       } else {
         out.style.color = 'var(--sy-danger)';
         out.textContent = 'Failed: ' + ((d && d.message) || 'unknown error');
@@ -747,23 +748,67 @@ function testGeoapify() {
   });
 }
 
+function updateGeoUsage(month, count) {
+  if (count === undefined || count === null) return;
+  var c = document.getElementById('geoUsageCount');
+  var m = document.getElementById('geoUsageMonth');
+  if (c) c.textContent = count;
+  if (m && month) m.textContent = month;
+}
+
 function runGeoapifySync() {
   var btn = document.getElementById('geoSyncBtn');
   if (btn) { btn.disabled = true; btn.textContent = 'Syncing\u2026'; }
+  // Hide any results from a previous run while this one builds.
+  var summary = document.getElementById('geoSyncSummary');
+  var table = document.getElementById('geoSyncTable');
+  if (summary) summary.style.display = 'none';
+  if (table) table.style.display = 'none';
   $.ajax({
     url: '../rest/geo/sync', type: 'POST', dataType: 'JSON',
     success: function (d) {
       if (!d || !d.ok) {
         alert((d && d.message) || 'Sync failed.');
+        if (btn) { btn.disabled = false; btn.textContent = 'Sync all locations now'; }
         return;
       }
-      renderGeoSyncResult(d.result || {});
+      pollGeoapifySync();
     },
-    error: function () { alert('Sync request failed (forbidden or server error).'); },
-    complete: function () {
+    error: function () {
+      alert('Sync request failed (forbidden or server error).');
       if (btn) { btn.disabled = false; btn.textContent = 'Sync all locations now'; }
     }
   });
+}
+
+function pollGeoapifySync() {
+  var timer = setInterval(function () {
+    $.ajax({
+      url: '../rest/geo/progress', type: 'GET', dataType: 'JSON',
+      success: function (snap) {
+        renderSyncProgress('geoSync', snap);
+        if (!snap.running && snap.done) {
+          clearInterval(timer);
+          var fill = document.getElementById('geoSyncProgFill');
+          var stage = document.getElementById('geoSyncProgStage');
+          if (fill) {
+            fill.classList.remove('indeterminate');
+            fill.style.width = '100%';
+            if (snap.error) fill.style.background = 'var(--sy-danger)';
+          }
+          if (stage) stage.textContent = snap.error ? ('Error: ' + snap.error) : (snap.summary || 'Done');
+          var btn = document.getElementById('geoSyncBtn');
+          if (btn) { btn.disabled = false; btn.textContent = 'Sync all locations now'; }
+          if (!snap.error && snap.result) renderGeoSyncResult(snap.result);
+        }
+      },
+      error: function () {
+        clearInterval(timer);
+        var btn = document.getElementById('geoSyncBtn');
+        if (btn) { btn.disabled = false; btn.textContent = 'Sync all locations now'; }
+      }
+    });
+  }, 800);
 }
 
 function renderGeoSyncResult(res) {
@@ -774,6 +819,7 @@ function renderGeoSyncResult(res) {
   document.getElementById('geoSyncUpdated').textContent = res.updated || 0;
   document.getElementById('geoSyncSkipped').textContent = res.skipped || 0;
   document.getElementById('geoSyncFailed').textContent = res.failed || 0;
+  updateGeoUsage(res.usageMonth, res.usageCount);
   if (!body) return;
   body.innerHTML = '';
   var rows = res.results || [];

@@ -113,22 +113,36 @@ type GeoSyncMapResult struct {
 
 // GeoSyncResult summarises a batch geocode run.
 type GeoSyncResult struct {
-	Total   int                `json:"total"`
-	Updated int                `json:"updated"`
-	Skipped int                `json:"skipped"`
-	Failed  int                `json:"failed"`
-	Results []GeoSyncMapResult `json:"results"`
+	Total      int                `json:"total"`
+	Updated    int                `json:"updated"`
+	Skipped    int                `json:"skipped"`
+	Failed     int                `json:"failed"`
+	Results    []GeoSyncMapResult `json:"results"`
+	UsageMonth string             `json:"usageMonth"` // "2006-01" the count below belongs to
+	UsageCount int                `json:"usageCount"` // total Geoapify requests this month (estimate)
 }
 
 // RunGeoapifySync geocodes every map that has an address and stores the
 // resulting lat/lon back onto the map record. The "overview" map is skipped
 // (it is the world map itself, not a physical location). This is only ever
-// invoked manually from the admin Sync panel — there is no scheduler.
-func (app *App) RunGeoapifySync() GeoSyncResult {
+// invoked manually from the admin Sync panel — there is no scheduler. Progress
+// is reported through prog so the admin panel can show a live progress bar.
+func (app *App) RunGeoapifySync(prog *syncProgress) GeoSyncResult {
 	var res GeoSyncResult
 	apiKey := app.db.GetGeoSetting("geoapifyApiKey")
 
 	maps, _ := app.db.ListMaps()
+	// Count the locations we will actually attempt (everything but "overview")
+	// so the progress bar is determinate.
+	if prog != nil {
+		total := 0
+		for _, m := range maps {
+			if m.Mapname != "overview" {
+				total++
+			}
+		}
+		prog.beginPhase(total, "Geocoding locations…")
+	}
 	for _, m := range maps {
 		if m.Mapname == "overview" {
 			continue
@@ -141,17 +155,28 @@ func (app *App) RunGeoapifySync() GeoSyncResult {
 			row.Message = "no address set"
 			res.Skipped++
 			res.Results = append(res.Results, row)
+			if prog != nil {
+				prog.step("")
+				prog.logf("%s: skipped (no address)", m.Mapname)
+			}
 			continue
 		}
 
 		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 		lat, lon, formatted, err := geocodeAddress(ctx, apiKey, addr)
 		cancel()
+		// Every attempt that reaches the API consumes one request/credit,
+		// regardless of whether a match was found, so count it here.
+		_, _, _ = app.db.IncrGeoUsage(1)
 		if err != nil {
 			row.Status = "error"
 			row.Message = err.Error()
 			res.Failed++
 			res.Results = append(res.Results, row)
+			if prog != nil {
+				prog.step("")
+				prog.logf("%s: failed (%s)", m.Mapname, err.Error())
+			}
 			continue
 		}
 
@@ -162,6 +187,10 @@ func (app *App) RunGeoapifySync() GeoSyncResult {
 			row.Message = "could not save: " + err.Error()
 			res.Failed++
 			res.Results = append(res.Results, row)
+			if prog != nil {
+				prog.step("")
+				prog.logf("%s: could not save (%s)", m.Mapname, err.Error())
+			}
 			continue
 		}
 		row.Lat = lat
@@ -170,8 +199,13 @@ func (app *App) RunGeoapifySync() GeoSyncResult {
 		row.Status = "ok"
 		res.Updated++
 		res.Results = append(res.Results, row)
+		if prog != nil {
+			prog.step("")
+			prog.logf("%s: %.5f, %.5f", m.Mapname, lat, lon)
+		}
 		// Be polite to the API between requests.
 		time.Sleep(120 * time.Millisecond)
 	}
+	res.UsageMonth, res.UsageCount = app.db.GetGeoUsage()
 	return res
 }

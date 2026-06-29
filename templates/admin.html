@@ -815,10 +815,17 @@
       <div class="sync-card-head"><h2 class="sync-card-title">Batch sync all locations</h2></div>
       <p class="sync-card-hint">Geocode every map that has an address and store the resulting coordinates on the map.
         Runs once on demand and overwrites existing lat/lon values.</p>
+      <p class="sync-card-hint" style="margin-top:6px;">Geoapify has no quota API, so this is a local estimate of requests this server has made this month.
+        Check exact remaining quota in the <a href="https://myprojects.geoapify.com/" target="_blank" rel="noopener">Geoapify dashboard</a>.<br>
+        Requests this month (<span id="geoUsageMonth">{{.GeoUsageMonth}}</span>): <strong id="geoUsageCount">{{.GeoUsageCount}}</strong></p>
       <div class="sync-form-actions">
         <button type="button" class="sync-btn sync-btn-primary" id="geoSyncBtn" onClick="runGeoapifySync()">Sync all locations now</button>
       </div>
-      <div id="geoSyncSummary" class="sync-summary" style="display:none;">
+      <div class="sync-progress" id="geoSyncProgress">
+        <div class="sync-progress-head"><span id="geoSyncProgStage">Working&hellip;</span><span id="geoSyncProgCount"></span></div>
+        <div class="sync-progress-track"><div class="sync-progress-fill" id="geoSyncProgFill"></div></div>
+      </div>
+      <div id="geoSyncSummary" class="sync-summary" style="display:none; margin-top:14px;">
         <div class="sync-summary-item"><span class="sync-summary-num" id="geoSyncUpdated">0</span><span class="sync-summary-lbl">Updated</span></div>
         <div class="sync-summary-item"><span class="sync-summary-num" id="geoSyncSkipped">0</span><span class="sync-summary-lbl">Skipped</span></div>
         <div class="sync-summary-item"><span class="sync-summary-num" id="geoSyncFailed" style="color:var(--sy-danger);">0</span><span class="sync-summary-lbl">Failed</span></div>
