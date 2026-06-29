@@ -367,6 +367,13 @@
 .sync-modal-body { font-family: monospace; font-size: 13px; white-space: pre-wrap; word-break: break-word; }
 .sync-modal-content { font-family: inherit; font-size: 14px; }
 
+/* Center the backup export/import overlays on screen. */
+#exportOverlay.sync-modal, #importOverlay.sync-modal { display: none; }
+#exportOverlay.sync-modal[style*="block"], #importOverlay.sync-modal[style*="block"] {
+  display: flex !important; align-items: center; justify-content: center;
+}
+#exportOverlay .sync-modal-box, #importOverlay .sync-modal-box { margin: 0; }
+
 /* ── Collapsible (one-time config) toggle ────────────────── */
 .sync-collapse { display: none; margin-top: 16px; }
 .sync-collapse.open { display: block; }

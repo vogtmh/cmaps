@@ -219,9 +219,6 @@
       <div id="vipCategories" class="vip-cats">Loading&hellip;</div>
     </div>
 
-  </div>
-  <script>loadVips({{if gt .PermConfig 1}}true{{else}}false{{end}});</script>
-
   {{if gt .PermConfig 1}}
   <!-- Export modal -->
   <div id="exportOverlay" class="sync-modal">
@@ -258,14 +255,17 @@
           <input class="sync-input" type="file" id="importFile" accept=".zip,application/zip">
         </div>
         <div class="sync-field sync-field-wide">
-          <label class="sync-label">Data sets to import</label>
+          <label class="sync-label" style="margin-top:14px;">Data sets to import</label>
           <div style="margin-bottom:8px;">
             <button type="button" class="sync-btn sync-btn-sm" onClick="toggleImportGroups(true)">Select all</button>
             <button type="button" class="sync-btn sync-btn-sm" onClick="toggleImportGroups(false)">Select none</button>
           </div>
           <div id="importGroups" class="vip-cats">
             {{range .BackupGroups}}
-            <label style="display:block; margin:4px 0;"><input type="checkbox" class="import-group" value="{{.Key}}"> {{.Label}}</label>
+            <div class="sync-toggle-row">
+              <label class="sync-toggle"><input type="checkbox" class="import-group" value="{{.Key}}"><span class="sync-toggle-slider"></span></label>
+              <span class="sync-toggle-label">{{.Label}}</span>
+            </div>
             {{end}}
           </div>
         </div>
@@ -276,7 +276,12 @@
       </div>
     </div>
   </div>
+  {{end}}
 
+  </div>
+  <script>loadVips({{if gt .PermConfig 1}}true{{else}}false{{end}});</script>
+
+  {{if gt .PermConfig 1}}
   <script>
     function openExportModal() {
       var bar = document.getElementById('exportProgress');
