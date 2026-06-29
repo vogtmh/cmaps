@@ -250,28 +250,36 @@ function highlightManagers() {
     var scale = Number(itemscale);
     if (!(scale > 0)) { scale = 1; }
     var managers = result_old.desks.filter(element => element.color !="");
+    var svgns = 'http://www.w3.org/2000/svg';
     $.each( managers, function( t, manager ){
-      // Create highlightmarker
+      // Draw the VIP/manager ring as an SVG <circle> rather than a div with
+      // border-radius:50%. A CSS rounded border gets rasterised and Chromium
+      // clips it flat on one side (sub-pixel dependent, so only some balls
+      // were affected) when an ancestor (#content) carries a fractional zoom.
+      // SVG is vector-rendered and immune to that bug, so every ring is a
+      // full circle. Positioned in pre-zoom coordinates with its own
+      // zoom:itemscale, matching how deskballs are placed.
       var p = document.getElementById('deskitems');
-      var newElement = document.createElement('div');
-      newElement.setAttribute('id', 'manager' + manager.id);
-      p.appendChild(newElement);
-      // Build the ring exactly like a deskball: position in pre-zoom
-      // coordinates (manager.x / scale) and give the element its own
-      // zoom:itemscale. Without an integer zoom of its own, the rounded
-      // border gets clipped flat on one side by Chromium's border-radius
-      // rendering when an ancestor (#content) carries a fractional zoom -
-      // that was the long-standing "not a full circle" bug.
-      $('#manager' + manager.id).css('position','absolute');
-      $('#manager' + manager.id).css('left',((manager.x/scale)-12) + 'px');
-      $('#manager' + manager.id).css('top',((manager.y/scale)-12) + 'px');
-      $('#manager' + manager.id).css('width','18px');
-      $('#manager' + manager.id).css('height','18px');
-      $('#manager' + manager.id).css('border','3px solid '+manager.color);
-      $('#manager' + manager.id).css('background-color', 'transparent');
-      $('#manager' + manager.id).css('border-radius','50%');
-      $('#manager' + manager.id).css('zoom', scale);
-      $('#manager' + manager.id).css('z-index','9');
+      var svg = document.createElementNS(svgns, 'svg');
+      svg.setAttribute('id', 'manager' + manager.id);
+      svg.setAttribute('viewBox', '0 0 24 24');
+      svg.style.position = 'absolute';
+      svg.style.left = ((manager.x / scale) - 12) + 'px';
+      svg.style.top = ((manager.y / scale) - 12) + 'px';
+      svg.style.width = '24px';
+      svg.style.height = '24px';
+      svg.style.zoom = scale;
+      svg.style.overflow = 'visible';
+      svg.style.zIndex = '9';
+      var circle = document.createElementNS(svgns, 'circle');
+      circle.setAttribute('cx', '12');
+      circle.setAttribute('cy', '12');
+      circle.setAttribute('r', '10.5');
+      circle.setAttribute('fill', 'none');
+      circle.setAttribute('stroke', manager.color);
+      circle.setAttribute('stroke-width', '3');
+      svg.appendChild(circle);
+      p.appendChild(svg);
     });
 }
 
