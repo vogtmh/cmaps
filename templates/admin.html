@@ -160,7 +160,9 @@
         {{end}}
       </div>
 
-      <!-- Logos (right half) -->
+      <!-- Right column: Logos + Backup stacked -->
+      <div class="sync-col">
+      <!-- Logos -->
       <form action="?tab=config" method="post" enctype="multipart/form-data">
         <input type="hidden" name="tab" value="config">
         <div class="sync-card">
@@ -189,23 +191,24 @@
         </div>
       </form>
 
-    </div>
+      {{if gt .PermConfig 1}}
+      <!-- Backup & restore (right column, below Logos) -->
+      <div class="sync-card">
+        <div class="sync-card-head">
+          <h2 class="sync-card-title">Backup &amp; restore</h2>
+        </div>
+        <p class="sync-card-hint">Export the entire data set (database, map images, logos and avatar cache) as a single
+          zip &mdash; the <code>config.json</code> file is never included. Import lets you choose exactly which data sets to
+          restore; imported data overwrites the matching existing data.</p>
+        <div class="sync-form-actions">
+          <button type="button" class="sync-btn sync-btn-primary" onClick="openExportModal()">Export&hellip;</button>
+          <button type="button" class="sync-btn" onClick="openImportModal()">Import&hellip;</button>
+        </div>
+      </div>
+      {{end}}
+      </div>
 
-    {{if gt .PermConfig 1}}
-    <!-- Backup & restore -->
-    <div class="sync-card">
-      <div class="sync-card-head">
-        <h2 class="sync-card-title">Backup &amp; restore</h2>
-      </div>
-      <p class="sync-card-hint">Export the entire data set (database, map images, logos and avatar cache) as a single
-        zip &mdash; the <code>config.json</code> file is never included. Import lets you choose exactly which data sets to
-        restore; imported data overwrites the matching existing data.</p>
-      <div class="sync-form-actions">
-        <button type="button" class="sync-btn sync-btn-primary" onClick="openExportModal()">Export&hellip;</button>
-        <button type="button" class="sync-btn" onClick="openImportModal()">Import&hellip;</button>
-      </div>
     </div>
-    {{end}}
 
     <!-- VIP desk borders -->
     <div class="sync-card">
@@ -227,7 +230,7 @@
         <h2>Export data</h2>
         <button type="button" class="sync-btn sync-btn-sm" onClick="closeBackupModal('exportOverlay')">Close</button>
       </div>
-      <div class="sync-modal-body">
+      <div class="sync-modal-content">
         <p class="sync-card-hint">Builds a zip of the whole data set. When it is ready the download starts automatically.</p>
         <div class="sync-form-actions">
           <button type="button" class="sync-btn sync-btn-primary" id="exportSyncBtn" onClick="startExport()">Create export</button>
@@ -247,7 +250,7 @@
         <h2>Import data</h2>
         <button type="button" class="sync-btn sync-btn-sm" onClick="closeBackupModal('importOverlay')">Close</button>
       </div>
-      <div class="sync-modal-body">
+      <div class="sync-modal-content">
         <p class="sync-card-hint">Select an export zip, choose which data sets to restore, then import. Imported data
           <strong>overwrites</strong> the matching existing data &mdash; it is not merged.</p>
         <div class="sync-field sync-field-wide">

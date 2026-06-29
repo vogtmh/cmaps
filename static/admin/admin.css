@@ -92,6 +92,9 @@
    children must not keep their bottom margin (the row gap handles spacing). */
 .sync-cols { display: flex; gap: 18px; align-items: flex-start; flex-wrap: wrap; }
 .sync-cols > .sync-card, .sync-cols > form { flex: 1 1 0; min-width: 320px; margin-bottom: 18px; }
+.sync-cols > .sync-col { flex: 1 1 0; min-width: 320px; margin-bottom: 18px; display: flex; flex-direction: column; gap: 18px; }
+.sync-cols > .sync-col > form { margin: 0; }
+.sync-cols > .sync-col > .sync-card { margin-bottom: 0; }
 .sync-cols > form { margin: 0; }
 .sync-cols > form > .sync-card { margin-bottom: 0; }
 .sync-card-head {
@@ -362,6 +365,7 @@
 }
 .sync-modal-head h2 { margin: 0; font-size: 1.1em; }
 .sync-modal-body { font-family: monospace; font-size: 13px; white-space: pre-wrap; word-break: break-word; }
+.sync-modal-content { font-family: inherit; font-size: 14px; }
 
 /* ── Collapsible (one-time config) toggle ────────────────── */
 .sync-collapse { display: none; margin-top: 16px; }
