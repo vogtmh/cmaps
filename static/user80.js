@@ -1418,10 +1418,8 @@ function resetColors() {
   document.getElementById("notifycontent").innerHTML = "<span style=\"position:relative; width:454px;height:40px;display:inline;float:left;line-height: 40px;\">&nbsp;</span>";
 
   document.getElementById("addressbook_img").src="images/addressbook.png";
-  // Reset search button
-  $('#search_button').val('Find')
+  // Reset search box
   $('#searchtext').val('')
-  $('#search_button').css('background-color','#0979D8')
 }
 
 function searchDesks() {    
@@ -1449,7 +1447,6 @@ function searchDesks() {
 
 function searchLocaldesks() {
   var localdesks = result_old.desks;
-  var localresults = 0
   var gotoY = 0
   $.each( localdesks, function( t, localdesk ){
     var namecheck = (localdesk.fname+' '+localdesk.lname+','+localdesk.desktype+','+localdesk.dsk+','+localdesk.empl).toLowerCase()
@@ -1465,8 +1462,6 @@ function searchLocaldesks() {
           sresult = namecheck.includes(searchcheck);
         }
         if (sresult) {
-          // count local results
-          localresults++
           // output local results
           $('#'+localdesk.id).css('background-color','rgba(255, 127, 0, 1)')
           // collect for the search sidebar (dedupe by desk id)
@@ -1522,14 +1517,6 @@ function searchLocaldesks() {
   if (typeof teamlabel !== 'undefined') {
     teamlabel = '';
     window.history.replaceState({}, document.title, root);
-  }
-  // Display number of results on search button
-  $('#search_button').val(localresults+' found')
-  $('#search_button').css('background-color','#FF7F00')
-  // Colorize mobile search button - if exists
-  var element = document.getElementById('mobile_searchbutton');
-  if (element !== null) {
-    $('#mobile_searchbutton').css('background-color','#FF7F00');
   }
   // scroll to first result
   if (gotoY != 0) {
