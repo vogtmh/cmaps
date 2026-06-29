@@ -118,7 +118,15 @@ $(function(){
   // The search sidebar (Option B) shrinks & pushes the MAP only (the top
   // header keeps its full-width scale), by removing the sidebar width from
   // the usable map area and re-centering the map in the remaining space.
-  var sidebarW = (typeof searchSidebarWidth === 'number') ? searchSidebarWidth : 0;
+  // The sidebar itself is scaled (and re-anchored below the header) with the
+  // same factor as the header/UI via CSS zoom, so its icons and text track the
+  // map's deskball size and it follows window resizes.
+  var sidebarEl = document.getElementById('searchsidebar');
+  if (sidebarEl) {
+    sidebarEl.style.zoom = basePage.scale;
+  }
+  var sidebarOpen = (typeof searchSidebarWidth === 'number') && searchSidebarWidth > 0;
+  var sidebarW = sidebarOpen ? searchSidebarWidth * basePage.scale : 0;
   var mapScale = basePage.scale;
   var mapLeftPos = newLeftPos;
   if (sidebarW > 0) {

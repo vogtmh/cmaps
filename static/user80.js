@@ -1569,12 +1569,10 @@ function openSearchSidebar() {
   if (inMobileMode) { return; }
   var sidebar = document.getElementById('searchsidebar');
   if (!sidebar) { return; }
-  // Align the sidebar top with the bottom of the header bar.
-  var cp = document.getElementById('controlpanel');
-  sidebar.style.top = (cp ? cp.offsetHeight : 70) + 'px';
   if (searchSidebarWidth === SEARCH_SIDEBAR_WIDTH) { return; }
   searchSidebarWidth = SEARCH_SIDEBAR_WIDTH;
   sidebar.classList.add('open');
+  // scalePages() scales/re-anchors the sidebar and re-shifts the map.
   if (typeof window.cmapsRescale === 'function') { window.cmapsRescale(); }
 }
 
