@@ -1651,10 +1651,12 @@ function buildSidebarLocalRow(r) {
   var isPerson = personTypes.indexOf(r.desktype) !== -1;
 
   // Meeting room live status (current event + busy colour), looked up by desk id.
-  var meetingNow = null, meetingBusy = false;
+  // meetingSynced is false when the room has no status entry (not synced).
+  var meetingNow = null, meetingBusy = false, meetingSynced = false;
   if (r.desktype === 'meeting') {
     var rs = (meetingstatus || []).filter(function (e) { return e.deskid == r.id; });
     if (rs.length) {
+      meetingSynced = true;
       var av = rs[0].availability;
       meetingBusy = (av === 'booked' || av === 'in_use');
       if (meetingBusy && rs[0].now_title) { meetingNow = rs[0].now_title; }
@@ -1692,10 +1694,15 @@ function buildSidebarLocalRow(r) {
   //  - People (desk types): job title, falling back to the desk name.
   //  - Facilities (printer, ...): description (empl), falling back to the type.
   if (r.desktype === 'meeting') {
-    sub.textContent = meetingNow ? meetingNow : 'free';
-    // Colour the subtitle with the meeting-room status colour: the pulse blue
-    // when in use, the available green when free.
-    sub.style.color = meetingBusy ? 'rgb(0, 187, 255)' : 'rgb(0, 210, 0)';
+    if (!meetingSynced) {
+      // Room is not synced: report no information and leave the subtitle uncoloured.
+      sub.textContent = 'no information provided';
+    } else {
+      sub.textContent = meetingNow ? meetingNow : 'free';
+      // Colour the subtitle with the meeting-room status colour: the pulse blue
+      // when in use, the available green when free.
+      sub.style.color = meetingBusy ? 'rgb(0, 187, 255)' : 'rgb(0, 210, 0)';
+    }
   }
   else if (isPerson) {
     sub.textContent = (r.title && r.title.trim() !== '') ? r.title : r.dsk;
