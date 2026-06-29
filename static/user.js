@@ -247,29 +247,32 @@ function hideSticky () {
 }
 
 function highlightManagers() {
-    var scale = Number(itemscale);
-    if (!(scale > 0)) { scale = 1; }
     var managers = result_old.desks.filter(element => element.color !="");
     var svgns = 'http://www.w3.org/2000/svg';
     $.each( managers, function( t, manager ){
-      // Draw the VIP/manager ring as an SVG <circle> rather than a div with
-      // border-radius:50%. A CSS rounded border gets rasterised and Chromium
-      // clips it flat on one side (sub-pixel dependent, so only some balls
-      // were affected) when an ancestor (#content) carries a fractional zoom.
-      // SVG is vector-rendered and immune to that bug, so every ring is a
-      // full circle. Positioned in pre-zoom coordinates with its own
-      // zoom:itemscale, matching how deskballs are placed.
-      var p = document.getElementById('deskitems');
+      // Draw the VIP/manager ring as an SVG <circle> appended INSIDE the
+      // deskball element. Two reasons:
+      //  1) SVG is vector-rendered, so it is immune to Chromium's raster
+      //     border-radius bug that clipped a div ring flat on one side when an
+      //     ancestor (#content) has a fractional zoom.
+      //  2) As a child of the deskball it shares the ball's exact transform
+      //     context and is centred with percentages, which avoids the
+      //     sub-pixel coordinate drift that left small rings misaligned when
+      //     zoomed back out to normal size.
+      var ball = document.getElementById(manager.id);
+      if (!ball) { return; }
+      var existing = document.getElementById('manager' + manager.id);
+      if (existing) { existing.remove(); }
       var svg = document.createElementNS(svgns, 'svg');
       svg.setAttribute('id', 'manager' + manager.id);
       svg.setAttribute('viewBox', '0 0 24 24');
       svg.style.position = 'absolute';
-      svg.style.left = ((manager.x / scale) - 12) + 'px';
-      svg.style.top = ((manager.y / scale) - 12) + 'px';
-      svg.style.width = '24px';
-      svg.style.height = '24px';
-      svg.style.zoom = scale;
+      svg.style.left = '-20%';
+      svg.style.top = '-20%';
+      svg.style.width = '140%';
+      svg.style.height = '140%';
       svg.style.overflow = 'visible';
+      svg.style.pointerEvents = 'none';
       svg.style.zIndex = '9';
       var circle = document.createElementNS(svgns, 'circle');
       circle.setAttribute('cx', '12');
@@ -279,7 +282,7 @@ function highlightManagers() {
       circle.setAttribute('stroke', manager.color);
       circle.setAttribute('stroke-width', '3');
       svg.appendChild(circle);
-      p.appendChild(svg);
+      ball.appendChild(svg);
     });
 }
 
