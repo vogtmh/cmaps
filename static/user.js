@@ -1637,6 +1637,10 @@ function buildSidebarLocalRow(r) {
   row.className = 'searchsidebar_row';
   row.setAttribute('data-deskid', r.id);
   row.onclick = function () { selectSearchResult(r.id, row); };
+  // Hovering a row previews that result on the map (isolates it), reverting
+  // when the cursor leaves. A persistent click selection takes precedence.
+  row.onmouseenter = function () { hoverSearchResult(r.id); };
+  row.onmouseleave = function () { unhoverSearchResult(); };
 
   // Desk types that represent a real person (show their avatar). Everything else
   // is a facility/marker that uses its own icon image instead.
@@ -1789,6 +1793,35 @@ function showAllSearchResultsOnMap() {
     var oid = searchLocalResults[k].id;
     $('#' + oid).css('background-color', 'rgba(255, 127, 0, 1)');
     $('#caption' + oid).attr('style', 'visibility: visible');
+  }
+}
+
+// On the map: keep only the given desk highlighted (orange + caption) and hide
+// every other match. Does not change the persistent click selection.
+function isolateDeskOnMap(id) {
+  for (var k = 0; k < searchLocalResults.length; k++) {
+    var oid = searchLocalResults[k].id;
+    if (oid != id) {
+      $('#' + oid).css('background-color', '');
+      $('#caption' + oid).attr('style', 'visibility: hidden');
+    }
+  }
+  $('#' + id).css('background-color', 'rgba(255, 127, 0, 1)');
+  $('#caption' + id).attr('style', 'visibility: visible');
+}
+
+// Hover preview: isolate the hovered desk without touching the click selection.
+function hoverSearchResult(id) {
+  isolateDeskOnMap(id);
+}
+
+// Mouse leaves a row: restore the persistent state — keep the clicked result
+// isolated if one is selected, otherwise show all matches again.
+function unhoverSearchResult() {
+  if (searchSelectedId != null) {
+    isolateDeskOnMap(searchSelectedId);
+  } else {
+    showAllSearchResultsOnMap();
   }
 }
 
