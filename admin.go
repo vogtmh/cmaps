@@ -119,7 +119,7 @@ var commonTimezones = []string{
 
 // handleAdmin renders the admin panel (GET) and processes form submissions (POST).
 func (app *App) handleAdmin(w http.ResponseWriter, r *http.Request) {
-	// Static assets that live under /admin/ (backend80.js, admin80.css) are
+	// Static assets that live under /admin/ (backend.js, admin.css) are
 	// served from the embedded static FS; only /admin and /admin/ render the panel.
 	if r.URL.Path != "/admin" && r.URL.Path != "/admin/" {
 		app.serveStaticAsset(w, r)
@@ -772,7 +772,7 @@ func (app *App) buildAdminData(r *http.Request, sess Session, tab, msg string) a
 				d.DeskMaps = append(d.DeskMaps, m.Mapname)
 			}
 		}
-		// deskSummary() in backend80.js iterates the global "departments" object
+		// deskSummary() in backend.js iterates the global "departments" object
 		// (keyed by index, matching the legacy JSON_FORCE_OBJECT output).
 		deptObj := map[string]string{}
 		depts, _ := app.db.ListDepartments()

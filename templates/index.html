@@ -4,8 +4,8 @@
 <head>
   <title>{{.AppTitle}}</title>
   <meta charset="utf-8">
-  <link rel="stylesheet" type="text/css" href="cmaps80.css?v={{assetver}}">
-  <link rel="stylesheet" type="text/css" href="client80.css?v={{assetver}}">
+  <link rel="stylesheet" type="text/css" href="cmaps.css?v={{assetver}}">
+  <link rel="stylesheet" type="text/css" href="client.css?v={{assetver}}">
   <link rel="apple-touch-icon" sizes="57x57" href="favicons/apple-touch-icon-57x57.png">
   <link rel="apple-touch-icon" sizes="60x60" href="favicons/apple-touch-icon-60x60.png">
   <link rel="apple-touch-icon" sizes="72x72" href="favicons/apple-touch-icon-72x72.png">
@@ -27,9 +27,9 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <script src="tools/jquery3.js?v={{assetver}}"></script>
   <script src="tools/jquery-migrate-1.4.1.min.js?v={{assetver}}"></script>
-  <script src="user80.js?v={{assetver}}"></script>
-  <script src="login80.js?v={{assetver}}"></script>
-  <script src="tools/resize80.js?v={{assetver}}"></script>
+  <script src="user.js?v={{assetver}}"></script>
+  <script src="login.js?v={{assetver}}"></script>
+  <script src="tools/resize.js?v={{assetver}}"></script>
   <script src="tools/underscore.js?v={{assetver}}"></script>
 </head>
 
@@ -169,7 +169,7 @@
   <div id="group_label" style="position: absolute; color: #FF7F00; text-align:center; width: 200px; height: 70px; left:0px;top:0px;visibility:hidden; font-size:50px; font-weight: bold; z-index:100;background-color: rgba(0, 0, 0, 0.3);"></div>
   <div id="group_border" style="position: absolute; border-radius: 25px;border: 8px solid #FF7F00; background-color: rgba(255, 127, 0, 0.2); padding: 20px; width: 200px; height: 150px; left:0px;top:0px;visibility:hidden;"></div>
 
-  {{if .IsEditor}}<script src="admin80.js?v={{assetver}}"></script>{{else}}<script src="tools/empty.js?v={{assetver}}"></script>{{end}}
+  {{if .IsEditor}}<script src="admin.js?v={{assetver}}"></script>{{else}}<script src="tools/empty.js?v={{assetver}}"></script>{{end}}
 
   <script>
     var targetScreenWidth = {{.TargetScreenWidth}};
@@ -197,7 +197,7 @@
     // Whether the SAML "Login via SSO" option should be offered on the login form.
     var saml_login_available = {{if and .SAMLEnabled (not .DisableSAML)}}1{{else}}0{{end}};
 
-    // Config for the unified login overlay (login80.js / cmapsLogin).
+    // Config for the unified login overlay (login.js / cmapsLogin).
     window.cmapsAuth = {
       loggedIn:     {{if .LoggedIn}}true{{else}}false{{end}},
       samlEnabled:  {{if and .SAMLEnabled (not .DisableSAML)}}true{{else}}false{{end}},

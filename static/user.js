@@ -153,7 +153,7 @@ function logoutUser(mode) {
 }
 
 // Backwards-compatible shim: the login UI is now the unified overlay in
-// login80.js (cmapsLogin). loginForm(true) opens it, loginForm(false) closes it.
+// login.js (cmapsLogin). loginForm(true) opens it, loginForm(false) closes it.
 function loginForm (showform) {
   if (showform === false) {
     if (typeof cmapsCloseLogin === 'function') { cmapsCloseLogin(); }
@@ -2209,7 +2209,7 @@ function checkMobile() {
       script.onload = function () {
         addMobileInterface()
       };
-      script.src = 'mobile80.js';
+      script.src = 'mobile.js';
       document.head.appendChild(script);
     }
   }

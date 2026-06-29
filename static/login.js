@@ -1,4 +1,4 @@
-// login80.js — one page-agnostic login entry point usable from anywhere.
+// login.js — one page-agnostic login entry point usable from anywhere.
 //
 // Call cmapsLogin():
 //   1. If the user is already logged in, it does nothing.

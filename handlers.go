@@ -85,7 +85,7 @@ func (app *App) registerRESTRoutes(mux *http.ServeMux) {
 func (app *App) handleIndex(w http.ResponseWriter, r *http.Request) {
 	// Any non-root path is treated as a request for an embedded static asset
 	// (the legacy front-end references assets with root-relative paths such as
-	// "cmaps80.css", "user80.js", "images/add.png" and "tools/jquery3.js").
+	// "cmaps.css", "user.js", "images/add.png" and "tools/jquery3.js").
 	if r.URL.Path != "/" {
 		app.serveStaticAsset(w, r)
 		return

@@ -7,7 +7,7 @@ import (
 )
 
 // deskItem is one entry in the /rest/desks response. Field names and the
-// "0"/"1" booked string match the legacy PHP API consumed by user80.js.
+// "0"/"1" booked string match the legacy PHP API consumed by user.js.
 type deskItem struct {
 	Map      string    `json:"map"`
 	ID       int       `json:"id,string"`
