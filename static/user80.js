@@ -2,6 +2,8 @@
 
 // Declare global variables
 var result_old;
+var result_old_str;
+var deskHandlersBound = false;
 var overviewmaps;
 var bookingstatus;
 var meetingstatus; 
@@ -1787,6 +1789,26 @@ function pulseSearchResult(id) {
   }, 4000);
 }
 
+// bindDeskHandlers attaches the desk mouse handlers once via event delegation
+// on the #deskitems container, rather than emitting an inline <script> with
+// per-desk bindings on every refresh. showSticky is suppressed in admin edit
+// mode (where dragElement handles interaction instead).
+function bindDeskHandlers() {
+  if (deskHandlersBound) { return; }
+  deskHandlersBound = true;
+  $('#deskitems')
+    .on('mouseover', '.deskball', function () {
+      showNameplate(this.id, this.getAttribute('data-type'));
+    })
+    .on('mouseout', '.deskball', function () {
+      hideNameplate(1);
+    })
+    .on('mouseup', '.deskball', function () {
+      if (typeof token !== 'undefined' && setting_usermode == 'edit') { return; }
+      showSticky(this.id, this.getAttribute('data-type'));
+    });
+}
+
 // using the desks API to create all deskitems
 function updateDesks(forceRefresh) {    
   mapname = map;
@@ -1810,12 +1832,14 @@ function updateDesks(forceRefresh) {
         var deskType = '';
         var nameplate_caption = '';
         var halfsize = '';
+        var seenIds = {};
         for (var i = 0; i < result.desks.length; i++) {
           var counter = result.desks[i];
           // Check for shared desk - output only one item
-          if (counter.id != '' && outputdesks.includes('id="'+counter.id+'"')) {
+          if (counter.id != '' && seenIds[counter.id]) {
             continue;
           }
+          if (counter.id != '') { seenIds[counter.id] = true; }
           switch (counter.desktype) {
   
           case "exit":
@@ -1899,18 +1923,18 @@ function updateDesks(forceRefresh) {
           switch (deskType) {
             case "floor": 
               if (typeof token !== 'undefined') {
-                outputdesks+='<div id="' + counter.id + '" class="' + deskClass + '" style="position:absolute;left:' 
+                outputdesks+='<div id="' + counter.id + '" class="' + deskClass + '" data-type="' + deskType + '" style="position:absolute;left:' 
                         + (counter.x/itemscale-halfsize) + 'px;top:' + (counter.y/itemscale-halfsize) + 'px;border-radius:50%;zoom:' + itemscale + ';"'
-                        + 'onmouseover=showNameplate("' + counter.id + '","' + deskType + '"); onmouseup=showSticky("' + counter.id + '","' + deskType + '"); onmouseout=hideNameplate(1);>'
+                        + '>'
                         + '<div id="caption' + counter.id + '" class="caption">' + nameplate_caption + '</div></div>';
               }
               else {
-                outputdesks+='<div id="' + counter.id + '" class="' + deskClass + '" style="position:absolute; visibility:hidden; left:' 
+                outputdesks+='<div id="' + counter.id + '" class="' + deskClass + '" data-type="' + deskType + '" style="position:absolute; visibility:hidden; left:' 
                         + counter.x + 'px;top:' + (counter.y-40) + 'px;border-radius:50%; width:1px; height:1px;"></div>';
               }
               break;
             case "meeting":
-              outputdesks+='<div id="' + counter.id + '" class="' + deskClass + '" style="position:absolute;left:' 
+              outputdesks+='<div id="' + counter.id + '" class="' + deskClass + '" data-type="' + deskType + '" style="position:absolute;left:' 
                             + (counter.x/itemscale-halfsize) + 'px;top:' + (counter.y/itemscale-halfsize) + 'px;border-radius:50%;zoom:' + itemscale + ';"'
                             + '>'
                             + '<div id="caption' + counter.id + '" class="caption">' + nameplate_caption + '</div>'
@@ -1920,36 +1944,32 @@ function updateDesks(forceRefresh) {
                             + '</div>';
               break;
             default: 
-                outputdesks+='<div id="' + counter.id + '" class="' + deskClass + '" style="position:absolute;left:' 
+                outputdesks+='<div id="' + counter.id + '" class="' + deskClass + '" data-type="' + deskType + '" style="position:absolute;left:' 
                             + (counter.x/itemscale-halfsize) + 'px;top:' + (counter.y/itemscale-halfsize) + 'px;border-radius:50%;zoom:' + itemscale + ';"'
                             + '>'
                             + '<div id="caption' + counter.id + '" class="caption">' + nameplate_caption + '</div></div>';
                 break;
               }
-          // add mouse events based on user/admin mode
-          outputdesks += '<script>';
-          if (typeof(token) != 'undefined' && setting_usermode == 'edit') {
-            // dragNdrop for admins
-            outputdesks += 'dragElement(document.getElementById('+counter.id+'),"'+deskType+'");'
-            outputdesks += '$("#'+counter.id+'").mouseover(function(){showNameplate("'+counter.id+'", "'+deskType+'");});'
-            outputdesks += '$("#'+counter.id+'").mouseout(function(){hideNameplate(1);});'
-          }
-          else {
-            // default actions for users
-            outputdesks += '$("#'+counter.id+'").mouseover(function(){showNameplate("'+counter.id+'", "'+deskType+'");});'
-            outputdesks += '$("#'+counter.id+'").mouseup(function(){showSticky("'+counter.id+'", "'+deskType+'");});'
-            outputdesks += '$("#'+counter.id+'").mouseout(function(){hideNameplate(1);});'
-          }
-          outputdesks += '</script>';
         }
         
-        if (JSON.stringify(result) == JSON.stringify(result_old) && (forceRefresh != true)) {
+        if (forceRefresh != true && JSON.stringify(result) == result_old_str) {
           console.log('[Desks] up-to-date');
         }
         else {
           console.log('[Desks] new data - updating map');
           $("#deskitems").html(outputdesks);
           result_old = result;
+          result_old_str = JSON.stringify(result);
+          // Bind mouse handlers once via event delegation instead of emitting a
+          // <script> block per desk. In admin edit mode also (re)attach the
+          // drag handlers to the freshly rendered desk elements.
+          bindDeskHandlers();
+          if (typeof(token) != 'undefined' && setting_usermode == 'edit') {
+            var deskEls = document.querySelectorAll('#deskitems .deskball');
+            for (var d = 0; d < deskEls.length; d++) {
+              dragElement(deskEls[d], deskEls[d].getAttribute('data-type'));
+            }
+          }
           getMeetingStatus(true);
           //statsPanel(); 
           //if (searchtext) {searchDesks()}

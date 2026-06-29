@@ -92,6 +92,10 @@ func main() {
 	mux := http.NewServeMux()
 	app.routes(mux)
 
+	// Wrap the whole mux with gzip so text-based responses (HTML, JS, CSS, JSON
+	// desk/changes payloads) are compressed for clients that support it.
+	handler := gzipMiddleware(mux)
+
 	// Background AD mirror refresh (no-op until an AD source is configured).
 	app.StartADSyncScheduler(6 * time.Hour)
 
@@ -102,7 +106,7 @@ func main() {
 	app.StartRobinLocationScheduler(1 * time.Hour)
 
 	log.Printf("CompanyMaps 9 listening on %s (data dir: %s)", cfg.ListenAddr, cfg.DataDir)
-	if err := http.ListenAndServe(cfg.ListenAddr, mux); err != nil {
+	if err := http.ListenAndServe(cfg.ListenAddr, handler); err != nil {
 		log.Fatalf("server: %v", err)
 	}
 }
