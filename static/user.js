@@ -105,13 +105,25 @@ function computeDuplicateDeskIds() {
     return (typeof healthFlaggedDesks !== 'undefined' && healthFlaggedDesks) ? healthFlaggedDesks : [];
   }
   var wl = (typeof healthWhitelist !== 'undefined' && healthWhitelist) ? healthWhitelist : [];
-  var byName = {};
+  // Collapse to one entry per physical desk ID first. A single stored desk that
+  // is shared by several people is expanded server-side into multiple
+  // "shareddesk" rows that all carry the SAME id and desk name; without this
+  // de-duplication they would look like a name clash and glow even though the
+  // server (which works on the raw, unexpanded desks) never flags them. Grouping
+  // unique IDs by name then mirrors the server's duplicateDeskGroups() exactly.
+  var nameById = {};
   var desks = result_old.desks;
   for (var i = 0; i < desks.length; i++) {
-    var name = desks[i].dsk;
+    var d = desks[i];
+    if (d.id === undefined || d.id === null) { continue; }
+    var name = d.dsk;
     if (name === undefined || name === null) { continue; }
     if (wl.indexOf(name) !== -1) { continue; }
-    (byName[name] = byName[name] || []).push(desks[i].id);
+    if (!(d.id in nameById)) { nameById[d.id] = name; }
+  }
+  var byName = {};
+  for (var id in nameById) {
+    (byName[nameById[id]] = byName[nameById[id]] || []).push(id);
   }
   var ids = [];
   for (var key in byName) {
