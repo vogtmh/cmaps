@@ -38,8 +38,20 @@ type adminUserRow struct {
 }
 
 type kv struct {
-	Variable string
-	Value    string
+	Variable    string
+	Value       string
+	Description string
+}
+
+// settingDescriptions maps general settings to a short explanation shown as a
+// subtitle under each variable name in the admin "base variables" list.
+var settingDescriptions = map[string]string{
+	"apptitle":     "Application name shown in the browser tab and the top bar.",
+	"domain":       "Default domain appended to usernames for login and Teams/SSO matching.",
+	"reportURL":    "Link target for the \u201cReport a problem\u201d button. Leave empty to hide it.",
+	"teamsContact": "Microsoft Teams user (email) opened when contacting support from an announcement.",
+	"nomapText":    "Placeholder text for maps without an image. Empty uses \u201cThis map has not been added yet.\u201d Supports multiple lines.",
+	"nomapLink":    "Optional link shown right below the placeholder text on maps without an image.",
 }
 
 // adminData holds everything the admin.html template needs.
@@ -335,6 +347,18 @@ func (app *App) handleAdminPost(w http.ResponseWriter, r *http.Request, sess Ses
 			_ = removeFileIfExists(app.cfg.dataPath("maps", name+".png"))
 			_ = app.db.AuditLog("Maps", sess.Username, "Map deleted ("+name+")")
 			return "Map deleted."
+		}
+		if name := r.FormValue("nomapMapname"); name != "" {
+			// Convert an existing map into a placeholder ("nomap"): remove the
+			// image file but keep the map record so the location still shows on
+			// the overview. Desks are left intact and reappear if an image is
+			// uploaded again later.
+			if name == "overview" {
+				return ""
+			}
+			_ = removeFileIfExists(app.cfg.dataPath("maps", name+".png"))
+			_ = app.db.AuditLog("Maps", sess.Username, "Map image removed, converted to placeholder ("+name+")")
+			return "Map image removed. The map is now shown as a placeholder."
 		}
 		if r.FormValue("editMapOrigName") != "" {
 			return app.updateMapFromForm(r, sess)
@@ -716,7 +740,11 @@ func (app *App) buildAdminData(r *http.Request, sess Session, tab, msg string) a
 			if k == "logo_regular" || k == "logo_hover" {
 				continue
 			}
-			d.GeneralVars = append(d.GeneralVars, kv{Variable: k, Value: v})
+			// The world map has its own toggle card, so hide it from the table.
+			if k == "worldmap" {
+				continue
+			}
+			d.GeneralVars = append(d.GeneralVars, kv{Variable: k, Value: v, Description: settingDescriptions[k]})
 		}
 		sort.Slice(d.GeneralVars, func(i, j int) bool { return d.GeneralVars[i].Variable < d.GeneralVars[j].Variable })
 		d.LogoRegular = app.settingOr("logo_regular", "/static/images/cmaps-regular.png")

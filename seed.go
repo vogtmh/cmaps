@@ -21,9 +21,10 @@ func (app *App) seedDemoData() error {
 		"logo_regular": "/static/images/cmaps-regular.png",
 		"logo_hover":   "/static/images/cmaps-hover.png",
 		"domain":       "demo",
-		"avatarType":   "jpg",
 		"teamsContact": "",
 		"reportURL":    "",
+		"nomapText":    "",
+		"nomapLink":    "",
 	}
 	for k, v := range settings {
 		if err := db.SetSetting(k, v); err != nil {

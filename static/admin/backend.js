@@ -1169,7 +1169,7 @@ function hideDirectoryResults() {
 // Save a single base variable without reloading the page.
 function saveSetting(name, btn) {
   var row = btn.closest('tr');
-  var input = row ? row.querySelector('input[type=text]') : null;
+  var input = row ? row.querySelector('input[type=text], textarea') : null;
   if (!input) return;
   var orig = btn.textContent;
   btn.disabled = true;

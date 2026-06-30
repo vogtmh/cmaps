@@ -319,6 +319,7 @@ func openDB(path string) (*DB, error) {
 	}
 	db := &DB{bolt: bdb, loc: loc}
 	db.migrateRobinConfig()
+	db.removeObsoleteSettings()
 	return db, nil
 }
 
@@ -332,6 +333,14 @@ func (db *DB) migrateRobinConfig() {
 			continue
 		}
 		_ = putJSON(db, bucketRobinCfg, []byte(name), v)
+		_ = deleteKey(db, bucketSettings, []byte(name))
+	}
+}
+
+// removeObsoleteSettings deletes general settings that are no longer used by the
+// application so they stop appearing in the admin "base variables" list.
+func (db *DB) removeObsoleteSettings() {
+	for _, name := range []string{"teamsChannel", "avatarType"} {
 		_ = deleteKey(db, bucketSettings, []byte(name))
 	}
 }

@@ -94,6 +94,12 @@ func main() {
 	if err := db.EnsureSetting("reportURL", ""); err != nil {
 		log.Fatalf("ensure settings: %v", err)
 	}
+	if err := db.EnsureSetting("nomapText", ""); err != nil {
+		log.Fatalf("ensure settings: %v", err)
+	}
+	if err := db.EnsureSetting("nomapLink", ""); err != nil {
+		log.Fatalf("ensure settings: %v", err)
+	}
 
 	mux := http.NewServeMux()
 	app.routes(mux)

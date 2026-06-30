@@ -166,9 +166,18 @@
   </div>
   {{end}}
   {{else}}
+  {{if .HasMapImage}}
   <img src="maps/{{.Map}}.png" style="opacity:0.7;position:absolute; left:0px; width: {{.TargetScreenWidth}}px;{{if .Printmode}} -webkit-filter: invert(1);filter: invert(1);{{end}}" alt="" />
   <div id="deskitems"></div>
   <div id="meetingitems"></div>
+  {{else}}
+  <div id="nomapplaceholder" class="nomap-placeholder" style="width:{{.TargetScreenWidth}}px;">
+    <div class="nomap-card">
+      <div class="nomap-text">{{if .NomapText}}{{.NomapText}}{{else}}This map has not been added yet.{{end}}</div>
+      {{if .NomapLink}}<div class="nomap-link"><a href="{{.NomapLink}}" target="_blank" rel="noopener noreferrer">{{.NomapLink}}</a></div>{{end}}
+    </div>
+  </div>
+  {{end}}
   {{end}}
 
   <div id="group_label" style="position: absolute; color: #FF7F00; text-align:center; width: 200px; height: 70px; left:0px;top:0px;visibility:hidden; font-size:50px; font-weight: bold; z-index:100;background-color: rgba(0, 0, 0, 0.3);"></div>
@@ -198,6 +207,7 @@
     var setting_printmode = {{if .Printmode}}1{{else}}0{{end}};
     var setting_noanimation = {{if .NoAnimation}}1{{else}}0{{end}};
     var setting_worldmap = {{if .WorldMap}}1{{else}}0{{end}};
+    var hasMapImage = {{if .HasMapImage}}1{{else}}0{{end}};
     var region = "{{.Region}}";
     var tzOffset = "{{.TzOffset}}";
 
@@ -226,13 +236,15 @@
       } else {
         updateOverview();
       }
-    } else {
+    } else if (hasMapImage == 1) {
       StartClock();
       updateDesks();
       updateBookings();
       setInterval(getMeetingStatus, 60000);
       setInterval(updateDesks, 300000);
       setInterval(updateBookings, 60000);
+    } else {
+      StartClock();
     }
 
     checkMobile();

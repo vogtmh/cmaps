@@ -37,6 +37,9 @@ type indexData struct {
 	OtherMaps         []mapLink
 	IsOverview        bool
 	WorldMap          bool
+	HasMapImage       bool   // detail map: whether the map image file exists
+	NomapText         string // optional custom placeholder text for maps without an image
+	NomapLink         string // optional link shown below the placeholder text
 	Itemscale         string
 	Autozoom          int
 	Zoom              int
@@ -170,6 +173,15 @@ func (app *App) renderIndex(w http.ResponseWriter, r *http.Request, sess Session
 
 	targetWidth := 1600
 
+	// Detail (non-overview) maps may not have an image yet; in that case the
+	// front-end shows a placeholder instead of a broken image.
+	hasMapImage := true
+	if mapName != "overview" {
+		if _, err := os.Stat(app.cfg.dataPath("maps", mapName+".png")); err != nil {
+			hasMapImage = false
+		}
+	}
+
 	// Floor buttons for non-overview maps.
 	var floors []floorButton
 	if mapName != "overview" {
@@ -265,6 +277,9 @@ func (app *App) renderIndex(w http.ResponseWriter, r *http.Request, sess Session
 		OtherMaps:         otherMaps,
 		IsOverview:        mapName == "overview",
 		WorldMap:          app.db.GetSetting("worldmap") == "1",
+		HasMapImage:       hasMapImage,
+		NomapText:         app.db.GetSetting("nomapText"),
+		NomapLink:         app.db.GetSetting("nomapLink"),
 		Itemscale:         itemscale,
 		Autozoom:          autozoom,
 		Zoom:              zoom,

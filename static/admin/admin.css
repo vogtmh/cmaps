@@ -267,6 +267,9 @@
 .sync-field.coord-muted .sync-label { color: var(--sy-muted); }
 .sync-field.coord-muted .sync-input { color: var(--sy-muted); opacity: 0.7; }
 
+/* Subtitle under a setting's variable name explaining what it does. */
+.sync-setting-desc { color: var(--sy-muted); font-size: 0.8em; line-height: 1.4; margin-top: 3px; }
+
 /* Now / Next meeting columns: stacked title + time. */
 .sync-table td.sync-col-meet { vertical-align: top; line-height: 1.3; }
 .sync-meet-title { display: block; }

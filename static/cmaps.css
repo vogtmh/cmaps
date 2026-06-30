@@ -1236,6 +1236,44 @@ body {
     /*transition: transform .2s;  Animation */
 }
 
+/* Placeholder shown for maps that exist but have no image yet (nomap). */
+.nomap-placeholder {
+    position: absolute;
+    top: 0;
+    left: 0;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding-top: 120px;
+    box-sizing: border-box;
+}
+.nomap-placeholder .nomap-card {
+    max-width: 640px;
+    padding: 40px 48px;
+    background: rgba(255, 255, 255, 0.92);
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    border-radius: 12px;
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.12);
+    text-align: center;
+}
+.nomap-placeholder .nomap-text {
+    white-space: pre-line;
+    font-size: 22px;
+    line-height: 1.5;
+    color: #333;
+}
+.nomap-placeholder .nomap-link {
+    margin-top: 18px;
+    font-size: 18px;
+}
+.nomap-placeholder .nomap-link a {
+    color: #0979D8;
+    text-decoration: none;
+}
+.nomap-placeholder .nomap-link a:hover {
+    text-decoration: underline;
+}
+
 /* World map markers (dynamic overview placed by lat/lon) */
 .worldlines {
     z-index: 40;
