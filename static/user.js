@@ -3216,7 +3216,9 @@ function layoutPersonalMenu() {
   var logoutCenter = 60;         // avatar is at left:20, width 80 -> center 60
 
   var rowRight = row.offsetLeft + row.offsetWidth;   // right edge of the row
-  var menuWidth = Math.max(390, rowRight);
+  // Extend the menu 20px past the row's right edge to mirror the 20px gap on the
+  // left (between the menu edge and the avatar).
+  var menuWidth = Math.max(390, rowRight + 20);
   menu.style.width = menuWidth + "px";
 
   var admin = document.getElementById("adminpanel_button");
