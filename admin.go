@@ -200,6 +200,7 @@ func (app *App) handleAdmin(w http.ResponseWriter, r *http.Request) {
 	data := app.buildAdminData(r, sess, tab, msg)
 	data.SyncSub = syncSub
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-cache")
 	// AJAX tab switches and form submits request ?partial=1 and receive only the
 	// content fragment (the "admincontent" block), which the client swaps into
 	// #content without a full page reload.

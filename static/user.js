@@ -23,6 +23,20 @@ var searchSelectedId = null;
 // Id of the desk currently spotlighted by the search fog (null = no fog).
 var searchFogId = null;
 
+// Edit palette sidebar (editors only; opens on the right in edit mode). Width
+// 0 = closed. The palette itself is built/controlled in admin.js; this global
+// lives here so user.js (applyUsermodeUI) and resize.js (map shrink) can see it
+// even on the non-editor build where admin.js is absent.
+var editSidebarWidth = 0;
+
+// Floor markers are locked to a fixed vertical rail at the right edge of the map
+// (only their Y matters: they are vertical navigation anchors). FLOOR_RAIL_X is
+// the locked centre X in the 1600px content space; FLOOR_TAB_HALFH is half the
+// tab height in that same pre-zoom space. The rail sits flush against the right
+// edge of the 1600px content (just in front of the edit sidebar).
+var FLOOR_RAIL_X = 1597;
+var FLOOR_TAB_HALFH = 13;
+
 function toggleUsermode() {
   if (setting_usermode == 'edit') {
     setting_usermode = 'user';
@@ -39,8 +53,12 @@ function toggleUsermode() {
 // editor-only "add" (plus) button when in user mode, so a logged-in editor
 // gets a user-like experience.
 function applyUsermodeUI() {
-  var editing = (setting_usermode == 'edit');
+  var editing = (typeof token !== 'undefined' && setting_usermode == 'edit');
   $("#usermode_switch").toggleClass('on', editing);
+  // Reflect edit mode on <body> so editor-only affordances (e.g. floor marker
+  // tabs) can be shown/hidden purely via CSS. Only true editors ever enter edit
+  // mode; end users (no token) must never see these affordances.
+  document.body.classList.toggle('editmode', editing);
   if (editing) {
     $("#inputgrid").show();
     $("#adminpanel_link").show();
@@ -48,6 +66,8 @@ function applyUsermodeUI() {
     $("#inputgrid").hide();
     $("#adminpanel_link").hide();
   }
+  // Show/hide the editor drag-and-drop palette (defined in admin.js).
+  if (typeof applyEditSidebar === 'function') { applyEditSidebar(); }
 }
 
 function timezoneDate() {
@@ -2451,6 +2471,8 @@ function updateDesks(forceRefresh) {
         var nameplate_caption = '';
         var halfsize = '';
         var seenIds = {};
+        var hasFloor = false;
+        var floorEntries = [];
         for (var i = 0; i < result.desks.length; i++) {
           var counter = result.desks[i];
           // Check for shared desk - output only one item
@@ -2540,16 +2562,19 @@ function updateDesks(forceRefresh) {
 
           switch (deskType) {
             case "floor": 
-              if (typeof token !== 'undefined') {
-                outputdesks+='<div id="' + counter.id + '" class="' + deskClass + '" data-type="' + deskType + '" style="position:absolute;left:' 
-                        + (counter.x/itemscale-halfsize) + 'px;top:' + (counter.y/itemscale-halfsize) + 'px;border-radius:50%;zoom:' + itemscale + ';"'
-                        + '>'
-                        + '<div id="caption' + counter.id + '" class="caption">' + nameplate_caption + '</div></div>';
-              }
-              else {
-                outputdesks+='<div id="' + counter.id + '" class="' + deskClass + '" data-type="' + deskType + '" style="position:absolute; visibility:hidden; left:' 
-                        + counter.x + 'px;top:' + (counter.y-40) + 'px;border-radius:50%; width:1px; height:1px;"></div>';
-              }
+              // Floor markers are vertical navigation anchors locked to a fixed
+              // rail on the right edge. Render an identical right-aligned tab in
+              // BOTH edit and view mode so the on-screen position matches the
+              // scroll anchor (the old view-mode `y-40` 1px hack made the anchor
+              // land lower than where the marker was placed). zoom:itemscale +
+              // translate(-100%,-50%) anchors the tab's right edge on the rail X
+              // and centres it vertically on the stored Y.
+              hasFloor = true;
+              floorEntries.push({ id: counter.id, label: nameplate_caption });
+              outputdesks+='<div id="' + counter.id + '" class="floor_tab" data-type="floor" style="position:absolute;left:'
+                      + (FLOOR_RAIL_X/itemscale) + 'px;top:' + (counter.y/itemscale) + 'px;zoom:' + itemscale + ';transform:translate(-100%,-50%);">'
+                      + '<span class="floor_tab_label">' + nameplate_caption + '</span>'
+                      + '</div>';
               break;
             case "meeting":
               outputdesks+='<div id="' + counter.id + '" class="' + deskClass + '" data-type="' + deskType + '" style="position:absolute;left:' 
@@ -2578,15 +2603,22 @@ function updateDesks(forceRefresh) {
           $("#deskitems").html(outputdesks);
           result_old = result;
           result_old_str = JSON.stringify(result);
+          // Show/size the floor rail and (in edit mode) make floor tabs draggable.
+          updateFloorRail(hasFloor);
+          // Refresh the header floor navigation links so newly added/removed/
+          // renamed floors appear immediately without a page reload.
+          updateFloorLinks(floorEntries);
           // Bind mouse handlers once via event delegation instead of emitting a
           // <script> block per desk. In admin edit mode also (re)attach the
           // drag handlers to the freshly rendered desk elements.
           bindDeskHandlers();
           if (typeof(token) != 'undefined' && setting_usermode == 'edit') {
-            var deskEls = document.querySelectorAll('#deskitems .deskball');
+            var deskEls = document.querySelectorAll('#deskitems .deskball, #deskitems .floor_tab');
             for (var d = 0; d < deskEls.length; d++) {
               dragElement(deskEls[d], deskEls[d].getAttribute('data-type'));
             }
+            // One-time conversion of legacy floor records to the rail X.
+            if (typeof migrateFloorsToRail === 'function') { migrateFloorsToRail(); }
           }
           getMeetingStatus(true);
           //statsPanel(); 
@@ -2600,6 +2632,129 @@ function updateDesks(forceRefresh) {
     }    
   });
 }
+
+// ---------------------------------------------------------------------------
+// Floor rail (right-edge vertical navigation rail)
+// ---------------------------------------------------------------------------
+// Floor markers are rendered as tabs locked to a vertical rail at the right edge
+// of the map. The rail is a thin line drawn as a direct child of #content (so it
+// is unaffected by #deskitems being rebuilt each poll). It is shown whenever at
+// least one floor marker exists, or while a floor item is being dragged from the
+// palette.
+
+// Ensure the rail element exists and is sized to the current map height. Returns
+// the rail element (or null on the overview / when there is no content).
+function ensureFloorRail() {
+  var content = document.getElementById('content');
+  if (!content) { return null; }
+  var rail = document.getElementById('floorrail');
+  if (!rail) {
+    rail = document.createElement('div');
+    rail.id = 'floorrail';
+    rail.className = 'floor_rail';
+    content.appendChild(rail);
+  }
+  rail.style.left = FLOOR_RAIL_X + 'px';
+  // In edit mode the rail is drawn all the way to the end of the page (the full
+  // content height) so it is always a clear drop target; outside edit mode it
+  // spans the map image only.
+  var editing = (typeof token !== 'undefined' && setting_usermode == 'edit');
+  var img = document.getElementById('detailmapimage');
+  var mapH = (img && img.offsetHeight) ? img.offsetHeight : (content.offsetHeight || 2000);
+  var h = editing ? Math.max(content.offsetHeight || 0, mapH) : mapH;
+  rail.style.height = h + 'px';
+  return rail;
+}
+
+// Show/hide the rail. The rail is an editor-only affordance: it is only ever
+// visible in edit mode (or while dragging a floor item from the palette).
+function updateFloorRail(hasFloor) {
+  var rail = ensureFloorRail();
+  if (!rail) { return; }
+  var editing = (typeof token !== 'undefined' && setting_usermode == 'edit');
+  if (editing && (hasFloor || rail.classList.contains('dragging'))) {
+    rail.classList.add('visible');
+  } else if (!rail.classList.contains('dragging')) {
+    rail.classList.remove('visible');
+  }
+}
+
+// Rebuild the header floor navigation links from the current floor markers so
+// adding/removing/renaming a floor is reflected immediately (no page reload).
+// Mirrors the server-rendered markup in index.html. Labels are inserted as text
+// nodes (not innerHTML) to avoid any markup injection from floor names.
+function updateFloorLinks(floorEntries) {
+  var container = document.getElementById('floorlinks');
+  if (!container) { return; }
+  container.innerHTML = '';
+  for (var i = 0; i < floorEntries.length; i++) {
+    var a = document.createElement('a');
+    a.href = '#' + floorEntries[i].id;
+    a.style.textDecoration = 'none';
+    var div = document.createElement('div');
+    div.className = 'headeritem_floors';
+    div.textContent = floorEntries[i].label;
+    a.appendChild(div);
+    container.appendChild(a);
+  }
+  // The "Floor" caption shows only when there are floors and button
+  // descriptions are enabled, matching the server-side template condition.
+  var label = document.getElementById('floorcontrol_label');
+  if (label) {
+    var show = floorEntries.length > 0 && !(typeof noDescription !== 'undefined' && noDescription);
+    label.style.display = show ? '' : 'none';
+  }
+}
+
+// Force the rail visible (used while dragging a floor item from the palette).
+function showFloorRailForDrag() {
+  var rail = ensureFloorRail();
+  if (!rail) { return; }
+  rail.classList.add('visible');
+  rail.classList.add('dragging');
+}
+
+// End the drag-forced visibility; hide the rail again unless floors exist.
+function endFloorRailDrag() {
+  var rail = document.getElementById('floorrail');
+  if (!rail) { return; }
+  rail.classList.remove('dragging');
+  var hasFloor = !!document.querySelector('#deskitems .floor_tab');
+  if (!hasFloor) { rail.classList.remove('visible'); }
+}
+
+// Smoothly scroll the page so the given floor marker reaches the top edge of the
+// map content (just below the fixed header). Computed from live bounding rects so
+// it is correct at any zoom; a floor placed at y=0 produces ~0 scroll (no jump).
+function scrollToFloor(id) {
+  var el = document.getElementById(id);
+  var content = document.getElementById('content');
+  if (!el || !content) { return; }
+  var contentTop = content.getBoundingClientRect().top + window.scrollY;
+  var elTop = el.getBoundingClientRect().top + window.scrollY;
+  var target = elTop - contentTop;
+  if (target < 0) { target = 0; }
+  window.scrollTo({ top: target, behavior: 'smooth' });
+}
+
+$(function () {
+  // Reflect the initial edit/user mode on <body> so CSS-driven editor-only
+  // affordances (e.g. floor marker tabs) render correctly on first paint. Only
+  // true editors (token defined) ever count as editing.
+  document.body.classList.toggle('editmode', typeof token !== 'undefined' && setting_usermode === 'edit');
+  // Header floor links (server-rendered as <a href="#id">) navigate via a
+  // header-aware smooth scroll instead of the native anchor jump (which hid the
+  // target behind the fixed header and used the buggy offset).
+  $(document).on('click', '#floorcontrol a[href^="#"]', function (e) {
+    e.preventDefault();
+    scrollToFloor(this.getAttribute('href').substring(1));
+  });
+  // In view mode, clicking a floor tab on the rail also navigates. In edit mode
+  // the tab is draggable and a click opens its editor (handled by dragElement).
+  $(document).on('click', '#deskitems .floor_tab', function () {
+    if (setting_usermode !== 'edit') { scrollToFloor(this.id); }
+  });
+});
 
 function updateTeams() {
   $.ajax({

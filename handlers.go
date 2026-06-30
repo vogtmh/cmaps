@@ -215,6 +215,7 @@ func (app *App) handleChanges(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-cache")
 	if err := app.tmpl.ExecuteTemplate(w, "changes.html", map[string]string{"AppTitle": app.appTitle()}); err != nil {
 		http.Error(w, "template error: "+err.Error(), http.StatusInternalServerError)
 	}
@@ -372,6 +373,10 @@ func (app *App) handleRestAccount(w http.ResponseWriter, r *http.Request) {
 
 func (app *App) render(w http.ResponseWriter, name string, data interface{}) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	// HTML pages must always be revalidated so the freshly versioned (?v=)
+	// asset URLs are picked up after a deploy. Without this, browsers (notably
+	// Safari) heuristically cache the page and keep referencing stale JS/CSS.
+	w.Header().Set("Cache-Control", "no-cache")
 	if err := app.tmpl.ExecuteTemplate(w, name, data); err != nil {
 		http.Error(w, "template error: "+err.Error(), http.StatusInternalServerError)
 	}

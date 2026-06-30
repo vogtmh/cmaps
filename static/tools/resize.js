@@ -126,18 +126,85 @@ $(function(){
   if (sidebarEl) {
     sidebarEl.style.zoom = basePage.scale;
   }
-  var sidebarOpen = (typeof searchSidebarWidth === 'number') && searchSidebarWidth > 0;
-  var sidebarW = sidebarOpen ? searchSidebarWidth * basePage.scale : 0;
-  var mapScale = basePage.scale;
-  var mapLeftPos = newLeftPos;
-  if (sidebarW > 0) {
-    var mapMaxWidth = maxWidth - sidebarW;
-    var mapSetWidth = (mapMaxWidth/maxHeight > 2) ? maxHeight*2 : mapMaxWidth;
-    mapScale = (mapSetWidth / basePage.width)*0.99;
-    mapSetWidth = mapSetWidth*manualscale;
-    mapLeftPos = sidebarW + Math.abs(Math.floor((mapMaxWidth - mapSetWidth)/2));
+  // Cap the edit sidebar's scale so it does not grow without bound on very wide
+  // (e.g. 21:9) displays where basePage.scale climbs well above 1. The reserved
+  // width below uses the same capped factor so the map gap stays in sync.
+  var SIDEBAR_MAX_SCALE = 1.0;
+  var editSidebarScale = Math.min(basePage.scale, SIDEBAR_MAX_SCALE);
+  var editEl = document.getElementById('editsidebar');
+  if (editEl) {
+    editEl.style.zoom = editSidebarScale;
+    // The header's real height is 69*basePage.scale. The sidebar's CSS top is
+    // expressed in its own zoomed space (rendered top = cssTop * zoom), and its
+    // zoom is CAPPED at 1.0 while the header scale is not. So on wide screens
+    // (basePage.scale > 1) a static top:69px would render at only 69px and the
+    // taller header would overlap the sidebar. Anchor it to the header height by
+    // dividing out the capped zoom so the rendered top always matches.
+    editEl.style.top = ((69 * basePage.scale) / (editSidebarScale || 1)) + 'px';
   }
-  var contentZoom = mapScale*manualscale;
+  // Keep the trash drop zone the SAME on-screen size as the bottom-right Edit
+  // toggle and clear of it. The toggle lives in #buttons_right (zoom:basePage
+  // .scale, UNcapped, anchored right:10px), so it keeps growing past scale 1.0.
+  // The trash sits in the edit sidebar footer whose zoom is CAPPED at 1.0, so to
+  // match the toggle it needs its own extra zoom of basePage.scale/editSidebar
+  // Scale (effective render = editSidebarScale * that = basePage.scale). The
+  // footer's right padding (in its own pre-zoom space) then clears the toggle:
+  //   screen clearance = 10px gap + 80px toggle * basePage.scale + 12px margin
+  //   footer padding    = screen clearance / editSidebarScale
+  var trashEl = document.getElementById('editsidebar_trash');
+  var trashZoom = basePage.scale / (editSidebarScale || 1);
+  if (trashEl) {
+    trashEl.style.zoom = trashZoom;
+  }
+  var footerEl = document.getElementById('editsidebar_footer');
+  if (footerEl) {
+    var toggleClearScreen = 10 + (80 * basePage.scale) + 12;
+    var footerPadRight = Math.ceil(toggleClearScreen / (editSidebarScale || 1));
+    footerEl.style.paddingRight = footerPadRight + 'px';
+    // Stretch the trash to fill the remaining footer width left of the toggle.
+    // CSS `zoom` scales layout too, so the trash occupies (width * trashZoom) in
+    // the footer's pre-zoom space. The footer is 340px wide (border-box) with a
+    // 14px left padding and footerPadRight on the right, so the free content
+    // width in footer space is (340 - 14 - footerPadRight); divide by trashZoom
+    // to get the trash's own CSS width that exactly fills it.
+    if (trashEl) {
+      var freeFooterSpace = 340 - 14 - footerPadRight;
+      var trashWidth = Math.max(80, Math.floor(freeFooterSpace / trashZoom));
+      trashEl.style.width = trashWidth + 'px';
+    }
+    // Raise the trash so it shares the Edit toggle's bottom edge and sits level
+    // beside it (next to each other). The toggle is anchored at bottom:40*scale
+    // with a ~5px margin, so its box bottom is ~45*scale from the viewport
+    // bottom; converted into the footer's pre-zoom space that is 45*scale /
+    // editSidebarScale. The footer auto-grows upward to fit the raised trash.
+    var footerPadBottom = Math.ceil((45 * basePage.scale) / (editSidebarScale || 1));
+    footerEl.style.paddingBottom = footerPadBottom + 'px';
+  }
+  var leftW = ((typeof searchSidebarWidth === 'number') && searchSidebarWidth > 0) ? searchSidebarWidth * basePage.scale : 0;
+  var rightW = ((typeof editSidebarWidth === 'number') && editSidebarWidth > 0) ? editSidebarWidth * editSidebarScale : 0;
+  // The MAP content always fills the full width between the sidebars (or the
+  // whole viewport when none are open). Unlike the header UI it is NOT subject to
+  // the 2:1 aspect cap (which only keeps header icons from getting huge on 21:9),
+  // so it never leaves a centered gap on wide screens. The page body has
+  // overflow-x:hidden, so filling the width exactly never adds a horizontal
+  // scrollbar.
+  //
+  // The content is ANCHORED to the left edge (or the left search sidebar), never
+  // centered. This is both the desired look (fill the full width up to the
+  // sidebar) and a cross-browser requirement: `#content` is positioned with CSS
+  // `zoom` plus `left:mapLeftPos/contentZoom`, which relies on the browser
+  // scaling the `left` offset back up by the zoom factor. Blink (Chrome) and
+  // Gecko (Firefox 126+) do that so the division cancels out, but WebKit
+  // (Safari) handles `zoom` + positioned offsets differently, so any non-zero
+  // offset leaves a leftover horizontal gap. With no left sidebar open this makes
+  // mapLeftPos = 0 -> left:0, which every browser renders identically. Any slack
+  // from manual zoom-out (<100%) therefore falls entirely on the right.
+  var mapMaxWidth = maxWidth - leftW - rightW;
+  if (mapMaxWidth < 100) { mapMaxWidth = 100; }
+  var contentZoom = (mapMaxWidth / basePage.width) * manualscale;
+  var contentScreenW = basePage.width * contentZoom; // == mapMaxWidth * manualscale
+  var mapLeftPos = leftW;
+  var mapScale = contentZoom; // kept for the autozoom var written below
   var pageStyle = 'zoom:' + contentZoom + ';left:' + (mapLeftPos/contentZoom) + 'px;top:' + ((69*basePage.scale)/contentZoom) + 'px;';
   // For detail maps, extend the content height to the map image plus 150px
   // (real screen pixels) of clearance so the fixed bottom overlay buttons

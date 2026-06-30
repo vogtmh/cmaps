@@ -329,6 +329,200 @@
     opacity: 1;
 }
 
+/* Edit palette sidebar (mirrors the search sidebar, anchored on the right).
+   Holds draggable item tiles; slides in when edit mode is enabled. */
+.edit_sidebar {
+    position: fixed;
+    right: 0;
+    top: 69px;
+    bottom: 0;
+    height: auto;
+    width: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    background: #2b2b2b;
+    z-index: 4;
+    box-shadow: -2px 0 14px rgba(0, 0, 0, 0.45);
+    transition: width 300ms ease-in-out;
+}
+
+.edit_sidebar.open {
+    width: 340px;
+}
+
+.edit_sidebar_title {
+    flex: 0 0 auto;
+    width: 340px;
+    box-sizing: border-box;
+    font-size: 20px;
+    font-weight: bold;
+    padding: 18px 18px 14px 18px;
+    color: #fff;
+    background: #2b2b2b;
+}
+
+.edit_sidebar_inner {
+    flex: 1 1 auto;
+    width: 340px;
+    overflow-y: auto;
+    color: #fff;
+    box-sizing: border-box;
+    padding-bottom: 16px;
+}
+
+/* Footer pinned to the bottom of the edit sidebar; hosts the trash drop zone.
+   The trash is sized like the bottom-right edit-mode toggle and sits just to its
+   left. The right padding clears the fixed toggle and is set at runtime by
+   resize.js (scalePages), because the toggle scales with the window while this
+   footer's scale is capped, so a static value cannot track it. */
+.edit_sidebar_footer {
+    flex: 0 0 auto;
+    width: 340px;
+    box-sizing: border-box;
+    display: flex;
+    justify-content: flex-end;
+    align-items: flex-end;
+    padding: 12px 95px 22px 14px;
+    background: #2b2b2b;
+    border-top: 1px solid #3f3f3f;
+}
+
+.edit_sidebar_trash {
+    width: 80px;
+    height: 60px;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    gap: 4px;
+    padding: 6px 4px;
+    border: 2px dashed #5a5a5a;
+    border-radius: 16px;
+    color: #9a9a9a;
+    transition: background-color 120ms ease-in-out, border-color 120ms ease-in-out, color 120ms ease-in-out;
+}
+
+.edit_sidebar_trash_icon {
+    width: 24px;
+    height: 24px;
+    background-image: url('images/trash.png');
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: center;
+    opacity: 0.7;
+    pointer-events: none;
+}
+
+.edit_sidebar_trash_label {
+    font-size: 12px;
+    line-height: 1;
+    pointer-events: none;
+}
+
+/* Highlighted while an item is dragged over the trash zone. */
+.edit_sidebar_trash.dragover {
+    background: rgba(208, 19, 23, 0.18);
+    border-color: #d01317;
+    color: #ff6b6e;
+}
+
+.edit_sidebar_trash.dragover .edit_sidebar_trash_icon {
+    opacity: 1;
+}
+
+.editsidebar_section {
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #9a9a9a;
+    padding: 16px 18px 6px 18px;
+}
+
+.editsidebar_grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    padding: 4px 14px 6px 14px;
+}
+
+.editsidebar_tile {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    padding: 12px 8px 10px 8px;
+    background: #353535;
+    border: 1px solid #3f3f3f;
+    border-radius: 10px;
+    cursor: grab;
+    user-select: none;
+    transition: background-color 120ms ease-in-out, border-color 120ms ease-in-out, transform 120ms ease-in-out;
+}
+
+.editsidebar_tile:hover {
+    background: #404040;
+    border-color: #0979D8;
+}
+
+.editsidebar_tile:active {
+    cursor: grabbing;
+    transform: scale(0.97);
+}
+
+.editsidebar_tile_icon {
+    width: 44px;
+    height: 44px;
+    margin-bottom: 8px;
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: center;
+    flex: 0 0 auto;
+    pointer-events: none;
+}
+
+.editsidebar_tile_name {
+    font-size: 13px;
+    font-weight: 600;
+    color: #fff;
+    line-height: 1.2;
+    pointer-events: none;
+}
+
+.editsidebar_tile_desc {
+    font-size: 11px;
+    color: #9a9a9a;
+    line-height: 1.25;
+    margin-top: 3px;
+    pointer-events: none;
+}
+
+/* Floating preview that follows the cursor while dragging a palette item. */
+.editsidebar_dragghost {
+    position: fixed;
+    z-index: 99999;
+    pointer-events: none;
+    opacity: 0.85;
+    transform: translate(-50%, -50%);
+    width: 44px;
+    height: 44px;
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: center;
+}
+
+/* Type label shown in the item editor in place of the legacy type dropdown
+   (the type is now chosen from the palette). */
+.np-typelabel {
+    font-size: 1.1em;
+    font-weight: bold;
+    color: #0979D8;
+    text-align: center;
+    margin-bottom: 8px;
+}
+
 /* Right mapplate */
 
 .rightmapplate {
@@ -1930,6 +2124,50 @@ input.cmn-toggle-round-flat:checked + label:after {
  width: 100px;
  height: 100px;
  background-color: #d017a8b3;
+}
+
+/* Floor navigation rail (right edge of the map) and its marker tabs. */
+.floor_rail {
+    position: absolute;
+    top: 0;
+    width: 3px;
+    background: rgba(208, 23, 168, 0.45);
+    z-index: 90;
+    display: none;
+}
+.floor_rail.visible {
+    display: block;
+}
+.floor_tab {
+    position: absolute;
+    z-index: 91;
+    min-width: 26px;
+    height: 26px;
+    line-height: 26px;
+    padding: 0 10px;
+    box-sizing: border-box;
+    background-color: #d017a8;
+    color: #fff;
+    font-size: 13px;
+    font-weight: bold;
+    white-space: nowrap;
+    text-align: center;
+    border-radius: 5px 0 0 5px;
+    box-shadow: -1px 1px 4px rgba(0, 0, 0, 0.35);
+    cursor: pointer;
+    user-select: none;
+    /* Floor markers are an editor-only affordance: hidden for end users,
+       shown only while editing (body.editmode is set in applyUsermodeUI). */
+    display: none;
+}
+body.editmode .floor_tab {
+    display: block;
+}
+.floor_tab:hover {
+    background-color: #ec2bbf;
+}
+.floor_tab_label {
+    pointer-events: none;
 }
 
 .caption {

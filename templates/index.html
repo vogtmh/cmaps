@@ -79,8 +79,8 @@
 
   <!-- Floor -->
   <div class="headeritem" id="floorcontrol" style="width:260px;">
-    {{if and (not .NoDescription) .Floors}}<span class="headeritem_text">Floor</span>{{end}}
-    <span style="width:200px;line-height:65px;float:left; display:inline;">
+    <span id="floorcontrol_label" class="headeritem_text"{{if not (and (not .NoDescription) .Floors)}} style="display:none;"{{end}}>Floor</span>
+    <span id="floorlinks" style="width:200px;line-height:65px;float:left; display:inline;">
       {{range .Floors}}
       <a href="#{{.ID}}" style="text-decoration: none;"><div class="headeritem_floors">{{.Employee}}</div></a>
       {{end}}
@@ -167,6 +167,20 @@
   <div id="searchsidebar_inner" class="search_sidebar_inner"></div>
 </div>
 
+{{if and (not .IsOverview) .IsEditor}}
+<!-- Edit palette sidebar (drag items onto the map; visible in edit mode) -->
+<div id="editsidebar" class="edit_sidebar">
+  <div id="editsidebar_title" class="edit_sidebar_title">Add items</div>
+  <div id="editsidebar_inner" class="edit_sidebar_inner"></div>
+  <div id="editsidebar_footer" class="edit_sidebar_footer">
+    <div id="editsidebar_trash" class="edit_sidebar_trash" title="Drag an item here to delete it">
+      <div class="edit_sidebar_trash_icon"></div>
+      <div class="edit_sidebar_trash_label">Delete</div>
+    </div>
+  </div>
+</div>
+{{end}}
+
 <!-- Content -->
 <div id="content" class="page_content" style="zoom:{{.ContentScale}};left:{{.ContentLeft}}px;top:{{.ContentTop}}px;">
   {{if .IsOverview}}
@@ -208,6 +222,7 @@
     var logo_regular = "{{.LogoRegular}}";
     var logo_hover = "{{.LogoHover}}";
     var setting_usermode = "{{.UserMode}}";
+    var noDescription = {{if .NoDescription}}true{{else}}false{{end}};
     var teamsContact = "{{.TeamsContact}}";
     var domain = "{{.Domain}}";
     var reportURL = "{{.ReportURL}}";
@@ -312,11 +327,6 @@
 <div class="buttons_right_anchor" style="position:fixed; right: 10px; bottom: {{.Bottom40}}px; z-index:5;">
 <div id="buttons_right" class="buttons_right" style="position:relative; height:auto;width:80px;background: transparent; zoom:{{.Autozoom}};">
   {{if .LoggedIn}}
-    {{if and (not .IsOverview) .IsEditor}}
-    <div class="inputgrid" id="inputgrid" style="float:right; margin:5px; width:80px; height:80px; background: transparent;{{if eq .UserMode "user"}}display:none;{{end}}">
-      <input class="inputgridbutton" type="image" src="images/add.png" style="width:80px; height:80px;" onClick="return doNewItem('showInputgrid')" onmouseover='this.src="images/add_on.png"' onmouseout='this.src="images/add.png"'>
-    </div>
-    {{end}}
     {{if and .IsOverview (gt .PermMaps 1)}}
     <div class="inputgrid" id="inputgrid" style="float:right; margin:5px; width:80px; height:80px; background: transparent;{{if eq .UserMode "user"}}display:none;{{end}}">
       {{if .WorldMap}}

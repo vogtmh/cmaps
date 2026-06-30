@@ -608,7 +608,8 @@ function addInputfields(deskid, desktype, override, manual) {
         fields+='<input type="hidden" id="apidesktype" name="formdesktype" value="' + selected + '">';
         break;
     case "floor":
-        fields+='<div style="width:30%; float:left;display:inline;">x</div><input type="text" style="width: 70%; float: left;display:inline;" id="apideskx" name="formx" value="' + input.x + '">';
+        // Floor X is locked to the rail; only Y + label are editable.
+        fields+='<input type="hidden" id="apideskx" name="formx" value="' + FLOOR_RAIL_X + '">';
         fields+='<div style="width:30%; float:left;display:inline;">y</div><input type="text" style="width: 70%; float: left;display:inline;" id="apidesky" name="formy" value="' + input.y + '">';
         fields+='<div style="width:30%; float:left;display:inline;">Label</div><input type="text" style="width: 70%; float: left;display:inline;" id="apideskempl" name="formempl" value="' + input.empl + '">';
         fields+='<input type="hidden" id="apideskdsk" name="formdsk" value="Floor">';
@@ -838,6 +839,8 @@ function dragElement(elmnt, deskType) {
   var startJsY;
   var diffX;
   var diffY;
+  var lastDragClientX;
+  var lastDragClientY;
 
   if (document.getElementById(elmnt.id)) {
     document.getElementById(elmnt.id).onmousedown = dragMouseDown;
@@ -880,15 +883,38 @@ function dragElement(elmnt, deskType) {
 
     dragItem= elmnt.id;
     // set the element's new position:
-    elmnt.style.left = (startItemX + diffX) + "px";
-    elmnt.style.top = (startItemY + diffY) + "px";
-    
+    if (deskType === 'floor') {
+      // Floor markers are rail-locked: only their vertical position changes.
+      elmnt.style.top = (startItemY + diffY) + "px";
+    } else {
+      elmnt.style.left = (startItemX + diffX) + "px";
+      elmnt.style.top = (startItemY + diffY) + "px";
+    }
+
+    // Track the cursor and highlight the trash drop zone when hovering it.
+    lastDragClientX = e.clientX;
+    lastDragClientY = e.clientY;
+    var trashEl = document.getElementById('editsidebar_trash');
+    if (trashEl) {
+      if (pointOverTrash(e.clientX, e.clientY)) { trashEl.classList.add('dragover'); }
+      else { trashEl.classList.remove('dragover'); }
+    }
+
   }
 
-  function closeDragElement() {
+  function closeDragElement(e) {
     /* stop moving when mouse button is released:*/
     document.onmouseup = null;
     document.onmousemove = null;
+    var trashEl = document.getElementById('editsidebar_trash');
+    if (trashEl) { trashEl.classList.remove('dragover'); }
+    // If the item was released over the trash zone, delete it instead of moving.
+    var cx = (e && typeof e.clientX === 'number') ? e.clientX : lastDragClientX;
+    var cy = (e && typeof e.clientY === 'number') ? e.clientY : lastDragClientY;
+    if (typeof cx === 'number' && pointOverTrash(cx, cy)) {
+      deleteDeskById(elmnt.id);
+      return;
+    }
     var x = parseInt($('#'+dragItem).css("left"));
     var y = parseInt($('#'+dragItem).css("top"));
     if (x == startItemX && y == startItemY) {
@@ -903,6 +929,8 @@ function dragElement(elmnt, deskType) {
       itemdesktype = attr.desktype;
       itemx = parseInt(attr.x)+Math.round(diffItemX*itemscale);
       itemy = parseInt(attr.y)+Math.round(diffItemY*itemscale);
+      // Floor markers are locked to the rail X regardless of horizontal drag.
+      if (deskType === 'floor') { itemx = FLOOR_RAIL_X; }
       itemdsk = attr.dsk;
       itemempl = attr.empl;
       itemavtr = attr.avtr;
@@ -924,5 +952,382 @@ function dragElement(elmnt, deskType) {
         }
       });
     }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Edit palette sidebar (drag-and-drop item placement)
+// ---------------------------------------------------------------------------
+// A right-side sidebar (mirrors the left search sidebar) that holds a catalog
+// of map items grouped by category. Each tile shows a live preview + a short
+// description so editors know what each item is for. It opens automatically in
+// edit mode and replaces the old "+" button / click-to-place flow.
+
+var EDIT_SIDEBAR_WIDTH = 340;
+
+// Catalog of placeable items. `color`/`icon`/`square` mirror the on-map look
+// (see .deskball and the per-type classes in cmaps.css) so each tile previews
+// exactly what will be placed.
+var EDIT_PALETTE = [
+  { section: 'Desks', items: [
+    { type: 'ldap-desk',  label: 'Directory desk', desc: 'Seat linked to a directory user; the assignee fills in automatically.', color: 'rgba(180,180,180,0.85)' },
+    { type: 'local-desk', label: 'Custom desk',    desc: 'Manually managed seat with your own name, avatar and department.',     color: 'rgba(0,0,255,0.5)' },
+    { type: 'hotseat',    label: 'Hot seat',       desc: 'Flexible first-come desk, shown in red.',                               color: 'rgba(208,19,23,0.8)' },
+    { type: 'booking',    label: 'Bookable desk',  desc: 'Reservable desk (green); users can book it for a day.',                color: 'rgba(61,173,30,0.8)' }
+  ]},
+  { section: 'Rooms & areas', items: [
+    { type: 'meeting', label: 'Meeting room', desc: 'Conference room with live availability.', color: 'rgba(137,26,183,0.8)', icon: 'meeting.png' },
+    { type: 'floor',   label: 'Floor', desc: 'Navigation marker on the right-hand rail; jumps to a floor or section. Only its vertical position matters.', color: '#d017a8b3', square: true },
+    { type: 'blocked', label: 'Blocked',      desc: 'Marks an unavailable or out-of-service spot.', color: 'rgba(180,180,180,0.85)' },
+    { type: 'exit',    label: 'Exit',         desc: 'Emergency exit marker.', color: 'rgba(84,185,72,0.8)', icon: 'exit.png' }
+  ]},
+  { section: 'Points of interest', items: [
+    { type: 'restroom',    label: 'Restroom',      desc: 'Toilets / washroom.',            color: 'rgba(78,81,100,0.8)',  icon: 'restroom.png' },
+    { type: 'food',        label: 'Food & drink',  desc: 'Kitchen, canteen or coffee point.', color: 'rgba(215,125,40,0.8)', icon: 'food.png' },
+    { type: 'printer',     label: 'Printer',       desc: 'Printer or copier station.',     color: 'rgba(50,50,50,0.8)',   icon: 'printer.png' },
+    { type: 'firstaid',    label: 'First aid',     desc: 'First-aid kit or station.',      color: 'rgba(220,50,50,0.8)',  icon: 'firstaid.png' },
+    { type: 'service',     label: 'Service point', desc: 'Help desk or service point.',    color: 'rgba(70,190,190,0.8)', icon: 'service.png' },
+    { type: 'keycardlock', label: 'Keycard door',  desc: 'Door secured by a keycard.',     color: 'rgba(240,220,0,0.85)', icon: 'keycardlock.png' },
+    { type: 'keylock',     label: 'Key door',      desc: 'Door secured by a physical key.', color: 'rgba(240,220,0,0.85)', icon: 'keylock.png' }
+  ]}
+];
+
+// Quick lookup of a catalog entry by its desktype.
+var EDIT_PALETTE_BY_TYPE = (function () {
+  var m = {};
+  EDIT_PALETTE.forEach(function (sec) {
+    sec.items.forEach(function (it) { m[it.type] = it; });
+  });
+  return m;
+})();
+
+// Half the on-map CSS box size (in pre-zoom 1600px space) for a palette type,
+// matching the per-type halfsize used by updateDesks() in user.js. The rendered
+// on-screen diameter of an item is 2*halfsize * itemscale * contentZoom.
+function editItemHalfsize(type) {
+  switch (type) {
+    case 'meeting':
+    case 'exit':
+    case 'restroom':
+      return 25;
+    case 'firstaid':
+    case 'food':
+    case 'keycardlock':
+    case 'keylock':
+    case 'printer':
+    case 'service':
+      return 18;
+    case 'floor':
+      return 13; // floor rail tab (half tab height; X is rail-locked)
+    default:
+      return 10; // desks (ldap/local/hotseat/booking/blocked)
+  }
+}
+
+// Build the inline style for an item's preview swatch (circle, or square for
+// floor/zone), tinted and icon'd to match how it renders on the map.
+function editPaletteIconStyle(item) {
+  var s = 'background-color:' + item.color + ';';
+  s += item.square ? 'border-radius:6px;' : 'border-radius:50%;';
+  if (item.icon) {
+    s += 'background-image:url("images/' + item.icon + '");background-size:cover;';
+  }
+  return s;
+}
+
+// Render the palette tiles into the sidebar (once).
+function renderEditPalette() {
+  var inner = document.getElementById('editsidebar_inner');
+  if (!inner) { return; }
+  inner.innerHTML = '';
+  EDIT_PALETTE.forEach(function (sec) {
+    var h = document.createElement('div');
+    h.className = 'editsidebar_section';
+    h.textContent = sec.section;
+    inner.appendChild(h);
+
+    var grid = document.createElement('div');
+    grid.className = 'editsidebar_grid';
+    sec.items.forEach(function (item) {
+      var tile = document.createElement('div');
+      tile.className = 'editsidebar_tile';
+      tile.setAttribute('data-type', item.type);
+      tile.setAttribute('title', item.label + ' \u2014 ' + item.desc);
+
+      var icon = document.createElement('div');
+      icon.className = 'editsidebar_tile_icon';
+      icon.setAttribute('style', editPaletteIconStyle(item));
+      tile.appendChild(icon);
+
+      var name = document.createElement('div');
+      name.className = 'editsidebar_tile_name';
+      name.textContent = item.label;
+      tile.appendChild(name);
+
+      var desc = document.createElement('div');
+      desc.className = 'editsidebar_tile_desc';
+      desc.textContent = item.desc;
+      tile.appendChild(desc);
+
+      // Start a drag-to-place gesture on pointer down.
+      tile.addEventListener('pointerdown', function (ev) {
+        ev.preventDefault();
+        startPaletteDrag(item, ev);
+      });
+
+      grid.appendChild(tile);
+    });
+    inner.appendChild(grid);
+  });
+}
+
+function openEditSidebar() {
+  if (inMobileMode) { return; }
+  if (typeof map !== 'undefined' && map === 'overview') { return; }
+  var sb = document.getElementById('editsidebar');
+  if (!sb) { return; }
+  if (!sb.getAttribute('data-built')) {
+    renderEditPalette();
+    sb.setAttribute('data-built', '1');
+  }
+  if (editSidebarWidth === EDIT_SIDEBAR_WIDTH) { return; }
+  editSidebarWidth = EDIT_SIDEBAR_WIDTH;
+  sb.classList.add('open');
+  if (typeof window.cmapsRescale === 'function') { window.cmapsRescale(); }
+}
+
+function closeEditSidebar() {
+  var sb = document.getElementById('editsidebar');
+  if (sb) { sb.classList.remove('open'); }
+  if (editSidebarWidth === 0) { return; }
+  editSidebarWidth = 0;
+  if (typeof window.cmapsRescale === 'function') { window.cmapsRescale(); }
+}
+
+// Show the palette only while editing a detail map (not on the overview, not on
+// mobile). Called from applyUsermodeUI (user.js) and on initial load.
+function applyEditSidebar() {
+  if (setting_usermode === 'edit' && (typeof map === 'undefined' || map !== 'overview') && !inMobileMode) {
+    openEditSidebar();
+  } else {
+    closeEditSidebar();
+  }
+}
+
+$(function () {
+  // Open the palette on load if the page starts in edit mode. Runs after
+  // resize.js has installed window.cmapsRescale (admin.js loads later).
+  applyEditSidebar();
+});
+
+// ---------------------------------------------------------------------------
+// Drag a palette item onto the map (pointer-based; zoom-correct on drop)
+// ---------------------------------------------------------------------------
+// We deliberately do NOT use the HTML5 drag-and-drop API: the map uses a
+// fractional CSS `zoom` on #content plus a per-item `zoom:itemscale`, which make
+// native drop coordinates and ghost images unreliable. Instead a floating ghost
+// follows the cursor in plain screen space, and the screen->map conversion runs
+// once on drop via screenToMap().
+
+var paletteDrag = null; // { item, ghost } while a drag is in progress
+
+// Convert a viewport (clientX/clientY) point to the map's internal coordinate
+// space (pre-zoom, 1600px-wide). A desk stored at (x,y) renders with its centre
+// exactly at internal (x,y), so the returned point is what we store. Reading the
+// live bounding rect + computed zoom of #content makes this correct at any
+// autozoom/manual-zoom and regardless of whether a sidebar is open.
+function screenToMap(clientX, clientY) {
+  var content = document.getElementById('content');
+  if (!content) { return null; }
+  var rect = content.getBoundingClientRect();
+  var z = parseFloat(window.getComputedStyle(content).zoom) || 1;
+  return {
+    x: Math.round((clientX - rect.left) / z),
+    y: Math.round((clientY - rect.top) / z)
+  };
+}
+
+// True when a viewport point lies over the editable map content (not over the
+// header, the sidebars or outside the window).
+function pointOverMap(clientX, clientY) {
+  var content = document.getElementById('content');
+  if (!content) { return false; }
+  var el = document.elementFromPoint(clientX, clientY);
+  return !!(el && content.contains(el));
+}
+
+// True when a viewport point lies over the trash drop zone at the bottom of the
+// edit sidebar (only meaningful while the sidebar is open).
+function pointOverTrash(clientX, clientY) {
+  if (editSidebarWidth === 0) { return false; }
+  var trash = document.getElementById('editsidebar_trash');
+  if (!trash) { return false; }
+  var r = trash.getBoundingClientRect();
+  return clientX >= r.left && clientX <= r.right && clientY >= r.top && clientY <= r.bottom;
+}
+
+// Delete a map item (desk/floor/poi) by id. Used by the trash drop zone.
+function deleteDeskById(id) {
+  $.ajax({
+    url: 'rest/update',
+    async: true,
+    type: 'get',
+    data: { token: token, mode: 'delete', map: mapname, id: id, user: username },
+    dataType: 'JSON',
+    success: function () { updateDesks(); },
+    error: function () { alert('Could not delete item.'); }
+  });
+}
+
+function startPaletteDrag(item, ev) {
+  // Cancel any half-finished drag first.
+  endPaletteDrag();
+
+  var ghost = document.createElement('div');
+  ghost.className = 'editsidebar_dragghost';
+  ghost.setAttribute('style', editPaletteIconStyle(item));
+  // Size the ghost to the item's real on-screen size so the cursor preview
+  // matches what will be placed: diameter = 2*halfsize * itemscale * contentZoom.
+  var content = document.getElementById('content');
+  var z = content ? (parseFloat(window.getComputedStyle(content).zoom) || 1) : 1;
+  var scale = parseFloat(typeof itemscale !== 'undefined' ? itemscale : 1) || 1;
+  if (item.type === 'floor') {
+    // Floor markers snap to the rail; preview as a small tab and reveal the rail.
+    ghost.style.width = (60 * scale * z) + 'px';
+    ghost.style.height = (2 * editItemHalfsize('floor') * scale * z) + 'px';
+    ghost.style.borderRadius = '5px';
+    if (typeof showFloorRailForDrag === 'function') { showFloorRailForDrag(); }
+  } else {
+    var size = 2 * editItemHalfsize(item.type) * scale * z;
+    ghost.style.width = size + 'px';
+    ghost.style.height = size + 'px';
+  }
+  ghost.style.left = ev.clientX + 'px';
+  ghost.style.top = ev.clientY + 'px';
+  document.body.appendChild(ghost);
+
+  paletteDrag = { item: item, ghost: ghost };
+  document.addEventListener('pointermove', onPaletteDragMove, true);
+  document.addEventListener('pointerup', onPaletteDragUp, true);
+}
+
+// Screen X of the floor rail (so the floor drag ghost can snap to it).
+function floorRailScreenX() {
+  var rail = document.getElementById('floorrail');
+  if (rail) {
+    var r = rail.getBoundingClientRect();
+    return r.left + r.width / 2;
+  }
+  // Fall back to converting the rail's content-space X to screen space.
+  var content = document.getElementById('content');
+  if (!content) { return null; }
+  var cr = content.getBoundingClientRect();
+  var z = parseFloat(window.getComputedStyle(content).zoom) || 1;
+  return cr.left + FLOOR_RAIL_X * z;
+}
+
+function onPaletteDragMove(ev) {
+  if (!paletteDrag) { return; }
+  var clientX = ev.clientX;
+  if (paletteDrag.item.type === 'floor') {
+    // Lock the floor ghost horizontally onto the rail; only Y tracks the cursor.
+    var railX = floorRailScreenX();
+    if (railX !== null) { clientX = railX; }
+  }
+  paletteDrag.ghost.style.left = clientX + 'px';
+  paletteDrag.ghost.style.top = ev.clientY + 'px';
+  // Dim the ghost when it is not over a valid drop area.
+  paletteDrag.ghost.style.opacity = pointOverMap(ev.clientX, ev.clientY) ? '0.95' : '0.4';
+}
+
+function onPaletteDragUp(ev) {
+  if (!paletteDrag) { return; }
+  var item = paletteDrag.item;
+  var over = pointOverMap(ev.clientX, ev.clientY);
+  var pt = over ? screenToMap(ev.clientX, ev.clientY) : null;
+  endPaletteDrag();
+  if (over && pt) {
+    // Floor markers ignore the dropped X and lock to the rail.
+    var px = (item.type === 'floor') ? FLOOR_RAIL_X : pt.x;
+    placeItem(item.type, px, pt.y);
+  }
+}
+
+function endPaletteDrag() {
+  document.removeEventListener('pointermove', onPaletteDragMove, true);
+  document.removeEventListener('pointerup', onPaletteDragUp, true);
+  if (paletteDrag && paletteDrag.ghost && paletteDrag.ghost.parentNode) {
+    paletteDrag.ghost.parentNode.removeChild(paletteDrag.ghost);
+  }
+  if (typeof endFloorRailDrag === 'function') { endFloorRailDrag(); }
+  paletteDrag = null;
+}
+
+// Migrate any pre-existing floor records whose X is not the rail X to the rail
+// (their X used to be free; floors are now rail-locked). Runs only for editors,
+// once per id; after each successful update the next poll sees the corrected X.
+var floorMigrating = {};
+function migrateFloorsToRail() {
+  if (typeof token === 'undefined') { return; }
+  if (!result_old || !result_old.desks) { return; }
+  result_old.desks.forEach(function (d) {
+    if (d.desktype !== 'floor') { return; }
+    if (parseInt(d.x, 10) === FLOOR_RAIL_X) { return; }
+    if (floorMigrating[d.id]) { return; }
+    floorMigrating[d.id] = true;
+    $.ajax({
+      url: 'rest/update',
+      type: 'get',
+      data: { token: token, mode: 'update', map: mapname, id: d.id, desktype: 'floor',
+        x: FLOOR_RAIL_X, y: d.y, desknumber: 'Floor', employee: d.empl,
+        avatar: (d.avtr || '-'), department: '- none -', user: username },
+      dataType: 'JSON',
+      success: function () { delete floorMigrating[d.id]; },
+      error: function () { delete floorMigrating[d.id]; }
+    });
+  });
+}
+
+// Open the item editor at (x,y) pre-scoped to the dragged palette type. Reuses
+// type to the correct fields + defaults and wires the create submit), but hides
+// the legacy type dropdown since the type is now chosen from the palette.
+function placeItem(type, x, y) {
+  createDesk(x, y);
+  var sel = document.getElementById('selDesktype');
+  if (sel) {
+    sel.value = type;
+    // override == 3 rebuilds the fields from the selected type, reading the
+    // x/y inputs createDesk just populated.
+    addInputfields(666, 'newdesk', 3);
+    $(sel).hide();
+    var item = EDIT_PALETTE_BY_TYPE[type];
+    if (item && !document.getElementById('np_typelabel')) {
+      var lbl = document.createElement('div');
+      lbl.id = 'np_typelabel';
+      lbl.className = 'np-typelabel';
+      lbl.textContent = item.label;
+      sel.parentNode.insertBefore(lbl, sel);
+    }
+  }
+  // Tint the placement preview marker to match the dragged item.
+  var marker = document.getElementById('newdeskitem');
+  var pitem = EDIT_PALETTE_BY_TYPE[type];
+  if (marker && pitem) {
+    // Resize the marker to the item's real on-map size (content space:
+    // diameter = 2*halfsize * itemscale) so the preview is WYSIWYG. createDesk
+    // builds a 20px desk ball by default, which is wrong for meeting rooms,
+    // floors and points of interest.
+    var scale = parseFloat(typeof itemscale !== 'undefined' ? itemscale : 1) || 1;
+    var size = 2 * editItemHalfsize(type) * scale;
+    marker.style.width = size + 'px';
+    marker.style.height = size + 'px';
+    marker.style.left = (x - size / 2) + 'px';
+    marker.style.top = (y - size / 2) + 'px';
+    marker.style.backgroundColor = pitem.color;
+    if (pitem.icon) {
+      marker.style.backgroundImage = 'url("images/' + pitem.icon + '")';
+      marker.style.backgroundSize = 'cover';
+    }
+    marker.style.borderRadius = pitem.square ? '3px' : '50%';
   }
 }
