@@ -148,11 +148,20 @@ func (app *App) renderIndex(w http.ResponseWriter, r *http.Request, sess Session
 			if label == "" {
 				label = ucfirst(m)
 			}
-			// Maps whose identifier carries the "-nomap" marker have no floor
-			// plan yet. They get their own dropdown column; strip the marker
-			// from the label since the column + colour now convey the status.
+			// A map is a placeholder when it has no floor-plan image on disk.
+			// This is the same signal the admin panel uses (os.Stat of the map
+			// PNG). The legacy "-nomap" identifier marker is still honoured for
+			// backward compatibility, but is no longer required.
+			isPlaceholder := false
 			if strings.Contains(strings.ToLower(m), "-nomap") {
 				label = stripNomap(label)
+				isPlaceholder = true
+			} else if m != "overview" {
+				if _, err := os.Stat(app.cfg.dataPath("maps", m+".png")); err != nil {
+					isPlaceholder = true
+				}
+			}
+			if isPlaceholder {
 				placeholderMaps = append(placeholderMaps, mapLink{Name: m, Label: label})
 			} else {
 				otherMaps = append(otherMaps, mapLink{Name: m, Label: label})
