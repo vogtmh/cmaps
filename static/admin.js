@@ -376,6 +376,22 @@ function openWorldMapAdd() {
     }
   });
 
+  // Anchor the grow-out animation on the + button so the panel appears to
+  // expand from it. The panel is position:fixed at right:16/bottom:16, so its
+  // final (unscaled) box can be derived from the viewport and its layout size,
+  // independent of the current scale(0.2) transform.
+  var addBtn = document.querySelector('.worldmap-add-btn');
+  if (addBtn) {
+    var b = addBtn.getBoundingClientRect();
+    var panelRight = window.innerWidth - 16;
+    var panelBottom = window.innerHeight - 16;
+    var panelLeft = panelRight - panel.offsetWidth;
+    var panelTop = panelBottom - panel.offsetHeight;
+    var ox = (b.left + b.width / 2) - panelLeft;
+    var oy = (b.top + b.height / 2) - panelTop;
+    panel.style.transformOrigin = ox + 'px ' + oy + 'px';
+  }
+
   // Defer adding .open so the transition runs from the off-screen position.
   requestAnimationFrame(function () { panel.classList.add('open'); });
 }
@@ -783,7 +799,7 @@ function doNewItem(action) {
         return false;
       }
       var addButton = '<input class="inputgridbutton" type="image" src="images/add_on.png" style="width:80px; height:80px;" onClick="return doNewItem(\'hideInputgrid\')" onmouseover=this.src="images/add.png" onmouseout=this.src="images/add_on.png">';
-      $("body").css("background-image", "url(images/blackprint.png)");
+      document.body.classList.add("addmode");
       document.body.addEventListener("click", getClickPosition, false);
       $('#inputgrid').html(addButton);
       $('#newitem_container').hide();
@@ -792,7 +808,7 @@ function doNewItem(action) {
 
     case "hideInputgrid":
       var addButton = '<input class="inputgridbutton" type="image" src="images/add.png" style="width:80px; height:80px;" onClick="return doNewItem(\'showInputgrid\')" onmouseover=this.src="images/add_on.png" onmouseout=this.src="images/add.png">';
-        $("body").css("background-image", "url(images/blueprint.png)");
+        document.body.classList.remove("addmode");
       document.body.removeEventListener("click", getClickPosition, false);
       $('#inputgrid').html(addButton);
       $('#newitem_container').hide();

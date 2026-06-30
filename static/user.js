@@ -3256,13 +3256,13 @@ function layoutPersonalMenu() {
 function togglePersonalMenu() {
   var x = document.getElementById("personal_menu");
   var admin = document.getElementById("adminpanel_button");
-  if (x.style.visibility === "hidden") {
+  if (!x.classList.contains("open")) {
     layoutPersonalMenu();
-    x.style.visibility = "visible";
+    x.classList.add("open");
     if (admin) { admin.classList.add("menu-open"); }
     userBookings();
   } else {
-    x.style.visibility = "hidden";
+    x.classList.remove("open");
     if (admin) { admin.classList.remove("menu-open"); }
   }
 }

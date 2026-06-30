@@ -1167,6 +1167,40 @@
     z-index:1;
 }
 
+/* Dynamic-Island-style open animation: the menu grows out of the avatar pill
+   with a springy overshoot. The transform-origin is pinned to the avatar's
+   centre (60px in from the left, 60px up from the bottom) so it appears to
+   expand from the avatar rather than from a corner. */
+#personal_menu {
+    visibility: hidden;
+    opacity: 0;
+    transform: scale(0.2);
+    transform-origin: 60px calc(100% - 60px);
+    transition:
+        transform 0.42s cubic-bezier(0.34, 1.4, 0.5, 1),
+        opacity 0.18s ease-out,
+        visibility 0s linear 0.42s;
+}
+#personal_menu > * {
+    opacity: 0;
+    transition: opacity 0.14s ease-out;
+}
+#personal_menu.open {
+    visibility: visible;
+    opacity: 1;
+    transform: scale(1);
+    transition:
+        transform 0.42s cubic-bezier(0.34, 1.4, 0.5, 1),
+        opacity 0.12s ease-out,
+        visibility 0s;
+}
+/* Fade the contents in once the shape has mostly expanded, so it reads as the
+   container morphing first and the controls settling in afterwards. */
+#personal_menu.open > * {
+    opacity: 1;
+    transition: opacity 0.2s ease-out 0.16s;
+}
+
 .avatarbutton_row {
     position:absolute;
     left:60px;
@@ -1236,8 +1270,25 @@ table { border-collapse:collapse }
 body {
     font-family: Roboto, Arial, Helvetica;
     background-color:#000; 
-    background-image: url("images/background.png"); 
     color:#ffffff;
+}
+
+/* Real background lives on a dedicated fixed layer behind all content so it can
+   be desaturated/dimmed on its own (e.g. while placing a new desk) without
+   affecting the page content. */
+body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    background-image: url("images/background.png");
+    transition: filter 300ms ease-in-out;
+}
+
+/* Add-item ("blackprint") mode: desaturate and dim the real background instead
+   of swapping in a separate image. */
+body.addmode::before {
+    filter: grayscale(1) brightness(0.5);
 }
 
 /* ── Unified login overlay (login.js cmapsLogin) ────────── */
@@ -2352,12 +2403,36 @@ input[type=submit]:hover, input[type=button]:hover {
     border-radius: 16px;
     box-shadow: 0 8px 28px rgba(0, 0, 0, 0.55);
     z-index: 6;
-    transform: translateX(calc(100% + 32px));
-    transition: transform 320ms ease-in-out;
+    /* Dynamic-Island-style open: grow out of the + button with a springy
+       overshoot. The transform-origin is set dynamically in openWorldMapAdd()
+       to point at the add button's position. */
+    visibility: hidden;
+    opacity: 0;
+    transform: scale(0.2);
+    transform-origin: top right;
+    transition:
+        transform 0.42s cubic-bezier(0.34, 1.4, 0.5, 1),
+        opacity 0.18s ease-out,
+        visibility 0s linear 0.42s;
     overflow: hidden;
 }
+.worldmap-add-panel > * {
+    opacity: 0;
+    transition: opacity 0.14s ease-out;
+}
 .worldmap-add-panel.open {
-    transform: translateX(0);
+    visibility: visible;
+    opacity: 1;
+    transform: scale(1);
+    transition:
+        transform 0.42s cubic-bezier(0.34, 1.4, 0.5, 1),
+        opacity 0.12s ease-out,
+        visibility 0s;
+}
+/* Fade the contents in once the shape has mostly expanded. */
+.worldmap-add-panel.open > * {
+    opacity: 1;
+    transition: opacity 0.2s ease-out 0.16s;
 }
 .worldmap-add-panel .wma-head {
     flex: 0 0 auto;
