@@ -321,7 +321,11 @@
     {{end}}
     {{if and .IsOverview (gt .PermMaps 1)}}
     <div class="inputgrid" id="inputgrid" style="float:right; margin:5px; width:80px; height:80px; background: transparent;{{if eq .UserMode "user"}}display:none;{{end}}">
+      {{if .WorldMap}}
+      <div class="inputgridbutton worldmap-add-btn" title="Add location" onClick="return doNewItem('showInputgrid')"></div>
+      {{else}}
       <input class="inputgridbutton" type="image" src="images/add.png" style="width:80px; height:80px;" onClick="return doNewItem('showInputgrid')" onmouseover='this.src="images/add_on.png"' onmouseout='this.src="images/add.png"'>
+      {{end}}
     </div>
     {{end}}
     {{if gt .PermDesks 0}}
@@ -374,6 +378,57 @@
 </div>
 
 {{if .Findme}}<script> teamlabel = "{{.Teamlabel}}"; searchtext = "{{.Findme}}"</script>{{end}}
+
+{{if and .LoggedIn .IsOverview (gt .PermMaps 1)}}
+<!-- Slide-in "Add map" form for the dynamic world-map overview -->
+<div id="worldmap_add_panel" class="worldmap-add-panel">
+  <div class="wma-head">
+    <span class="wma-title">Add location</span>
+    <button type="button" class="wma-close" onclick="closeWorldMapAdd()" aria-label="Close">&times;</button>
+  </div>
+  <div class="wma-body">
+    <label class="wma-label" for="wma_address">Address</label>
+    <textarea id="wma_address" class="wma-input wma-textarea" rows="3" placeholder="e.g. Friedrichstrasse 1, Berlin, Germany" onblur="geocodeWorldMapAdd()"></textarea>
+    <div id="wma_geo_msg" class="wma-msg"></div>
+
+    <label class="wma-label" for="wma_name">Map name</label>
+    <div class="wma-namerow">
+      <span id="wma_flag" class="wma-flag" style="display:none;"></span>
+      <input type="text" id="wma_name" class="wma-input" placeholder="auto-filled from address" autocomplete="off">
+    </div>
+
+    <label class="wma-label" for="wma_file">Floor plan <span class="wma-optional">(optional)</span></label>
+    <input type="file" id="wma_file" class="wma-input wma-file" accept="image/png,image/jpeg,image/gif">
+
+    <button type="button" class="wma-advanced-toggle" id="wma_advanced_toggle" onclick="toggleWorldMapAdvanced()">Advanced &#9656;</button>
+    <div id="wma_advanced" class="wma-advanced" style="display:none;">
+      <label class="wma-label" for="wma_lat">Latitude</label>
+      <input type="text" id="wma_lat" class="wma-input" placeholder="auto-filled from address">
+      <label class="wma-label" for="wma_lon">Longitude</label>
+      <input type="text" id="wma_lon" class="wma-input" placeholder="auto-filled from address">
+      <label class="wma-label" for="wma_itemscale">Item scale</label>
+      <input type="text" id="wma_itemscale" class="wma-input" value="1">
+      <label class="wma-label" for="wma_published">Published</label>
+      <select id="wma_published" class="wma-input">
+        <option value="yes">yes</option>
+        <option value="no">no</option>
+      </select>
+      <label class="wma-label" for="wma_mapflag">Country flag</label>
+      <select id="wma_mapflag" class="wma-input" onchange="updateWorldMapFlagPreview()">
+        <option value="none">none</option>
+      </select>
+      <label class="wma-label" for="wma_timezone">Timezone</label>
+      <select id="wma_timezone" class="wma-input">
+        <option value="">-- select a timezone --</option>
+      </select>
+    </div>
+  </div>
+  <div class="wma-foot">
+    <button type="button" class="wma-btn wma-btn-cancel" onclick="closeWorldMapAdd()">Cancel</button>
+    <button type="button" class="wma-btn wma-btn-create" id="wma_create_btn" onclick="submitWorldMapAdd()">Create</button>
+  </div>
+</div>
+{{end}}
 
 </body>
 </html>

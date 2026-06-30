@@ -25,23 +25,30 @@ const geoapifyEndpoint = "https://api.geoapify.com/v1/geocode/search"
 type geoapifyResponse struct {
 	Features []struct {
 		Properties struct {
-			Lat       float64 `json:"lat"`
-			Lon       float64 `json:"lon"`
-			Formatted string  `json:"formatted"`
+			Lat         float64 `json:"lat"`
+			Lon         float64 `json:"lon"`
+			Formatted   string  `json:"formatted"`
+			CountryCode string  `json:"country_code"`
+			City        string  `json:"city"`
+			Timezone    struct {
+				Name string `json:"name"`
+			} `json:"timezone"`
 		} `json:"properties"`
 	} `json:"features"`
 }
 
 // geocodeAddress resolves a free-form address to coordinates using the given
-// API key. Returns the best (first) match. An empty key or address is an error.
-func geocodeAddress(ctx context.Context, apiKey, text string) (lat, lon float64, formatted string, err error) {
+// API key. Returns the best (first) match, including the ISO country code, city
+// and IANA timezone name when the provider supplies them. An empty key or
+// address is an error.
+func geocodeAddress(ctx context.Context, apiKey, text string) (lat, lon float64, formatted, country, city, timezone string, err error) {
 	apiKey = strings.TrimSpace(apiKey)
 	text = strings.TrimSpace(text)
 	if apiKey == "" {
-		return 0, 0, "", fmt.Errorf("no Geoapify API key configured")
+		return 0, 0, "", "", "", "", fmt.Errorf("no Geoapify API key configured")
 	}
 	if text == "" {
-		return 0, 0, "", fmt.Errorf("address is empty")
+		return 0, 0, "", "", "", "", fmt.Errorf("address is empty")
 	}
 
 	q := url.Values{}
@@ -53,36 +60,36 @@ func geocodeAddress(ctx context.Context, apiKey, text string) (lat, lon float64,
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
 	if err != nil {
-		return 0, 0, "", err
+		return 0, 0, "", "", "", "", err
 	}
 	client := &http.Client{Timeout: 15 * time.Second}
 	res, err := client.Do(req)
 	if err != nil {
-		return 0, 0, "", err
+		return 0, 0, "", "", "", "", err
 	}
 	defer res.Body.Close()
 
 	body, err := io.ReadAll(io.LimitReader(res.Body, 1<<20))
 	if err != nil {
-		return 0, 0, "", err
+		return 0, 0, "", "", "", "", err
 	}
 	if res.StatusCode != http.StatusOK {
 		msg := strings.TrimSpace(string(body))
 		if len(msg) > 200 {
 			msg = msg[:200]
 		}
-		return 0, 0, "", fmt.Errorf("Geoapify returned HTTP %d: %s", res.StatusCode, msg)
+		return 0, 0, "", "", "", "", fmt.Errorf("Geoapify returned HTTP %d: %s", res.StatusCode, msg)
 	}
 
 	var parsed geoapifyResponse
 	if err := json.Unmarshal(body, &parsed); err != nil {
-		return 0, 0, "", fmt.Errorf("could not parse Geoapify response: %v", err)
+		return 0, 0, "", "", "", "", fmt.Errorf("could not parse Geoapify response: %v", err)
 	}
 	if len(parsed.Features) == 0 {
-		return 0, 0, "", fmt.Errorf("no match found for address")
+		return 0, 0, "", "", "", "", fmt.Errorf("no match found for address")
 	}
 	p := parsed.Features[0].Properties
-	return p.Lat, p.Lon, p.Formatted, nil
+	return p.Lat, p.Lon, p.Formatted, strings.ToLower(p.CountryCode), p.City, p.Timezone.Name, nil
 }
 
 // geoAddressText turns a stored map address (newlines encoded as <br/>) into a
@@ -163,7 +170,7 @@ func (app *App) RunGeoapifySync(prog *syncProgress) GeoSyncResult {
 		}
 
 		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-		lat, lon, formatted, err := geocodeAddress(ctx, apiKey, addr)
+		lat, lon, formatted, _, _, _, err := geocodeAddress(ctx, apiKey, addr)
 		cancel()
 		// Every attempt that reaches the API consumes one request/credit,
 		// regardless of whether a match was found, so count it here.

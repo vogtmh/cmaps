@@ -310,6 +310,231 @@ function geocodeNewMap() {
   });
 }
 
+// ---------------------------------------------------------------------------
+// Dynamic world-map "Add location" slide-in form
+// ---------------------------------------------------------------------------
+
+// wmaSlugify turns a free-form name (e.g. a city) into a lowercase map identifier.
+function wmaSlugify(name) {
+  return (name || '')
+    .toString()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // strip accents
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '');
+}
+
+// openWorldMapAdd populates the selects and slides the panel in from the right.
+function openWorldMapAdd() {
+  var panel = document.getElementById('worldmap_add_panel');
+  if (!panel) { return; }
+
+  // Reset fields.
+  document.getElementById('wma_address').value = '';
+  document.getElementById('wma_name').value = '';
+  document.getElementById('wma_file').value = '';
+  document.getElementById('wma_lat').value = '';
+  document.getElementById('wma_lon').value = '';
+  document.getElementById('wma_itemscale').value = '1';
+  document.getElementById('wma_published').value = 'yes';
+  document.getElementById('wma_geo_msg').innerHTML = '';
+  document.getElementById('wma_geo_msg').style.color = '#ccc';
+  var flag = document.getElementById('wma_flag');
+  flag.style.display = 'none';
+  flag.style.backgroundImage = '';
+
+  // Collapse advanced unless geocoding is unavailable (then coords need manual entry).
+  var advConfigured = (typeof setting_geoapify_configured !== 'undefined' && setting_geoapify_configured == 1);
+  setWorldMapAdvanced(!advConfigured);
+  if (!advConfigured) {
+    var msg = document.getElementById('wma_geo_msg');
+    msg.style.color = '#fc6';
+    msg.innerHTML = 'Geocoding is not configured. Enter latitude/longitude manually under Advanced.';
+  }
+
+  // Timezone select (default to the server region until an address sets it).
+  $.getJSON('tools/timezones.json', function (json) {
+    var sel = document.getElementById('wma_timezone');
+    var html = '<option value="">-- select a timezone --</option>';
+    $.each(json, function (i, tz) {
+      html += '<option value="' + tz + '">' + tz + '</option>';
+    });
+    sel.innerHTML = html;
+    if (typeof region !== 'undefined' && region) { sel.value = region; }
+  });
+
+  // Country flag select.
+  $.ajax({
+    url: 'rest/config?mode=mapflags', async: true, type: 'get', dataType: 'JSON',
+    success: function (result) {
+      var sel = document.getElementById('wma_mapflag');
+      var html = '<option value="none">none</option>';
+      var flags = (result && result.mapflags) || [];
+      for (var i = 0; i < flags.length; i++) {
+        html += '<option value="' + flags[i] + '">' + flags[i] + '</option>';
+      }
+      sel.innerHTML = html;
+    }
+  });
+
+  // Defer adding .open so the transition runs from the off-screen position.
+  requestAnimationFrame(function () { panel.classList.add('open'); });
+}
+
+function closeWorldMapAdd() {
+  var panel = document.getElementById('worldmap_add_panel');
+  if (panel) { panel.classList.remove('open'); }
+}
+
+function setWorldMapAdvanced(show) {
+  var box = document.getElementById('wma_advanced');
+  var toggle = document.getElementById('wma_advanced_toggle');
+  if (!box || !toggle) { return; }
+  box.style.display = show ? 'block' : 'none';
+  toggle.classList.toggle('open', show);
+  toggle.innerHTML = show ? 'Advanced \u25BE' : 'Advanced \u25B8';
+}
+
+function toggleWorldMapAdvanced() {
+  var box = document.getElementById('wma_advanced');
+  setWorldMapAdvanced(box.style.display === 'none');
+}
+
+// updateWorldMapFlagPreview reflects the chosen country flag next to the name.
+function updateWorldMapFlagPreview() {
+  var cc = document.getElementById('wma_mapflag').value;
+  var flag = document.getElementById('wma_flag');
+  if (cc && cc !== 'none' && cc !== '') {
+    flag.style.backgroundImage = 'url(countryflags/' + cc + '.svg)';
+    flag.style.display = 'inline-block';
+  } else {
+    flag.style.backgroundImage = '';
+    flag.style.display = 'none';
+  }
+}
+
+// geocodeWorldMapAdd resolves the entered address to coordinates and auto-fills
+// lat/lon, the country flag, the timezone and a suggested map name.
+function geocodeWorldMapAdd() {
+  var addr = document.getElementById('wma_address').value.trim();
+  var msg = document.getElementById('wma_geo_msg');
+  if (addr === '') { return; }
+  if (typeof setting_geoapify_configured === 'undefined' || setting_geoapify_configured != 1) {
+    msg.style.color = '#fc6';
+    msg.innerHTML = 'Geocoding is not configured. Enter latitude/longitude manually under Advanced.';
+    setWorldMapAdvanced(true);
+    return;
+  }
+  msg.style.color = '#ccc';
+  msg.innerHTML = 'Looking up\u2026';
+  $.ajax({
+    url: 'rest/geo/test?address=' + encodeURIComponent(addr),
+    async: true, type: 'get', dataType: 'JSON',
+    success: function (d) {
+      if (d && d.ok) {
+        document.getElementById('wma_lat').value = Number(d.lat).toFixed(4);
+        document.getElementById('wma_lon').value = Number(d.lon).toFixed(4);
+        // Country flag, if we have a matching flag option.
+        if (d.country) {
+          var mf = document.getElementById('wma_mapflag');
+          var found = false;
+          for (var i = 0; i < mf.options.length; i++) {
+            if (mf.options[i].value === d.country) { mf.value = d.country; found = true; break; }
+          }
+          if (found) { updateWorldMapFlagPreview(); }
+        }
+        // Timezone, if returned and present in the select.
+        if (d.timezone) {
+          var tz = document.getElementById('wma_timezone');
+          for (var j = 0; j < tz.options.length; j++) {
+            if (tz.options[j].value === d.timezone) { tz.value = d.timezone; break; }
+          }
+        }
+        // Suggest a map name from the city when the user has not typed one.
+        var nameField = document.getElementById('wma_name');
+        if (nameField.value.trim() === '' && d.city) {
+          nameField.value = wmaSlugify(d.city);
+        }
+        msg.style.color = '#8f8';
+        msg.innerHTML = 'Found: ' + (d.formatted || (Number(d.lat).toFixed(4) + ', ' + Number(d.lon).toFixed(4)));
+      } else {
+        msg.style.color = '#f88';
+        msg.innerHTML = 'Lookup failed: ' + ((d && d.message) || 'unknown error');
+      }
+    },
+    error: function () {
+      msg.style.color = '#f88';
+      msg.innerHTML = 'Lookup failed (request error).';
+    }
+  });
+}
+
+// submitWorldMapAdd validates and posts the new map to rest/update (mode=createmap).
+function submitWorldMapAdd() {
+  var msg = document.getElementById('wma_geo_msg');
+  var name = wmaSlugify(document.getElementById('wma_name').value);
+  var lat = document.getElementById('wma_lat').value.trim();
+  var lon = document.getElementById('wma_lon').value.trim();
+  var itemscale = document.getElementById('wma_itemscale').value.trim() || '1';
+  var published = document.getElementById('wma_published').value;
+  var mapflag = document.getElementById('wma_mapflag').value || 'none';
+  var timezone = document.getElementById('wma_timezone').value;
+  var address = document.getElementById('wma_address').value.trim();
+
+  if (name === '') {
+    msg.style.color = '#f88';
+    msg.innerHTML = 'Please enter a map name.';
+    return;
+  }
+  if (lat === '' || lon === '') {
+    msg.style.color = '#f88';
+    msg.innerHTML = 'Coordinates are missing. Enter an address to look them up, or set them under Advanced.';
+    setWorldMapAdvanced(true);
+    return;
+  }
+  if (timezone === '') {
+    msg.style.color = '#f88';
+    msg.innerHTML = 'Please choose a timezone under Advanced.';
+    setWorldMapAdvanced(true);
+    return;
+  }
+
+  var fd = new FormData();
+  fd.append('mode', 'createmap');
+  fd.append('token', token);
+  fd.append('map', name);
+  fd.append('itemscale', itemscale);
+  fd.append('published', published);
+  fd.append('mapflag', mapflag);
+  fd.append('timezone', timezone);
+  fd.append('address', address);
+  fd.append('lat', lat);
+  fd.append('lon', lon);
+  var fileInput = document.getElementById('wma_file');
+  if (fileInput.files && fileInput.files.length > 0) {
+    fd.append('image', fileInput.files[0]);
+  }
+
+  var btn = document.getElementById('wma_create_btn');
+  btn.disabled = true;
+  msg.style.color = '#ccc';
+  msg.innerHTML = 'Creating\u2026';
+
+  fetch('rest/update/', { method: 'POST', body: fd, credentials: 'same-origin' })
+    .then(function (resp) {
+      if (resp.ok || resp.redirected || resp.status === 303) {
+        window.location.href = '/?map=overview';
+        return null;
+      }
+      if (resp.status === 409) { throw new Error('That map name is already in use.'); }
+      return resp.text().then(function (t) { throw new Error(t || ('HTTP ' + resp.status)); });
+    })
+    .catch(function (err) {
+      btn.disabled = false;
+      msg.style.color = '#f88';
+      msg.innerHTML = 'Could not create map: ' + err.message;
+    });
+}
+
 function addInputfields(deskid, desktype, override, manual) {
 
   // New items overwrite all automatic settings
@@ -551,6 +776,12 @@ function getClickPosition(e) {
 function doNewItem(action) {
   switch (action) {
     case "showInputgrid":
+      // On the dynamic world-map overview, creating a map is address-driven via a
+      // slide-in form instead of the classic click-to-place flow.
+      if (map == "overview" && typeof setting_worldmap !== 'undefined' && setting_worldmap == 1) {
+        openWorldMapAdd();
+        return false;
+      }
       var addButton = '<input class="inputgridbutton" type="image" src="images/add_on.png" style="width:80px; height:80px;" onClick="return doNewItem(\'hideInputgrid\')" onmouseover=this.src="images/add.png" onmouseout=this.src="images/add_on.png">';
       $("body").css("background-image", "url(images/blackprint.png)");
       document.body.addEventListener("click", getClickPosition, false);

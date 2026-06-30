@@ -1309,7 +1309,7 @@ func (app *App) handleRestGeoTest(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
 	defer cancel()
-	lat, lon, formatted, err := geocodeAddress(ctx, apiKey, text)
+	lat, lon, formatted, country, city, timezone, err := geocodeAddress(ctx, apiKey, text)
 	// The test issues one real API request, so count it toward the monthly estimate.
 	_, _, _ = app.db.IncrGeoUsage(1)
 	if err != nil {
@@ -1324,6 +1324,9 @@ func (app *App) handleRestGeoTest(w http.ResponseWriter, r *http.Request) {
 		"lat":        lat,
 		"lon":        lon,
 		"formatted":  formatted,
+		"country":    country,
+		"city":       city,
+		"timezone":   timezone,
 		"usageMonth": month,
 		"usageCount": count,
 	})
