@@ -1291,7 +1291,7 @@ func (app *App) handleRestRobinProgress(w http.ResponseWriter, r *http.Request) 
 // writes coordinates to any map.
 func (app *App) handleRestGeoTest(w http.ResponseWriter, r *http.Request) {
 	sess, ok := app.currentSession(r)
-	if !ok || app.permLevel(sess, "ldap") < 1 {
+	if !ok || (app.permLevel(sess, "ldap") < 1 && app.permLevel(sess, "maps") < 1) {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}

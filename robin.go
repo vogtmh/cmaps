@@ -935,12 +935,14 @@ type robinOccupant struct {
 	Source string // how Name was resolved (for diagnostics)
 }
 
-// resolveOccupant resolves a Robin reservee to a display identity from the local
-// LDAP mirror (matching the reservee's primary mail or any AD proxyAddresses
-// alias). Robin's /users API is not used: it is forbidden for our access token,
-// so it can never resolve a name. When no AD match is found the raw email is
-// kept as the display name.
-func (app *App) resolveOccupant(email string, userID int, emailUser map[string]LdapUser) robinOccupant {
+// resolveOccupant resolves a Robin reservee to a display identity from the full
+// AD directory snapshot (matching the reservee's primary mail or any AD
+// proxyAddresses alias). The full directory is used — not the office-filtered
+// desk-placement mirror — so people without an office attribute still resolve.
+// Robin's /users API is not used: it is forbidden for our access token, so it
+// can never resolve a name. When no AD match is found the raw email is kept as
+// the display name.
+func (app *App) resolveOccupant(email string, userID int, emailUser map[string]DirectoryUser) robinOccupant {
 	occ := robinOccupant{Mail: email, UserID: userID}
 	if email != "" {
 		if u, ok := emailUser[strings.ToLower(email)]; ok {
@@ -949,14 +951,14 @@ func (app *App) resolveOccupant(email string, userID int, emailUser map[string]L
 				occ.Name = full
 			}
 			occ.Mail = u.Mail
-			occ.Phone = u.Telephonenumber
-			occ.Title = u.Description
+			occ.Phone = u.Phone
+			occ.Title = u.Title
 			occ.Mobile = u.Mobile
 			occ.Userid = u.Userid
 			if strings.EqualFold(email, u.Mail) {
-				occ.Source = "LDAP mirror (email match)"
+				occ.Source = "AD directory (email match)"
 			} else {
-				occ.Source = "LDAP mirror (alias match → " + u.Mail + ")"
+				occ.Source = "AD directory (alias match → " + u.Mail + ")"
 			}
 			return occ
 		}
@@ -1016,19 +1018,22 @@ func (app *App) collectRobinOccupancy(prog *syncProgress, capture func(name stri
 		return statuses, res
 	}
 
-	// LDAP mirror for resolving reservee emails → display names. The primary
-	// mail and any AD proxyAddresses aliases (e.g. a legacy "spaeth@" before
-	// "first.last@") both map to the same person.
-	ldap, _ := app.db.ListLdap()
-	emailUser := make(map[string]LdapUser)
-	for _, u := range ldap {
+	// AD directory snapshot for resolving reservee emails → display names. The
+	// full directory (every enabled user, regardless of office) is used so that
+	// people without an office attribute still resolve. The primary mail and any
+	// AD proxyAddresses aliases (e.g. a legacy "spaeth@" before "first.last@")
+	// both map to the same person.
+	dir, _ := app.db.ListDirectory()
+	emailUser := make(map[string]DirectoryUser)
+	for _, u := range dir {
 		if u.Mail != "" {
 			emailUser[strings.ToLower(u.Mail)] = u
 		}
 		for _, a := range u.Aliases {
 			if a != "" {
-				if _, taken := emailUser[a]; !taken {
-					emailUser[a] = u
+				la := strings.ToLower(a)
+				if _, taken := emailUser[la]; !taken {
+					emailUser[la] = u
 				}
 			}
 		}

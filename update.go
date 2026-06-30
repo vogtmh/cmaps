@@ -104,7 +104,11 @@ func (app *App) handleRestUpdate(w http.ResponseWriter, r *http.Request) {
 		mapflag := get("mapflag")
 		timezone := get("timezone")
 		address := get("address")
-		if mapName == "" || itemscale == "" || published == "" || mapflag == "" || timezone == "" || address == "" || get("x") == "" || get("y") == "" {
+		// Coordinates are required as a pair: either pixel X/Y (classic overview)
+		// or geographic lat/lon (dynamic world map). Address is optional.
+		hasXY := get("x") != "" && get("y") != ""
+		hasLatLon := get("lat") != "" && get("lon") != ""
+		if mapName == "" || itemscale == "" || published == "" || mapflag == "" || timezone == "" || (!hasXY && !hasLatLon) {
 			http.Error(w, "parameters missing", http.StatusBadRequest)
 			return
 		}
@@ -113,10 +117,17 @@ func (app *App) handleRestUpdate(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "mapname already in use", http.StatusConflict)
 			return
 		}
-		_ = app.db.PutMap(MapInfo{
+		newMap := MapInfo{
 			Mapname: mapName, Itemscale: itemscale, Published: published, Country: mapflag,
 			Timezone: timezone, Address: address, MapX: x, MapY: y,
-		})
+		}
+		if lat, err := strconv.ParseFloat(get("lat"), 64); err == nil {
+			newMap.Lat = lat
+		}
+		if lon, err := strconv.ParseFloat(get("lon"), 64); err == nil {
+			newMap.Lon = lon
+		}
+		_ = app.db.PutMap(newMap)
 		_ = app.db.AuditLog("Maps", user, "Map has been created ("+mapName+")")
 		http.Redirect(w, r, "/?map=overview", http.StatusSeeOther)
 		return

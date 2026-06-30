@@ -986,17 +986,23 @@
       <form action="?tab=maps" method="post" enctype="multipart/form-data">
         <input type="hidden" name="tab" value="maps">
         <div class="sync-form-grid">
-          <div class="sync-field"><label class="sync-label">Map name (identifier)</label><input class="sync-input" type="text" name="newMapName" placeholder="e.g. goeppingen2" required></div>
-          <div class="sync-field"><label class="sync-label">Display name</label><input class="sync-input" type="text" name="newMapDisplayName" placeholder="e.g. Göppingen"></div>
-          <div class="sync-field"><label class="sync-label">Itemscale</label><input class="sync-input" type="text" name="newMapItemscale" value="1"></div>
-          <div class="sync-field"><label class="sync-label">Published</label><select class="sync-select" name="newMapPublished"><option value="yes" selected>Yes</option><option value="no">No</option></select></div>
-          <div class="sync-field"><label class="sync-label">Country</label><select class="sync-select" name="newMapCountry">{{range .Countryflags}}<option value="{{.}}">{{.}}</option>{{end}}</select></div>
-          <div class="sync-field"><label class="sync-label">Timezone</label><select class="sync-select" name="newMapTimezone">{{range .Timezones}}<option value="{{.}}"{{if eq . "Europe/Berlin"}} selected{{end}}>{{.}}</option>{{end}}</select></div>
-          <div class="sync-field {{if .WorldMap}}coord-muted{{end}}"><label class="sync-label">X</label><input class="sync-input" type="text" name="newMapX" value="0"></div>
-          <div class="sync-field {{if .WorldMap}}coord-muted{{end}}"><label class="sync-label">Y</label><input class="sync-input" type="text" name="newMapY" value="0"></div>
-          <div class="sync-field {{if not .WorldMap}}coord-muted{{end}}"><label class="sync-label">Latitude</label><input class="sync-input" type="text" name="newMapLat" placeholder="e.g. 48.7758"></div>
-          <div class="sync-field {{if not .WorldMap}}coord-muted{{end}}"><label class="sync-label">Longitude</label><input class="sync-input" type="text" name="newMapLon" placeholder="e.g. 9.1829"></div>
-          <div class="sync-field sync-field-wide"><label class="sync-label">Address</label><textarea class="sync-textarea sync-textarea-text" name="newMapAddress" placeholder="One line per row"></textarea></div>
+          <div class="sync-field"><label class="sync-label">Map name (identifier) *</label><input class="sync-input" type="text" name="newMapName" placeholder="e.g. goeppingen2" required></div>
+          <div class="sync-field"><label class="sync-label">Itemscale *</label><input class="sync-input" type="text" name="newMapItemscale" value="1" required></div>
+          <div class="sync-field"><label class="sync-label">Published *</label><select class="sync-select" name="newMapPublished"><option value="yes" selected>Yes</option><option value="no">No</option></select></div>
+          <div class="sync-field"><label class="sync-label">Country (map flag) *</label><select class="sync-select" name="newMapCountry" required>{{range .Countryflags}}<option value="{{.}}">{{.}}</option>{{end}}</select></div>
+          <div class="sync-field"><label class="sync-label">Timezone *</label><select class="sync-select" name="newMapTimezone" required>{{range .Timezones}}<option value="{{.}}"{{if eq . "Europe/Berlin"}} selected{{end}}>{{.}}</option>{{end}}</select></div>
+          {{if .WorldMap}}
+          <div class="sync-field"><label class="sync-label">Latitude *</label><input class="sync-input" type="text" id="newMapLat" name="newMapLat" placeholder="e.g. 48.7758" required></div>
+          <div class="sync-field"><label class="sync-label">Longitude *</label><input class="sync-input" type="text" id="newMapLon" name="newMapLon" placeholder="e.g. 9.1829" required></div>
+          <div class="sync-field sync-field-wide">
+            <button type="button" class="sync-btn sync-btn-sm" onclick="geocodeAddMap()">Get coordinates from address</button>
+            <span id="addMapGeoMsg" class="sync-status-text" style="margin-left:10px;"></span>
+          </div>
+          {{else}}
+          <div class="sync-field"><label class="sync-label">X *</label><input class="sync-input" type="text" name="newMapX" value="0" required></div>
+          <div class="sync-field"><label class="sync-label">Y *</label><input class="sync-input" type="text" name="newMapY" value="0" required></div>
+          {{end}}
+          <div class="sync-field sync-field-wide"><label class="sync-label">Address</label><textarea class="sync-textarea sync-textarea-text" id="newMapAddress" name="newMapAddress" placeholder="One line per row (optional; used by the geocode button)"></textarea></div>
           <div class="sync-field sync-field-wide"><label class="sync-label">Map image</label><input class="sync-input" type="file" name="image" accept="image/*"></div>
         </div>
         <div class="sync-form-actions"><button type="submit" class="sync-btn sync-btn-primary">Create map</button></div>
@@ -1049,6 +1055,35 @@
   <script>
     function openAddMap() { document.getElementById('addMapOverlay').style.display = 'block'; }
     function closeMapModal(id) { document.getElementById(id).style.display = 'none'; }
+    var ADMIN_GEOAPIFY_CONFIGURED = {{if .GeoapifyConfigured}}true{{else}}false{{end}};
+    // geocodeAddMap fills the Latitude/Longitude fields of the Add map modal from
+    // the entered address via Geoapify, or shows a hint when it isn't configured.
+    function geocodeAddMap() {
+      var msg = document.getElementById('addMapGeoMsg');
+      var configured = (typeof ADMIN_GEOAPIFY_CONFIGURED !== 'undefined') && ADMIN_GEOAPIFY_CONFIGURED;
+      if (!configured) {
+        msg.style.color = 'var(--sy-warn)';
+        msg.textContent = 'Geoapify is not set up. Add an API key under Sync \u2192 Geocoding, or enter coordinates manually.';
+        return;
+      }
+      var addr = (document.getElementById('newMapAddress').value || '').replace(/\s+/g, ' ').trim();
+      if (!addr) { msg.style.color = 'var(--sy-warn)'; msg.textContent = 'Enter an address first.'; return; }
+      msg.style.color = ''; msg.textContent = 'Looking up\u2026';
+      fetch('../rest/geo/test?address=' + encodeURIComponent(addr), { credentials: 'same-origin' })
+        .then(function (r) { return r.json(); })
+        .then(function (d) {
+          if (d && d.ok) {
+            document.getElementById('newMapLat').value = Number(d.lat).toFixed(4);
+            document.getElementById('newMapLon').value = Number(d.lon).toFixed(4);
+            msg.style.color = 'var(--sy-ok)';
+            msg.textContent = 'Found: ' + (d.formatted || (Number(d.lat).toFixed(4) + ', ' + Number(d.lon).toFixed(4)));
+          } else {
+            msg.style.color = 'var(--sy-danger)';
+            msg.textContent = 'Lookup failed: ' + ((d && d.message) || 'unknown error');
+          }
+        })
+        .catch(function () { msg.style.color = 'var(--sy-danger)'; msg.textContent = 'Lookup failed (request error).'; });
+    }
     function openEditMap(btn) {
       var d = btn.dataset;
       document.getElementById('editMapOrigName').value = d.name;

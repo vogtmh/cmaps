@@ -27,33 +27,34 @@ type mapLink struct {
 // server-side state the legacy index.php computed before handing off to the
 // JavaScript front-end.
 type indexData struct {
-	AppTitle          string
-	TargetScreenWidth int
-	HalfWidth         int
-	Map               string
-	MapTitle          string
-	MapDefault        string
-	MapList           []string
-	OtherMaps         []mapLink
-	IsOverview        bool
-	WorldMap          bool
-	HasMapImage       bool   // detail map: whether the map image file exists
-	NomapText         string // optional custom placeholder text for maps without an image
-	NomapLink         string // optional link shown below the placeholder text
-	Itemscale         string
-	Autozoom          int
-	Zoom              int
-	ZoomIn            int
-	ZoomOut           int
-	ZoomScaled        string // zoom/100
-	ContentScale      string // zoom/100*autozoom
-	ContentLeft       string // LeftPos / ContentScale (for the zoom-based layout)
-	ContentTop        string // TopHeader / ContentScale (for the zoom-based layout)
-	LeftPos           int
-	TopHeader         int // 69*autozoom
-	Top72             int // 72*autozoom
-	Bottom25          int // 25*autozoom
-	Floors            []floorButton
+	AppTitle           string
+	TargetScreenWidth  int
+	HalfWidth          int
+	Map                string
+	MapTitle           string
+	MapDefault         string
+	MapList            []string
+	OtherMaps          []mapLink
+	IsOverview         bool
+	WorldMap           bool
+	HasMapImage        bool   // detail map: whether the map image file exists
+	GeoapifyConfigured bool   // whether a Geoapify API key is set (enables the geocode button)
+	NomapText          string // optional custom placeholder text for maps without an image
+	NomapLink          string // optional link shown below the placeholder text
+	Itemscale          string
+	Autozoom           int
+	Zoom               int
+	ZoomIn             int
+	ZoomOut            int
+	ZoomScaled         string // zoom/100
+	ContentScale       string // zoom/100*autozoom
+	ContentLeft        string // LeftPos / ContentScale (for the zoom-based layout)
+	ContentTop         string // TopHeader / ContentScale (for the zoom-based layout)
+	LeftPos            int
+	TopHeader          int // 69*autozoom
+	Top72              int // 72*autozoom
+	Bottom25           int // 25*autozoom
+	Floors             []floorButton
 
 	NoDescription    bool
 	Desknumbers      bool
@@ -267,33 +268,34 @@ func (app *App) renderIndex(w http.ResponseWriter, r *http.Request, sess Session
 	}
 
 	data := indexData{
-		AppTitle:          app.appTitle(),
-		TargetScreenWidth: targetWidth,
-		HalfWidth:         targetWidth / 2,
-		Map:               mapName,
-		MapTitle:          mapTitle,
-		MapDefault:        mapDefault,
-		MapList:           mapList,
-		OtherMaps:         otherMaps,
-		IsOverview:        mapName == "overview",
-		WorldMap:          app.db.GetSetting("worldmap") == "1",
-		HasMapImage:       hasMapImage,
-		NomapText:         app.db.GetSetting("nomapText"),
-		NomapLink:         app.db.GetSetting("nomapLink"),
-		Itemscale:         itemscale,
-		Autozoom:          autozoom,
-		Zoom:              zoom,
-		ZoomIn:            zoom + 10,
-		ZoomOut:           zoom - 10,
-		ZoomScaled:        strconv.FormatFloat(float64(zoom)/100, 'f', -1, 64),
-		ContentScale:      strconv.FormatFloat(float64(zoom)/100*float64(autozoom), 'f', -1, 64),
-		ContentLeft:       strconv.FormatFloat(contentLeft, 'f', -1, 64),
-		ContentTop:        strconv.FormatFloat(contentTop, 'f', -1, 64),
-		LeftPos:           leftPos,
-		TopHeader:         69 * autozoom,
-		Top72:             72 * autozoom,
-		Bottom25:          25 * autozoom,
-		Floors:            floors,
+		AppTitle:           app.appTitle(),
+		TargetScreenWidth:  targetWidth,
+		HalfWidth:          targetWidth / 2,
+		Map:                mapName,
+		MapTitle:           mapTitle,
+		MapDefault:         mapDefault,
+		MapList:            mapList,
+		OtherMaps:          otherMaps,
+		IsOverview:         mapName == "overview",
+		WorldMap:           app.db.GetSetting("worldmap") == "1",
+		HasMapImage:        hasMapImage,
+		GeoapifyConfigured: app.db.GetGeoSetting("geoapifyApiKey") != "",
+		NomapText:          app.db.GetSetting("nomapText"),
+		NomapLink:          app.db.GetSetting("nomapLink"),
+		Itemscale:          itemscale,
+		Autozoom:           autozoom,
+		Zoom:               zoom,
+		ZoomIn:             zoom + 10,
+		ZoomOut:            zoom - 10,
+		ZoomScaled:         strconv.FormatFloat(float64(zoom)/100, 'f', -1, 64),
+		ContentScale:       strconv.FormatFloat(float64(zoom)/100*float64(autozoom), 'f', -1, 64),
+		ContentLeft:        strconv.FormatFloat(contentLeft, 'f', -1, 64),
+		ContentTop:         strconv.FormatFloat(contentTop, 'f', -1, 64),
+		LeftPos:            leftPos,
+		TopHeader:          69 * autozoom,
+		Top72:              72 * autozoom,
+		Bottom25:           25 * autozoom,
+		Floors:             floors,
 
 		NoDescription:    cookieBool(r, "setting_nodescription"),
 		Desknumbers:      cookieBool(r, "setting_desknumbers"),

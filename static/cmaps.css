@@ -732,6 +732,55 @@
     z-index:100;
 }
 
+/* New-map editor form: label/input rows kept vertically aligned via flex. */
+#formspace .createItem .np-row {
+    display: flex;
+    align-items: center;
+    margin-bottom: 8px;
+}
+#formspace .createItem .np-label {
+    flex: 0 0 32%;
+    padding-right: 8px;
+    box-sizing: border-box;
+    white-space: nowrap;
+}
+#formspace .createItem .np-input {
+    flex: 1 1 auto;
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+}
+/* Latitude/longitude rows sit next to the "Get from address" button, which
+   shrinks the inputs to make room and spans both rows. */
+#formspace .createItem .np-coordwrap {
+    display: flex;
+    align-items: stretch;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+#formspace .createItem .np-coordwrap .np-coords {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+#formspace .createItem .np-coordwrap .np-coords .np-row {
+    margin-bottom: 6px;
+}
+#formspace .createItem .np-coordwrap .np-coords .np-row:last-child {
+    margin-bottom: 0;
+}
+#formspace .createItem .np-geo {
+    flex: 0 0 auto;
+    width: 120px;
+    margin: 0;
+    padding: 8px 6px;
+    white-space: normal;
+    cursor: pointer;
+}
+#formspace .createItem .np-msg {
+    font-size: 0.85em;
+    color: #ccc;
+}
+
 /* Left nameplate */
 
 .leftnameplate {
@@ -1682,9 +1731,14 @@ input.cmn-toggle-round-flat:checked + label:after {
    }
 
 .newmap {
-    width: 100px;
-    height: 100px;
+    /* Match the size of the real world-map flag bubbles (.worldflag). */
+    width: 66px;
+    height: 66px;
     background-color: rgba(189, 39, 42, 0.7);
+    background-size: cover;
+    /* Sit above the world-map country layer and the .worldflag bubbles
+       (z-index 70) so the new-map placeholder marker is always visible. */
+    z-index: 80;
 }
 
 .blocked {

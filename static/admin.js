@@ -47,40 +47,64 @@ function createDesk(newX,newY) {
     }
     var caption = 'New map';
     var deskClass = 'newmap';
+    // Coordinate inputs depend on the overview mode. The preview marker (.newmap)
+    // is 66px and anchored by its top-left corner, so subtract half its size to
+    // centre it on the click point. The stored coordinate must match where the
+    // saved flag is later rendered:
+    //   - modern world map: .worldflag is centred on its x/y (translate -50%),
+    //     and lat/lon are derived from that same point -> store the click point.
+    //   - classic overview: .mapflag is a 30px flag anchored top-left, so store
+    //     the click point minus 15 so the flag's centre lands on the click.
+    var markerHalf = 33; // half of the 66px preview marker
+    var classicHalf = 15; // half of the 30px classic mapflag
+    var markerLeft = newX - markerHalf;
+    var markerTop = newY - markerHalf;
+    var coordFields = '';
+    if (typeof setting_worldmap !== 'undefined' && setting_worldmap == 1) {
+      var approx = (typeof worldProjection === 'function') ? worldProjection().toLatLon(newX, newY) : { lat: 0, lon: 0 };
+      coordFields = '<div class="np-coordwrap">'
+                  + '<div class="np-coords">'
+                  + '<div class="np-row"><div class="np-label">Latitude *</div><input type="text" class="np-input" id="apimaplat" name="lat" value="' + approx.lat.toFixed(4) + '"></div>'
+                  + '<div class="np-row"><div class="np-label">Longitude *</div><input type="text" class="np-input" id="apimaplon" name="lon" value="' + approx.lon.toFixed(4) + '"></div>'
+                  + '</div>'
+                  + '<input type="button" class="np-geo" value="Get from address" onclick="geocodeNewMap()">'
+                  + '</div>'
+                  + '<div class="np-row"><div class="np-label"></div><div id="geocodeNewMapMsg" class="np-input np-msg"></div></div>'
+                  + '<input type="hidden" id="apimapx" name="x" value="' + newX + '">'
+                  + '<input type="hidden" id="apimapy" name="y" value="' + newY + '">';
+    } else {
+      coordFields = '<div class="np-row"><div class="np-label">x *</div><input type="text" class="np-input" id="apimapx" name="x" value="' + (newX - classicHalf) + '"></div>'
+                  + '<div class="np-row"><div class="np-label">y *</div><input type="text" class="np-input" id="apimapy" name="y" value="' + (newY - classicHalf) + '"></div>';
+    }
     // create new map instead of item on overview map
     var newdeskitem='';
       newdeskitem +='<div id="newdeskitem" class="' + deskClass + '" style="position:absolute;left:' 
-                  + (newX-50) + 'px;top:' + (newY-50) + 'px;border-radius:50%;"></div>'
+                  + markerLeft + 'px;top:' + markerTop + 'px;border-radius:50%;"></div>'
                   + '<div class="nameplate_edit" style="position:absolute;top:' + editX +'px;left:' + editY + 'px;border-radius:10px;">'
                   + '<div style="position:absolute; top:0px; left:0px; width:100%; font-size:1.5em;line-height:50px; height:50px;'
                   + 'background-color:#666;text-align:center;border-radius:10px 10px 0px 0px;">'+caption+'</div>'
                   + '<div id="formspace">'
-                  + '<form class="createItem" style="width:80%; margin-top:60px;margin-left:10%;" enctype="multipart/form-data" action="rest/update/" method="post">'
-                  + '<div style="width:30%; float:left;display:inline;">Mapname</div><input type="text" style="width: 70%; float: left;display:inline;" id="apimapname" name="map">'
-                  + '<div style="width:30%; float:left;display:inline;">Itemscale</div><input type="text" style="width: 70%; float: left;display:inline;" id="apimapitemscale" name="itemscale" value="1">'
-                  + '<div style="width:30%; float:left;display:inline;">Published</div>'
-                  + '<select id="apimappublished" style="width: 70%; float: left;display:inline;" name="published">'
-                  + '<option value"yes">yes</option> <option value="no">no</option>'
-                  + '</select>'
-                  + '<div style="width:30%; float:left;display:inline;">MapFlag</div>'
-                  + '<div id="mapflags">'
-                  + '<select id="selMapflag" style="width: 70%; float: left;display:inline;" name="mapflag">'
-                  + '<option value="de">de</option>'
+                  + '<form class="createItem" style="width:80%; margin-top:60px;margin-left:10%;" enctype="multipart/form-data" action="rest/update/" method="post" onsubmit="return validateNewMap();">'
+                  + '<div class="np-row"><div class="np-label">Mapname *</div><input type="text" class="np-input" id="apimapname" name="map"></div>'
+                  + '<div class="np-row"><div class="np-label">Itemscale *</div><input type="text" class="np-input" id="apimapitemscale" name="itemscale" value="1"></div>'
+                  + '<div class="np-row"><div class="np-label">Published *</div>'
+                  + '<select class="np-input" id="apimappublished" name="published">'
+                  + '<option value="yes">yes</option> <option value="no">no</option>'
                   + '</select></div>'
-                  + '<div style="width:30%; float:left;display:inline;">Flagsize</div>'
-                  + '<input type="text" style="width: 70%; float: left;display:inline;" id="apimapflagsize" name="flagsize" value="100" '
-                  + 'onchange="$(\'#newdeskitem\').css(\'width\',document.getElementById(\'apimapflagsize\').value+\'px\');'
-                  + '$(\'#newdeskitem\').css(\'height\',document.getElementById(\'apimapflagsize\').value+\'px\');">';
-      newdeskitem+= '<div style="width:30%; float:left;display:inline;">Timezone</div>'
-                  + '<div id="timezones">'
-                  + '<select id="selTimezone" style="width: 70%; float: left;display:inline;" name="timezone">'  
+                  + '<div class="np-row"><div class="np-label">MapFlag *</div>'
+                  + '<div id="mapflags" class="np-input">'
+                  + '<select id="selMapflag" class="np-input" name="mapflag">'
+                  + '<option value="de">de</option>'
+                  + '</select></div></div>';
+      newdeskitem+= '<div class="np-row"><div class="np-label">Timezone *</div>'
+                  + '<div id="timezones" class="np-input">'
+                  + '<select id="selTimezone" class="np-input" name="timezone">'  
                   + '<option value="">-- Select a timezone -- </option>'  
-                  + '</select></div>';
-      newdeskitem+= '<div style="width:30%; float:left;display:inline;">Address</div><input type="text" style="width: 70%; float: left;display:inline;" id="apimapaddress" name="address" value="-">'
-                  + '<div style="width:30%; float:left;display:inline;">x</div><input type="text" style="width: 70%; float: left;display:inline;" id="apimapx" name="x" value="'+(newX-50)+'">'
-                  + '<div style="width:30%; float:left;display:inline;">y</div><input type="text" style="width: 70%; float: left;display:inline;" id="apimapy" name="y" value="'+(newY-50)+'">'
-                  + '<div style="width:30%; float:left;display:inline;">Floorplan</div>'
-                  + '<input type="file" id="i_file" accept="image/png" name="image" size="30"><img src="" width="400" style="display:none;" id="testbild" /><br /><div id="disp_tmp_path"></div>'
+                  + '</select></div></div>';
+      newdeskitem+= '<div class="np-row"><div class="np-label">Address</div><input type="text" class="np-input" id="apimapaddress" name="address" placeholder="optional"></div>'
+                  + coordFields
+                  + '<div class="np-row"><div class="np-label">Floorplan</div><div class="np-input"><input type="file" id="i_file" accept="image/png" name="image" size="30"></div></div>'
+                  + '<img src="" width="400" style="display:none;" id="testbild" /><div id="disp_tmp_path"></div>'
                   + '<input type="hidden" name="mode" value="createmap">'
                   + '<input type="hidden" name="token" value="'+token+'">'
                   + '<input type="submit" style="background-color:#0f0" Value="Create item" name="uploadMapfile"></form>'
@@ -101,7 +125,7 @@ function createDesk(newX,newY) {
     });
 
     $.getJSON("tools/timezones.json", function(json) {
-      var tzOutput = '<select id="selTimezone" style="width: 70%; float: left;display:inline;" name="timezone">'  
+      var tzOutput = '<select id="selTimezone" class="np-input" name="timezone">'  
                    + '<option value="">-- Select a timezone -- </option>';
       $.each(json, function( t, timezone ){
         tzOutput+= '<option value="'+timezone+'">'+timezone+'</option>';
@@ -115,7 +139,7 @@ function createDesk(newX,newY) {
       type: 'get',
       dataType: 'JSON',
       success: function(result){
-        var mfOutput = '<select id="selMapflag" style="width: 70%; float: left;display:inline;" name="mapflag" onchange="switchMapflag()">'  
+        var mfOutput = '<select id="selMapflag" class="np-input" name="mapflag" onchange="switchMapflag()">'  
                    + '<option value="">-- Select a mapflag -- </option>';
         for (var i = 0; i < result.mapflags.length; i++) {
           mfOutput+= '<option value="'+result.mapflags[i]+'">'+result.mapflags[i]+'</option>';
@@ -206,6 +230,84 @@ function switchMapflag() {
   $("#newdeskitem").css("background-image", "url('countryflags/"+mapValue+".svg')");
   $("#newdeskitem").css("background-size", "cover");
   console.log(mapValue);
+}
+
+// validateNewMap checks the required fields of the overview "new map" form
+// before it is submitted. Coordinates are required as a pair: lat/lon on the
+// modern world map, X/Y on the classic overview.
+function validateNewMap() {
+  var required = [
+    ['apimapname', 'Map name'],
+    ['apimapitemscale', 'Itemscale'],
+    ['apimappublished', 'Published'],
+    ['selMapflag', 'Map flag'],
+    ['selTimezone', 'Timezone']
+  ];
+  for (var i = 0; i < required.length; i++) {
+    var el = document.getElementById(required[i][0]);
+    if (!el || el.value.trim() === '') {
+      alert(required[i][1] + ' is required.');
+      if (el) { el.focus(); }
+      return false;
+    }
+  }
+  if (typeof setting_worldmap !== 'undefined' && setting_worldmap == 1) {
+    var lat = document.getElementById('apimaplat');
+    var lon = document.getElementById('apimaplon');
+    if (!lat || lat.value.trim() === '' || !lon || lon.value.trim() === '') {
+      alert('Latitude and longitude are required. Enter them manually or use "Get from address".');
+      return false;
+    }
+  } else {
+    var x = document.getElementById('apimapx');
+    var y = document.getElementById('apimapy');
+    if (!x || x.value.trim() === '' || !y || y.value.trim() === '') {
+      alert('X and Y are required.');
+      return false;
+    }
+  }
+  return true;
+}
+
+// geocodeNewMap fills the lat/lon fields of the overview "new map" form from the
+// entered address using the Geoapify integration. If no API key is configured it
+// shows a hint instead of failing silently.
+function geocodeNewMap() {
+  var msg = document.getElementById('geocodeNewMapMsg');
+  if (typeof setting_geoapify_configured === 'undefined' || setting_geoapify_configured != 1) {
+    msg.style.color = '#fc6';
+    msg.innerHTML = 'Geoapify geocoding is not set up. Ask an administrator to add an API key under Admin \u2192 Sync \u2192 Geocoding, or enter latitude/longitude manually.';
+    return;
+  }
+  var addr = document.getElementById('apimapaddress').value.trim();
+  if (addr === '') {
+    msg.style.color = '#fc6';
+    msg.innerHTML = 'Enter an address first.';
+    return;
+  }
+  msg.style.color = '#ccc';
+  msg.innerHTML = 'Looking up\u2026';
+  $.ajax({
+    url: 'rest/geo/test?address=' + encodeURIComponent(addr),
+    async: true,
+    type: 'get',
+    dataType: 'JSON',
+    success: function (d) {
+      if (d && d.ok) {
+        document.getElementById('apimaplat').value = Number(d.lat).toFixed(4);
+        document.getElementById('apimaplon').value = Number(d.lon).toFixed(4);
+        msg.style.color = '#8f8';
+        msg.innerHTML = 'Found: ' + (d.formatted || (Number(d.lat).toFixed(4) + ', ' + Number(d.lon).toFixed(4)));
+      } else {
+        msg.style.color = '#f88';
+        msg.innerHTML = 'Lookup failed: ' + ((d && d.message) || 'unknown error');
+      }
+    },
+    error: function () {
+      msg.style.color = '#f88';
+      msg.innerHTML = 'Lookup failed (request error).';
+    }
+  });
 }
 
 function addInputfields(deskid, desktype, override, manual) {
