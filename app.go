@@ -145,3 +145,14 @@ func (app *App) clearSessionCookie(w http.ResponseWriter) {
 		MaxAge:   -1,
 	})
 }
+
+// resetUsermodeCookie forces edit mode on a fresh login instead of inheriting the
+// previously persisted setting_usermode value.
+func (app *App) resetUsermodeCookie(w http.ResponseWriter) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     "setting_usermode",
+		Value:    "edit",
+		Path:     "/",
+		SameSite: http.SameSiteLaxMode,
+	})
+}

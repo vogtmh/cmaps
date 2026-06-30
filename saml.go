@@ -520,6 +520,7 @@ h2{color:#2ecc71;margin:0 0 16px}p{color:#666;margin:0 0 24px}a{color:#0a66c2}</
 	log.Printf("SAML ACS: successful login for %s (%s)", username, fullname)
 
 	app.setSessionCookie(w, token)
+	app.resetUsermodeCookie(w)
 	http.Redirect(w, r, returnPath, http.StatusFound)
 }
 

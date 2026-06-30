@@ -258,6 +258,7 @@ func (app *App) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	app.setSessionCookie(w, token)
+	app.resetUsermodeCookie(w)
 	app.db.AuditLog("login", sess.Username, "local login from "+clientIP(r))
 	http.Redirect(w, r, next, http.StatusSeeOther)
 }
@@ -328,6 +329,7 @@ func (app *App) handleRestAccount(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		app.setSessionCookie(w, token)
+		app.resetUsermodeCookie(w)
 		app.db.AuditLog("login", sess.Username, "local login from "+clientIP(r))
 		writeJSON(w, map[string]interface{}{"status": "ok", "message": "Login successful."})
 	case "logout":
