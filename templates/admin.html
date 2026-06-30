@@ -919,7 +919,7 @@
       <table class="sync-table">
         <thead>
           <tr>
-            <th class="sync-td-min">Status</th><th>Map</th><th>Display name</th><th>Itemscale</th><th>Country</th>
+            <th class="sync-td-min">Status</th><th class="sync-td-min">Map</th><th>Name</th><th>Display name</th><th>Itemscale</th><th>Country</th>
             <th>Timezone</th><th>Address</th>
             <th class="{{if .WorldMap}}coord-muted{{end}}">X</th><th class="{{if .WorldMap}}coord-muted{{end}}">Y</th>
             <th class="{{if not .WorldMap}}coord-muted{{end}}">Lat</th><th class="{{if not .WorldMap}}coord-muted{{end}}">Lon</th>
@@ -934,6 +934,13 @@
               <span class="map-status map-status-active" title="Active (visible)"></span>
               {{else}}
               <span class="map-status map-status-hidden" title="Hidden"></span>
+              {{end}}
+            </td>
+            <td class="sync-td-min">
+              {{if .HasFile}}
+              <span class="map-file map-file-available" title="Map available"></span>
+              {{else}}
+              <span class="map-file map-file-missing" title="No map yet"></span>
               {{end}}
             </td>
             <td>{{.Mapname}}</td>

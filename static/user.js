@@ -26,15 +26,28 @@ var searchFogId = null;
 function toggleUsermode() {
   if (setting_usermode == 'edit') {
     setting_usermode = 'user';
-    $("#usermode_switch").css("background-color", "orange");
   }
   else {
     setting_usermode = 'edit';
-    $("#usermode_switch").css("background-color", "#333");
   }
   document.cookie = "setting_usermode=" + setting_usermode+'; expires=Fri, 31 Dec 9999 23:59:59 GMT; SameSite=Lax';
-  $("#usermode_switch").html(setting_usermode);
+  applyUsermodeUI();
   updateDesks(true);
+}
+
+// Reflects the current edit/user mode in the toggle switch and hides the
+// editor-only "add" (plus) button when in user mode, so a logged-in editor
+// gets a user-like experience.
+function applyUsermodeUI() {
+  var editing = (setting_usermode == 'edit');
+  $("#usermode_switch").toggleClass('on', editing);
+  if (editing) {
+    $("#inputgrid").show();
+    $("#adminpanel_link").show();
+  } else {
+    $("#inputgrid").hide();
+    $("#adminpanel_link").hide();
+  }
 }
 
 function timezoneDate() {
@@ -3187,11 +3200,14 @@ function updateBookings() {
 
 function togglePersonalMenu() {
   var x = document.getElementById("personal_menu");
+  var admin = document.getElementById("adminpanel_button");
   if (x.style.visibility === "hidden") {
     x.style.visibility = "visible";
+    if (admin) { admin.classList.add("menu-open"); }
     userBookings();
   } else {
     x.style.visibility = "hidden";
+    if (admin) { admin.classList.remove("menu-open"); }
   }
 }
 
@@ -3210,18 +3226,10 @@ $(function() {
       dataType: 'JSON',
       success: function(result){
         var hoehe=$("#container").height()-65
-        var allmaps = result.maps
-        var activemaps = 0
-        for (var i = 0; i < allmaps.length; i++) {
-          if (allmaps[i].published == 'yes') {activemaps++}
-        }
-        maplist_height = (((activemaps-1)*55)+5)*autozoom
-        if (maplist_height < hoehe) {
-          $('#mapspanel').width(160)
-        }
-        else {
-          $('#mapspanel').width(320)
-        }
+        // Let each dropdown column (real maps / placeholder maps) wrap into
+        // sub-columns when it would be taller than the viewport. The panel
+        // width then sizes itself to the columns via flexbox.
+        $('#mapspanel .maps-col').css('max-height', hoehe+'px')
         $("#mapspanel").slideToggle("fast");
       }
     });

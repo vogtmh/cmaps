@@ -35,6 +35,7 @@ type indexData struct {
 	MapDefault         string
 	MapList            []string
 	OtherMaps          []mapLink
+	PlaceholderMaps    []mapLink
 	IsOverview         bool
 	WorldMap           bool
 	HasMapImage        bool   // detail map: whether the map image file exists
@@ -54,6 +55,7 @@ type indexData struct {
 	TopHeader          int // 69*autozoom
 	Top72              int // 72*autozoom
 	Bottom25           int // 25*autozoom
+	Bottom40           int // 40*autozoom
 	Floors             []floorButton
 
 	NoDescription    bool
@@ -139,13 +141,22 @@ func (app *App) renderIndex(w http.ResponseWriter, r *http.Request, sess Session
 	http.SetCookie(w, &http.Cookie{Name: "map", Value: mapName, Path: "/", SameSite: http.SameSiteLaxMode, Expires: time.Now().AddDate(5, 0, 0)})
 
 	otherMaps := make([]mapLink, 0, len(mapList))
+	placeholderMaps := make([]mapLink, 0)
 	for _, m := range mapList {
 		if m != mapName {
 			label := displayNames[m]
 			if label == "" {
 				label = ucfirst(m)
 			}
-			otherMaps = append(otherMaps, mapLink{Name: m, Label: label})
+			// Maps whose identifier carries the "-nomap" marker have no floor
+			// plan yet. They get their own dropdown column; strip the marker
+			// from the label since the column + colour now convey the status.
+			if strings.Contains(strings.ToLower(m), "-nomap") {
+				label = stripNomap(label)
+				placeholderMaps = append(placeholderMaps, mapLink{Name: m, Label: label})
+			} else {
+				otherMaps = append(otherMaps, mapLink{Name: m, Label: label})
+			}
 		}
 	}
 
@@ -276,6 +287,7 @@ func (app *App) renderIndex(w http.ResponseWriter, r *http.Request, sess Session
 		MapDefault:         mapDefault,
 		MapList:            mapList,
 		OtherMaps:          otherMaps,
+		PlaceholderMaps:    placeholderMaps,
 		IsOverview:         mapName == "overview",
 		WorldMap:           app.db.GetSetting("worldmap") == "1",
 		HasMapImage:        hasMapImage,
@@ -295,6 +307,7 @@ func (app *App) renderIndex(w http.ResponseWriter, r *http.Request, sess Session
 		TopHeader:          69 * autozoom,
 		Top72:              72 * autozoom,
 		Bottom25:           25 * autozoom,
+		Bottom40:           40 * autozoom,
 		Floors:             floors,
 
 		NoDescription:    cookieBool(r, "setting_nodescription"),
@@ -387,6 +400,20 @@ func ucfirst(s string) string {
 		return s
 	}
 	return strings.ToUpper(s[:1]) + s[1:]
+}
+
+// stripNomap removes the "-nomap" placeholder marker (any case) from a label.
+func stripNomap(s string) string {
+	lower := strings.ToLower(s)
+	for {
+		i := strings.Index(lower, "-nomap")
+		if i < 0 {
+			break
+		}
+		s = s[:i] + s[i+len("-nomap"):]
+		lower = lower[:i] + lower[i+len("-nomap"):]
+	}
+	return strings.TrimSpace(s)
 }
 
 func reverseStr(s string) string {

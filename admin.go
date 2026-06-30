@@ -811,6 +811,9 @@ func (app *App) buildAdminData(r *http.Request, sess Session, tab, msg string) a
 		maps, _ := app.db.ListMaps()
 		sort.Slice(maps, func(i, j int) bool { return maps[i].Mapname < maps[j].Mapname })
 		for _, m := range maps {
+			if m.Mapname == "overview" {
+				continue
+			}
 			row := mapRow{MapInfo: m}
 			if _, err := os.Stat(app.cfg.dataPath("maps", m.Mapname+".png")); err == nil {
 				row.HasFile = true

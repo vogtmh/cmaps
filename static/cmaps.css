@@ -1158,10 +1158,17 @@
     z-index:1;
 }
 
+.avatarbutton_row {
+    position:absolute;
+    left:60px;
+    bottom: 20px;
+    display:flex;
+    align-items:center;
+    gap:10px;
+}
+
 .avatarbutton_username {
-    position:absolute; 
-    left:60px; 
-    bottom: 20px; 
+    position:relative;
     width:auto; 
     height:80px;
     line-height: 80px; 
@@ -1499,6 +1506,39 @@ body {
 
 .headeritem_maps:hover {
     opacity: 1.0;
+}
+
+/* Location dropdown laid out as columns: real maps on the left, placeholder
+   maps (no floor plan yet) in their own column on the right. Each column wraps
+   into sub-columns when taller than the viewport (max-height set in JS). */
+#mapspanel {
+    display: flex;
+    align-items: flex-start;
+    gap: 4px;
+    padding-right: 10px;
+}
+.maps-col {
+    display: flex;
+    flex-flow: column wrap;
+    align-content: flex-start;
+}
+/* A column section with its own header (kept outside the wrapping flow so it
+   never drifts into a sub-column). */
+.maps-section {
+    display: flex;
+    flex-direction: column;
+}
+.maps-section-header {
+    color: #cfd3d8;
+    font-size: 13px;
+    text-align: center;
+    margin: 6px 10px 2px 10px;
+    padding-bottom: 4px;
+    border-bottom: 1px solid #5f6368;
+}
+/* Placeholder maps use a muted grey button to signal they have no map yet. */
+.headeritem_maps_nomap {
+    background-color: #5f6368;
 }
 
 .headeritem_picture {
@@ -2151,4 +2191,60 @@ input[type=submit]:hover, input[type=button]:hover {
 
 .editbutton:hover {
     background-color: #559F35;
+}
+
+#adminpanel_button.menu-open {
+    background-color: #444;
+}
+
+#adminpanel_button.menu-open:hover {
+    background-color: #559F35;
+}
+
+/* Edit/user mode toggle switch (replaces the old text button). When "on"
+   (edit mode) the track turns green and the knob slides right; when off
+   (user mode) it is grey and the editor-only plus button is hidden. */
+.usermode-toggle {
+    float: right;
+    margin: 5px;
+    width: 80px;
+    background-color: #333;
+    border-radius: 16px;
+    cursor: pointer;
+    text-align: center;
+    padding: 8px 0;
+    box-sizing: border-box;
+    user-select: none;
+}
+.usermode-toggle .usermode-toggle-label {
+    display: block;
+    color: #fff;
+    font-size: 13px;
+    line-height: 16px;
+    margin-bottom: 6px;
+}
+.usermode-toggle .usermode-toggle-track {
+    display: inline-block;
+    position: relative;
+    width: 44px;
+    height: 22px;
+    border-radius: 11px;
+    background-color: #777;
+    transition: background-color 0.15s ease;
+}
+.usermode-toggle .usermode-toggle-knob {
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background-color: #fff;
+    transition: left 0.15s ease;
+}
+.usermode-toggle.on .usermode-toggle-track {
+    background-color: #559F35;
+}
+.usermode-toggle.on .usermode-toggle-knob {
+    left: 24px;
 }

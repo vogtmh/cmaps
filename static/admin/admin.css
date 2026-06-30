@@ -302,6 +302,30 @@
   mask-image: url(../images/hide.png);
 }
 
+/* ── Map availability icon (image present/missing, tinted via mask) ── */
+.map-file {
+  display: inline-block;
+  width: 22px;
+  height: 22px;
+  vertical-align: middle;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-size: contain;
+  mask-size: contain;
+}
+.map-file-available {
+  background-color: #2ecc71;
+  -webkit-mask-image: url(../images/map-available.png);
+  mask-image: url(../images/map-available.png);
+}
+.map-file-missing {
+  background-color: #e74c3c;
+  -webkit-mask-image: url(../images/map-missing.png);
+  mask-image: url(../images/map-missing.png);
+}
+
 /* ── Empty state ─────────────────────────────────────────── */
 .sync-empty {
   padding: 26px;

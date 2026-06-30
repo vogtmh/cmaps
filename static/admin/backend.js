@@ -219,8 +219,8 @@ function updateSystemStats() {
       var element = document.getElementById('systemstats');
       if (element === null) {
         var systemspinner = ''
-        + '<div id="spinner" style="width:1600px; height:auto; float:left; margin-left:20px;">'
-        + '<img src="../images/spinner.png" style="margin-left:672px;" />'
+        + '<div id="spinner" style="width:100%; height:auto; box-sizing:border-box; text-align:center;">'
+        + '<img src="../images/spinner.png" />'
         + '</div>'
 
         var checkdiv = document.getElementById('systemspinner')

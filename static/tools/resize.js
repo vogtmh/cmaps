@@ -43,6 +43,7 @@ $(function(){
   var loginicon = $('.loginicon');
   var buttonsleftanchor = $('.buttons_left_anchor');
   var buttonsleft = $('.buttons_left');
+  var buttonsrightanchor = $('.buttons_right_anchor');
   var buttonsright = $('.buttons_right');
   var datepicker = $('.datepicker');
   var clock = $('.clock');
@@ -137,10 +138,19 @@ $(function(){
     mapLeftPos = sidebarW + Math.abs(Math.floor((mapMaxWidth - mapSetWidth)/2));
   }
   var contentZoom = mapScale*manualscale;
-  page.attr('style', 'zoom:' + contentZoom + ';left:' + (mapLeftPos/contentZoom) + 'px;top:' + ((69*basePage.scale)/contentZoom) + 'px;');
+  var pageStyle = 'zoom:' + contentZoom + ';left:' + (mapLeftPos/contentZoom) + 'px;top:' + ((69*basePage.scale)/contentZoom) + 'px;';
+  // For detail maps, extend the content height to the map image plus 150px
+  // (real screen pixels) of clearance so the fixed bottom overlay buttons
+  // never cover the lowest part of the floor plan.
+  var detailmapimage = document.getElementById('detailmapimage');
+  if (detailmapimage && detailmapimage.offsetHeight) {
+    pageStyle += 'height:' + (detailmapimage.offsetHeight + (150/contentZoom)) + 'px;';
+  }
+  page.attr('style', pageStyle);
   buttonsleftanchor.attr('style', 'position:fixed; left: 10px; bottom: '+ (25*basePage.scale) + 'px; z-index:5;');
   buttonsleft.attr('style', 'position:relative; height:80px;background: transparent; zoom:' + basePage.scale + ';');
-  buttonsright.attr('style', 'position:fixed; right: 10px; bottom: ' + (25*basePage.scale) + 'px; height:auto;width:80px;background: transparent; transform:scale(' + basePage.scale +');transform-origin:100% 100%;');
+  buttonsrightanchor.attr('style', 'position:fixed; right: 10px; bottom: '+ (40*basePage.scale) + 'px; z-index:5;');
+  buttonsright.attr('style', 'position:relative; height:auto;width:80px;background: transparent; zoom:' + basePage.scale + ';');
   
   datepicker.attr('style', 'position:relative;width:180px;height:175px;padding:15px 15px 10px 15px;background-color:#333;border-radius:10px 10px 0px 0px;display:none;zoom:' + basePage.scale + ';z-index:0;pointer-events:auto;');
   clock.attr('style', 'position:relative;width:180px;text-align:center;background-color:#333;border-radius:10px 10px 0px 0px;padding:10px;cursor:pointer;zoom:' + basePage.scale + ';z-index:1;pointer-events:auto;');
