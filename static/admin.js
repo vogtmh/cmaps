@@ -11,6 +11,10 @@ function checkHealthStatus() {
       if (healtherrors == 0) {
         var healthstatus = '<img src="images/dbcheck_ok2.png" style="width:44px;height:44px;" alt="" />'
         document.getElementById('healthstatus').innerHTML= healthstatus
+        // Restore the resting (hidden) state so a previously shown red warning
+        // disappears once the consistency problem has been resolved.
+        $("#healthstatus").css('display','none');
+        $("#healthstatus").css('background-color','#333');
       }
       else {
         var healthstatus = '<a href="admin/?tab=health">'
@@ -212,6 +216,7 @@ function createDesk(newX,newY) {
           console.log(result);
           hideSticky();
           updateDesks();
+          checkHealthStatus();
         },
         error: function (request, error) {
           alert('Could not create desk. Please check if all attributes have been entered.');
@@ -947,6 +952,7 @@ function dragElement(elmnt, deskType) {
         dataType: 'JSON',
         success: function(result){
           updateDesks();
+          checkHealthStatus();
         },
         error: function (result) {
           alert('Could not update desk. Please check if all attributes have been entered.');
@@ -1157,6 +1163,7 @@ function renderEditPalette() {
 
   var alignBtn = document.createElement('button');
   alignBtn.type = 'button';
+  alignBtn.id = 'editsidebar_alignbtn';
   alignBtn.className = 'editsidebar_toolbtn';
   alignBtn.title = 'Drag a box around a group of desks to tidy them into evenly aligned rows and columns (preview before applying).';
   alignBtn.innerHTML = '<span class="editsidebar_toolbtn_icon"></span>'
@@ -1377,7 +1384,7 @@ function deleteDeskById(id) {
     type: 'get',
     data: { token: token, mode: 'delete', map: mapname, id: id, user: username },
     dataType: 'JSON',
-    success: function () { updateDesks(); },
+    success: function () { updateDesks(); checkHealthStatus(); },
     error: function () { alert('Could not delete item.'); }
   });
 }
@@ -1689,7 +1696,7 @@ function placeCluster(item, cx, cy) {
     type: 'post',
     data: { token: token, mode: 'batch', map: mapname, user: username, ops: JSON.stringify(ops) },
     dataType: 'JSON',
-    success: function () { updateDesks(); },
+    success: function () { updateDesks(); checkHealthStatus(); },
     error: function () { alert('Could not place the desk cluster.'); }
   });
 }
@@ -1707,7 +1714,7 @@ function placeCustomItem(item, x, y) {
       desknumber: item.label, employee: '', avatar: '-', department: '- none -'
     },
     dataType: 'JSON',
-    success: function () { updateDesks(); },
+    success: function () { updateDesks(); checkHealthStatus(); },
     error: function () { alert('Could not place the custom item.'); }
   });
 }
@@ -1825,6 +1832,7 @@ function autoAlignPlan(bounds) {
 
 // Remove any auto-align preview overlay + confirm bar + in-progress selection.
 function cancelAutoAlign() {
+  setAutoAlignActive(false);
   endAutoAlignSelection();
   var p = document.getElementById('autoalign_preview');
   if (p && p.parentNode) { p.parentNode.removeChild(p); }
@@ -1896,8 +1904,23 @@ function applyAutoAlign(moves) {
 // aligning the whole map, the editor first drags a box around the desks they
 // want tidied; only those are aligned (then previewed + confirmed).
 function startAutoAlign() {
+  // Toggle: if the tool is already engaged, a second click disables it (same as
+  // pressing Cancel).
+  var btn = document.getElementById('editsidebar_alignbtn');
+  if (btn && btn.classList.contains('active')) {
+    cancelAutoAlign();
+    return;
+  }
   cancelAutoAlign();
+  setAutoAlignActive(true);
   beginAutoAlignSelection();
+}
+
+// Toggle the blue "glow" state on the sidebar Auto-align button while the tool
+// is engaged (selecting a box or previewing). Grey when idle, blue when active.
+function setAutoAlignActive(on) {
+  var btn = document.getElementById('editsidebar_alignbtn');
+  if (btn) { btn.classList.toggle('active', !!on); }
 }
 
 // In-progress area-selection drag state (null when not selecting).

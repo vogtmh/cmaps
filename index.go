@@ -82,15 +82,17 @@ type indexData struct {
 	Token     string
 	AvatarURL string
 
-	DepartmentsJSON template.JS
-	ItemTypesJSON   template.JS
-	LogoRegular     string
-	LogoHover       string
-	TeamsContact    string
-	Domain          string
-	ReportURL       string
-	Region          string
-	TzOffset        string
+	DepartmentsJSON     template.JS
+	ItemTypesJSON       template.JS
+	FlaggedDesksJSON    template.JS
+	HealthWhitelistJSON template.JS
+	LogoRegular         string
+	LogoHover           string
+	TeamsContact        string
+	Domain              string
+	ReportURL           string
+	Region              string
+	TzOffset            string
 
 	Findme    string
 	Teamlabel string
@@ -248,6 +250,28 @@ func (app *App) renderIndex(w http.ResponseWriter, r *http.Request, sess Session
 	permAdmin := app.permLevel(sess, "adminpanel")
 	isEditor := permDesks > 1
 
+	// Duplicate-desk highlight data for editors: IDs of desks on this map that
+	// share a (non-whitelisted) desk number, so the editor can spot and fix them.
+	flaggedDesks := []int{}
+	deskWhitelist := []string{}
+	if permDesks > 0 && mapName != "overview" {
+		groups, wl := app.duplicateDeskGroups()
+		deskWhitelist = wl
+		for _, g := range groups {
+			if g.Map != mapName {
+				continue
+			}
+			for _, d := range g.Members {
+				flaggedDesks = append(flaggedDesks, d.ID)
+			}
+		}
+	}
+	flaggedDesksJSON, _ := json.Marshal(flaggedDesks)
+	if deskWhitelist == nil {
+		deskWhitelist = []string{}
+	}
+	deskWhitelistJSON, _ := json.Marshal(deskWhitelist)
+
 	token := ""
 	if isEditor {
 		ymd := time.Now().Format("20060102")
@@ -352,15 +376,17 @@ func (app *App) renderIndex(w http.ResponseWriter, r *http.Request, sess Session
 		Token:     token,
 		AvatarURL: avatarURL,
 
-		DepartmentsJSON: template.JS(deptJSON),
-		ItemTypesJSON:   template.JS(itemTypesJSON),
-		LogoRegular:     app.settingOr("logo_regular", "/static/images/cmaps-regular.png"),
-		LogoHover:       app.settingOr("logo_hover", "/static/images/cmaps-hover.png"),
-		TeamsContact:    app.db.GetSetting("teamsContact"),
-		Domain:          app.db.GetSetting("domain"),
-		ReportURL:       app.db.GetSetting("reportURL"),
-		Region:          region,
-		TzOffset:        tzOffset,
+		DepartmentsJSON:     template.JS(deptJSON),
+		ItemTypesJSON:       template.JS(itemTypesJSON),
+		FlaggedDesksJSON:    template.JS(flaggedDesksJSON),
+		HealthWhitelistJSON: template.JS(deskWhitelistJSON),
+		LogoRegular:         app.settingOr("logo_regular", "/static/images/cmaps-regular.png"),
+		LogoHover:           app.settingOr("logo_hover", "/static/images/cmaps-hover.png"),
+		TeamsContact:        app.db.GetSetting("teamsContact"),
+		Domain:              app.db.GetSetting("domain"),
+		ReportURL:           app.db.GetSetting("reportURL"),
+		Region:              region,
+		TzOffset:            tzOffset,
 
 		Findme:    findme,
 		Teamlabel: q.Get("teamlabel"),

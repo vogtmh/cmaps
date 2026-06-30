@@ -68,6 +68,58 @@ function applyUsermodeUI() {
   }
   // Show/hide the editor drag-and-drop palette (defined in admin.js).
   if (typeof applyEditSidebar === 'function') { applyEditSidebar(); }
+  // Re-apply the duplicate-desk health highlight (only shows in edit mode).
+  flagHealthDesks();
+}
+
+// flagHealthDesks marks the desks reported by the consistency check (duplicate
+// desk names on this map) with a pulsing ring so an editor can find and fix
+// them. The set is recomputed from the CURRENT desk data on every call so the
+// ring updates live as desks are added/removed/renamed in edit mode (adding a
+// second desk with the same name starts the glow; deleting one stops it). The
+// ring is only ever visible to editors in edit mode (gated via body.editmode in
+// CSS). Re-run after every desk re-render and on every edit-mode toggle. The
+// server still injects `healthFlaggedDesks` for the first paint; it is used as a
+// fallback only when live desk data is not yet available.
+function flagHealthDesks() {
+  var prev = document.querySelectorAll('#deskitems .deskball.health_flag');
+  for (var i = 0; i < prev.length; i++) { prev[i].classList.remove('health_flag'); }
+
+  var flagged = computeDuplicateDeskIds();
+
+  for (var j = 0; j < flagged.length; j++) {
+    var el = document.getElementById(flagged[j]);
+    if (el && el.classList.contains('deskball')) { el.classList.add('health_flag'); }
+  }
+}
+
+// computeDuplicateDeskIds returns the IDs of desks on the current map that share
+// a (non-whitelisted) desk name with at least one other desk. Mirrors the
+// server's duplicateDeskGroups() so the in-map highlight always agrees with the
+// health report. Falls back to the server-injected list before live desk data
+// exists (first paint) and is empty on the overview map.
+function computeDuplicateDeskIds() {
+  if (typeof mapname !== 'undefined' && mapname === 'overview') { return []; }
+  // No live desk data yet (first paint): use the server-injected set.
+  if (!result_old || !result_old.desks || !result_old.desks.length) {
+    return (typeof healthFlaggedDesks !== 'undefined' && healthFlaggedDesks) ? healthFlaggedDesks : [];
+  }
+  var wl = (typeof healthWhitelist !== 'undefined' && healthWhitelist) ? healthWhitelist : [];
+  var byName = {};
+  var desks = result_old.desks;
+  for (var i = 0; i < desks.length; i++) {
+    var name = desks[i].dsk;
+    if (name === undefined || name === null) { continue; }
+    if (wl.indexOf(name) !== -1) { continue; }
+    (byName[name] = byName[name] || []).push(desks[i].id);
+  }
+  var ids = [];
+  for (var key in byName) {
+    if (byName[key].length >= 2) {
+      for (var k = 0; k < byName[key].length; k++) { ids.push(byName[key][k]); }
+    }
+  }
+  return ids;
 }
 
 function timezoneDate() {
@@ -2676,6 +2728,8 @@ function updateDesks(forceRefresh) {
           if (setting_desknumbers == 1) {showDesknumbers();}
           if (setting_shownames == 1) {showNames();}
           if (setting_printmode == 1) {$('.meeting').css('opacity','0.5');}
+          // Re-apply the duplicate-desk health highlight after each re-render.
+          flagHealthDesks();
         }
     }    
   });

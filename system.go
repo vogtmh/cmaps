@@ -78,69 +78,125 @@ func diskUsed(path string) string {
 	return fmt.Sprintf("%.2f", u.UsedPercent)
 }
 
-// checkLdapConsistency reports LDAP-mirror desks occupied by more than four
-// people. Mirrors the legacy per-row behaviour (one entry per offending person).
+// checkLdapConsistency reports LDAP-mirror offices occupied by more than four
+// people. Each over-occupied office is reported once; the error count is the
+// number of people sharing it (so the dashboard total stays meaningful).
 func (app *App) checkLdapConsistency() (int, []map[string]interface{}, []string) {
 	whitelist := app.whitelistFor("ldap")
 	mirror, _ := app.db.ListLdap()
 
-	counts := map[string]int{}
+	byOffice := map[string][]LdapUser{}
 	for _, u := range mirror {
-		counts[u.Office]++
+		if u.Office == "" {
+			continue
+		}
+		byOffice[u.Office] = append(byOffice[u.Office], u)
 	}
 
 	list := []map[string]interface{}{}
-	for _, u := range mirror {
-		if u.Office == "" || contains(whitelist, u.Office) {
+	ldapErrors := 0
+	for office, users := range byOffice {
+		if contains(whitelist, office) {
 			continue
 		}
-		if counts[u.Office] > 4 {
+		if len(users) > 4 {
+			ldapErrors += len(users)
+			names := []string{}
+			for _, u := range users {
+				n := strings.TrimSpace(u.Givenname + " " + u.Surname)
+				if n != "" {
+					names = append(names, n)
+				}
+			}
+			sort.Strings(names)
 			list = append(list, map[string]interface{}{
-				"desk":  u.Office,
-				"count": counts[u.Office],
-				"name":  strings.TrimSpace(u.Givenname + " " + u.Surname),
+				"desk":  office,
+				"count": len(users),
+				"name":  strings.Join(names, ", "),
+				"names": names,
 			})
 		}
 	}
 	sort.Slice(list, func(i, j int) bool {
 		return list[i]["desk"].(string) < list[j]["desk"].(string)
 	})
-	return len(list), list, whitelist
+	return ldapErrors, list, whitelist
 }
 
-// checkDeskConsistency reports duplicate desk names within each map.
-func (app *App) checkDeskConsistency() (int, []map[string]interface{}, []string) {
+// deskGroup is a set of desks on the same map that share a (non-whitelisted)
+// desk number. Callers report each group once and can highlight its members.
+type deskGroup struct {
+	Map     string
+	Desk    string
+	Members []Desk
+}
+
+// duplicateDeskGroups returns every group of desks that share the same desk
+// number within a map (excluding the overview and whitelisted names). The group
+// is the single source of truth for both the health report and the in-map
+// highlight, so the two never disagree.
+func (app *App) duplicateDeskGroups() ([]deskGroup, []string) {
 	whitelist := app.whitelistFor("desks")
 	maps, _ := app.db.ListMaps()
 
-	list := []map[string]interface{}{}
-	deskErrors := 0
+	var groups []deskGroup
 	for _, m := range maps {
 		if m.Mapname == "overview" {
 			continue
 		}
 		desks, _ := app.db.ListDesks(m.Mapname)
-		counts := map[string]int{}
+		byName := map[string][]Desk{}
+		order := []string{}
 		for _, d := range desks {
-			counts[d.Desknumber]++
+			if _, seen := byName[d.Desknumber]; !seen {
+				order = append(order, d.Desknumber)
+			}
+			byName[d.Desknumber] = append(byName[d.Desknumber], d)
 		}
-		for _, d := range desks {
-			if contains(whitelist, d.Desknumber) {
+		for _, name := range order {
+			members := byName[name]
+			if contains(whitelist, name) || len(members) < 2 {
 				continue
 			}
-			if counts[d.Desknumber] > 1 {
-				deskErrors += counts[d.Desknumber]
-				list = append(list, map[string]interface{}{
-					"desk":  d.Desknumber,
-					"count": counts[d.Desknumber],
-					"map":   m.Mapname,
-				})
-			}
+			groups = append(groups, deskGroup{Map: m.Mapname, Desk: name, Members: members})
 		}
 	}
-	sort.Slice(list, func(i, j int) bool {
-		return list[i]["desk"].(string) < list[j]["desk"].(string)
+	sort.Slice(groups, func(i, j int) bool {
+		if groups[i].Map != groups[j].Map {
+			return groups[i].Map < groups[j].Map
+		}
+		return groups[i].Desk < groups[j].Desk
 	})
+	return groups, whitelist
+}
+
+// checkDeskConsistency reports duplicate desk names within each map. Each
+// duplicate name is reported once per map; the error count is the number of
+// desks involved in the duplication (e.g. four desks named "Desk" => 4, not 16).
+func (app *App) checkDeskConsistency() (int, []map[string]interface{}, []string) {
+	groups, whitelist := app.duplicateDeskGroups()
+
+	list := []map[string]interface{}{}
+	deskErrors := 0
+	for _, g := range groups {
+		deskErrors += len(g.Members)
+		members := []map[string]interface{}{}
+		for _, d := range g.Members {
+			members = append(members, map[string]interface{}{
+				"id":         d.ID,
+				"employee":   d.Employee,
+				"department": d.Department,
+				"x":          d.X,
+				"y":          d.Y,
+			})
+		}
+		list = append(list, map[string]interface{}{
+			"desk":    g.Desk,
+			"count":   len(g.Members),
+			"map":     g.Map,
+			"members": members,
+		})
+	}
 	return deskErrors, list, whitelist
 }
 

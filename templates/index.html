@@ -48,13 +48,13 @@
   </div>
 
   <!-- Search -->
-  <div class="headeritem" id="searchcontrol" style="width:370px;">
+  <div class="headeritem" id="searchcontrol" style="width:290px;">
     {{if not .NoDescription}}<span class="headeritem_text">Search</span>{{end}}
     <span style="width:100px;line-height:65px;float:left; display:inline;">
-      <div style="width:320px;">
+      <div style="width:230px;">
         <input type="text" name="findme" id="searchtext" value="{{.Findme}}" size="10" autofocus style="width:150px; margin-right:5px;">
         <input type="hidden" name="map" value="{{.Map}}">
-        <input type="button" id="search_button" value="Find" style="width:120px;background-color: #0979D8;">
+        <input type="button" id="search_button" value="" title="Find" style="width:45px; height:45px; vertical-align:middle; border:none; cursor:pointer; background-color:#0979D8; background-image:url('images/find.png'); background-repeat:no-repeat; background-position:center; background-size:24px 24px;">
       </div>
     </span>
   </div>
@@ -78,9 +78,9 @@
   </div>
 
   <!-- Floor -->
-  <div class="headeritem" id="floorcontrol" style="width:260px;">
+  <div class="headeritem" id="floorcontrol" style="width:380px;">
     <span id="floorcontrol_label" class="headeritem_text"{{if not (and (not .NoDescription) .Floors)}} style="display:none;"{{end}}>Floor</span>
-    <span id="floorlinks" style="width:200px;line-height:65px;float:left; display:inline;">
+    <span id="floorlinks" style="width:310px;line-height:65px;float:left; display:inline;">
       {{range .Floors}}
       <a href="#{{.ID}}" style="text-decoration: none;"><div class="headeritem_floors">{{.Employee}}</div></a>
       {{end}}
@@ -213,6 +213,8 @@
     var itemscale = {{.Itemscale}};
     var departments = {{.DepartmentsJSON}};
     var customItemTypes = {{.ItemTypesJSON}};
+    var healthFlaggedDesks = {{.FlaggedDesksJSON}};
+    var healthWhitelist = {{.HealthWhitelistJSON}};
     var root = "/";
     var logo_regular = "{{.LogoRegular}}";
     var logo_hover = "{{.LogoHover}}";

@@ -121,6 +121,27 @@ function submitWhitelist(WLtype, WLtext) {
   $('#updateWhitelist').trigger('submit');
 }
 
+// healthEsc escapes a string for safe insertion as HTML text/attribute content.
+function healthEsc(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+// healthJsArg returns a quoted JS string literal that is also safe inside a
+// double-quoted HTML onclick attribute (escapes JS quotes/backslash and HTML
+// specials so the value can never break out of the attribute).
+function healthJsArg(s) {
+  s = String(s == null ? '' : s)
+    .replace(/\\/g, '\\\\')
+    .replace(/'/g, "\\'")
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;');
+  return "'" + s + "'";
+}
+
 function updateHealthDetails() {
   $.ajax({
     url: '../rest/system?healthdetails=1',
@@ -147,63 +168,60 @@ function updateHealthDetails() {
       }
     },
     success: function(result){
-      
-      // Output errors in LDAP assignment on left tile
-      var color='green'
-      var ldaparray = result.health.ldap
-      var percentage = ldaparray.length
-      if (percentage >=30 ) {color='red';}
-      else if (percentage >= 1) {color='orange';}
-      else {color='green';}
+
+      // ---- LDAP consistency (left column) ----
+      // One card per over-occupied office; the tile shows the total number of
+      // people involved (result.consistency_ldap), not the number of offices.
+      var ldaparray = result.health.ldap || [];
+      var ldapTotal = result.consistency_ldap;
+      var ldapColor = ldapTotal >= 30 ? 'red' : (ldapTotal >= 1 ? 'orange' : 'green');
       var healthldap = ''
-      + '<div style="width:750px; height:150px; float:left; margin-left:20px; background:'+color+'; opacity:0.7; text-align:center;line-height:150px;">'
-      + '<span style="display: inline-block; vertical-align: middle; line-height: normal;">'
-      + '<h1>LDAP errors</h1><h2>'+percentage+'</h2>'
-      + '</span>'
-      + '</div>'
-      for(var i = 0; i <ldaparray.length; i++) {
+        + '<div style="width:750px; margin-left:20px; background:'+ldapColor+'; opacity:0.85; text-align:center; border-radius:8px; padding:24px 0;">'
+        + '<h1 style="margin:0;">LDAP errors</h1><h2 style="margin:4px 0 0;">'+ldapTotal+'</h2>'
+        + '</div>';
+      for (var i = 0; i < ldaparray.length; i++) {
+        var lo = ldaparray[i];
         healthldap += ''
-        + '<div style="width:750px; height:70px; float:left; margin-left:20px; margin-top:5px; background:'+color+'; opacity:0.7; text-align:center;line-height:70px;">'
-        + '<span style="float:left; vertical-align: middle; line-height: normal; width:650px; height:70px;">'
-        + '<h2>'+ldaparray[i].desk+' assigned to '+ldaparray[i].count+' people: '+ldaparray[i].name+'</h2>'
-        + '</span>'
-        + '<a href="javascript:{}" onclick="submitWhitelist(\'ldap\',\''+ldaparray[i].desk+'\')">'
-        + '<span style="float:left; background-color: #505050; vertical-align: middle; line-height: normal; width:100px; height:70px;">'
-        + '<h2>ignore</h2>'
-        + '</span>'
-        + '</a>'
-        + '</div>'
+          + '<div style="width:750px; margin-left:20px; margin-top:10px; background:#3a3a3a; border-left:5px solid '+ldapColor+'; border-radius:8px; padding:14px 16px; box-sizing:border-box;">'
+          + '<div style="font-size:16px; font-weight:bold; color:#eee;">Office &ldquo;'+healthEsc(lo.desk)+'&rdquo; is shared by '+lo.count+' people</div>'
+          + '<div style="margin:6px 0 10px; color:#bbb; font-size:13px; line-height:1.4;">More than four people are mapped to the same office in the directory. Fix the office/room attribute for the people below in your directory source, then re-sync &mdash; or ignore this office to accept it.</div>'
+          + '<div style="color:#ccc; font-size:13px; margin-bottom:12px;">'+healthEsc((lo.names || []).join(', '))+'</div>'
+          + '<a href="javascript:{}" onclick="submitWhitelist(\'ldap\','+healthJsArg(lo.desk)+')" style="display:inline-block; background:#505050; color:#fff; padding:6px 14px; border-radius:6px; text-decoration:none; font-size:13px;">Ignore</a>'
+          + '</div>';
       }
-      document.getElementById('healthldap').innerHTML= healthldap;
-      
-      // Output errors in desk database on right tile
-      var color='green'
-      var deskarray = result.health.desks
-      var percentage = deskarray.length
-      if (percentage >=5 ) {color='red';}
-      else if (percentage >= 1) {color='orange';}
-      else {color='green';}
-      healthdesks = ''
-      + '<div style="width:750px; height:150px; float:right; margin-right:10px; background:'+color+'; opacity:0.7; text-align:center;line-height:150px;">'
-      + '<span style="display: inline-block; vertical-align: middle; line-height: normal;">'
-      + '<h1>Desk errors</h1><h2>'+percentage+'</h2>'
-      + '</span>'
-      + '</div>'
-      for(var i = 0; i <deskarray.length; i++) {
+      document.getElementById('healthldap').innerHTML = healthldap;
+
+      // ---- Desk consistency (right column) ----
+      // One card per duplicated desk name on a map. The tile shows the total
+      // number of desks involved (result.consistency_desks), so four desks named
+      // "Desk" read as 4 errors in a single card instead of 16 across four rows.
+      var deskarray = result.health.desks || [];
+      var deskTotal = result.consistency_desks;
+      var deskColor = deskTotal >= 5 ? 'red' : (deskTotal >= 1 ? 'orange' : 'green');
+      var healthdesks = ''
+        + '<div style="width:750px; margin-right:10px; background:'+deskColor+'; opacity:0.85; text-align:center; border-radius:8px; padding:24px 0;">'
+        + '<h1 style="margin:0;">Desk errors</h1><h2 style="margin:4px 0 0;">'+deskTotal+'</h2>'
+        + '</div>';
+      for (var k = 0; k < deskarray.length; k++) {
+        var de = deskarray[k];
+        var members = de.members || [];
+        var memberRows = '';
+        for (var m = 0; m < members.length; m++) {
+          var who = (members[m].employee && String(members[m].employee).trim()) ? members[m].employee : '(unassigned)';
+          var dept = members[m].department ? ' \u2014 ' + members[m].department : '';
+          memberRows += '<li style="margin:2px 0;">' + healthEsc(who) + healthEsc(dept) + '</li>';
+        }
         healthdesks += ''
-        + '<div style="width:750px; height:70px; float:left; margin-left:20px; margin-top:5px;background:'+color+'; opacity:0.7; text-align:center;line-height:70px;">'
-        + '<span style="float:left; vertical-align: middle; line-height: normal; width:650px; height:70px;">'
-        + '<h2>'+deskarray[i].desk+' exists '+deskarray[i].count+' times on map '+deskarray[i].map+'</h2>'
-        + '</span>'
-        + '<a href="javascript:{}" onclick="submitWhitelist(\'desks\',\''+deskarray[i].desk+'\')">'
-        + '<span style="float:left; background-color: #505050; vertical-align: middle; line-height: normal; width:100px; height:70px;">'
-        + '<h2>ignore</h2>'
-        + '</span>'
-        + '</a>'
-        + '</div>'
+          + '<div style="width:750px; margin-right:10px; margin-top:10px; background:#3a3a3a; border-left:5px solid '+deskColor+'; border-radius:8px; padding:14px 16px; box-sizing:border-box;">'
+          + '<div style="font-size:16px; font-weight:bold; color:#eee;">&ldquo;'+healthEsc(de.desk)+'&rdquo; is used by '+de.count+' desks on map '+healthEsc(de.map)+'</div>'
+          + '<div style="margin:6px 0 10px; color:#bbb; font-size:13px; line-height:1.4;">Desk names must be unique on a map. Open the map in edit mode &mdash; the affected desks are highlighted with a red ring &mdash; and rename each duplicate to a unique number, or ignore this name to accept it.</div>'
+          + '<ul style="margin:0 0 12px 18px; color:#ccc; font-size:13px;">'+memberRows+'</ul>'
+          + '<a href="../?map='+encodeURIComponent(de.map)+'" style="display:inline-block; background:#0979D8; color:#fff; padding:6px 14px; border-radius:6px; text-decoration:none; font-size:13px; margin-right:8px;">Show on map</a>'
+          + '<a href="javascript:{}" onclick="submitWhitelist(\'desks\','+healthJsArg(de.desk)+')" style="display:inline-block; background:#505050; color:#fff; padding:6px 14px; border-radius:6px; text-decoration:none; font-size:13px;">Ignore</a>'
+          + '</div>';
       }
-      document.getElementById('healthdesks').innerHTML= healthdesks;
-      
+      document.getElementById('healthdesks').innerHTML = healthdesks;
+
       console.log('[HealthDetails] updated');
     }
   })

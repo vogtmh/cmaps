@@ -178,7 +178,11 @@ $(function(){
   // from manual zoom-out (<100%) therefore falls entirely on the right.
   var mapMaxWidth = maxWidth - leftW - rightW;
   if (mapMaxWidth < 100) { mapMaxWidth = 100; }
-  var contentZoom = (mapMaxWidth / basePage.width) * manualscale;
+  // Apply the same 0.99 safety margin the header uses so the content never fills
+  // the viewport width to the very edge. Filling it exactly caused a horizontal
+  // scrollbar on tall pages (e.g. the admin panel) where a vertical scrollbar
+  // appears and steals a few px of width after the zoom was computed.
+  var contentZoom = (mapMaxWidth / basePage.width) * manualscale * 0.99;
   var contentScreenW = basePage.width * contentZoom; // == mapMaxWidth * manualscale
   var mapLeftPos = leftW;
   var mapScale = contentZoom; // kept for the autozoom var written below
