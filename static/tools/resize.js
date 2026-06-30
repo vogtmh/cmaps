@@ -97,18 +97,18 @@ $(function(){
     if( !detectMobile() ) {
       controlcontainer.attr('style', 'position:fixed; left: 0px; top: 0px; height:' + (69*basePage.scale) + 'px;width:100%;background-color:#333333;opacity:1.0;z-index:1; transition: all 300ms ease-in-out !important; display:flex; justify-content:center; align-items:flex-start;');
       controlback.attr('style', 'width:100%; height: 69px; position: fixed; top: 0px; left: 0px;background: #333333;transform-origin:50% 0%;z-index:1; transform:scaleY(' + basePage.scale + ');');
-      loginicon.attr('style', 'position:fixed; bottom:10px;left:10px; z-index:3; opacity:0.7;transform:scale(' + basePage.scale + ');transform-origin:0% 100%;');
+      loginicon.attr('style', 'position:fixed; bottom:10px;left:10px; z-index:3; opacity:1.0;transform:scale(' + basePage.scale + ');transform-origin:0% 100%;');
     }
     else {
       controlcontainer.attr('style', 'position:fixed; left: 0px; top: 0px; height:' + (69*basePage.scale) + 'px;width:100%;background-color:#333333;opacity:1.0;z-index:1; transition: all 300ms ease-in-out !important; display:flex; justify-content:center; align-items:flex-start;display:none;');
       controlback.attr('style', 'width:100%; height: 69px; position: fixed; top: 0px; left: 0px;background: #333333;transform-origin:50% 0%;z-index:1; transform:scaleY(' + basePage.scale + ');display:none;');
-      loginicon.attr('style', 'position:fixed; bottom:10px;left:10px; z-index:3; opacity:0.7;transform:scale(' + basePage.scale + ');transform-origin:0% 100%;display:none;');
+      loginicon.attr('style', 'position:fixed; bottom:10px;left:10px; z-index:3; opacity:1.0;transform:scale(' + basePage.scale + ');transform-origin:0% 100%;display:none;');
     }
   }
   else {
     controlcontainer.attr('style', 'position:fixed; left: 0px; top: 0px; height:' + (69*basePage.scale) + 'px;width:100%;background-color:#333333;opacity:1.0;z-index:1; transition: all 300ms ease-in-out !important; display:flex; justify-content:center; align-items:flex-start;');
     controlback.attr('style', 'width:100%; height: 69px; position: fixed; top: 0px; left: 0px;background: #333333;transform-origin:50% 0%;z-index:1; transform:scaleY(' + basePage.scale + ');');
-    loginicon.attr('style', 'position:fixed; bottom:10px;left:10px; z-index:3; opacity:0.7;transform:scale(' + basePage.scale + ');transform-origin:0% 100%;');
+    loginicon.attr('style', 'position:fixed; bottom:10px;left:10px; z-index:3; opacity:1.0;transform:scale(' + basePage.scale + ');transform-origin:0% 100%;');
   }
   controlcontent.attr('style', 'position:relative; top:0px;width:1600px;height:69px; z-index:2;zoom:' + basePage.scale + ';background-color:#333333;');
   notifycontainer.attr('style', 'position:fixed; left: 0px; top:' + (72*basePage.scale) + 'px; height:40px;width:100%;background-color:transparent;z-index:1; pointer-events: none;transition: all 300ms ease-in-out !important; display:flex; justify-content:center;');

@@ -1137,12 +1137,21 @@
     opacity: 1.0;
 }
 
+/* Login icon button: white icon on a colour-switching circle (no image swap). */
 .loginicon {
-    opacity: 0.4;
+    width: 50px;
+    height: 50px;
+    background-color: #333;
+    background-image: url("images/login.png");
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: 55%;
+    border-radius: 50%;
+    cursor: pointer;
 }
 
 .loginicon:hover {
-    opacity: 1.0;
+    background-color: #559F35;
 }
 
 #avatarbutton {
@@ -2232,6 +2241,52 @@ input[type=submit]:hover, input[type=button]:hover {
     width: 40px;
     height: 10px;
     transform: translate(-50%, -50%);
+}
+
+/* Login / logout icon buttons: a white icon centred on a circle whose
+   background colour switches on hover (replaces the old regular/hover image
+   swap). Sizing is supplied per-instance via width/height. */
+.iconbtn-circle {
+    background-color: #333;
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: 55%;
+    border-radius: 50%;
+    cursor: pointer;
+}
+.iconbtn-circle:hover {
+    background-color: #559F35;
+}
+.iconbtn-login {
+    background-image: url("images/login.png");
+}
+.iconbtn-logout {
+    background-image: url("images/logout.png");
+}
+/* Orange variant matching the avatar upload/delete buttons in the user menu
+   (orange #FF8040 base, green #00D700 on hover). */
+.iconbtn-orange {
+    background-color: #FF8040;
+}
+.iconbtn-orange:hover {
+    background-color: #00D700;
+}
+/* Plain (no circle) icon button: just the icon image, dimmed by default and
+   fully opaque on hover. */
+.iconbtn-plain {
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: contain;
+    cursor: pointer;
+    opacity: 0.7;
+}
+.iconbtn-plain:hover {
+    opacity: 1.0;
+    /* Tint the white icon red on hover (#e74c3c). The leading
+       brightness(0) normalises the white source to black so the
+       following sepia/saturate/hue-rotate chain lands on true red
+       instead of orange. */
+    filter: brightness(0) saturate(100%) invert(36%) sepia(51%) saturate(2878%) hue-rotate(335deg) brightness(91%) contrast(89%);
 }
 
 /* Edit/user mode toggle switch (replaces the old text button). When "on"

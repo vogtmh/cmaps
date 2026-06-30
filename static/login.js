@@ -55,10 +55,7 @@
         '<button type="button" class="cmaps-login-btn cmaps-login-btn-sso" id="cmapsLoginSso">Sign in with SSO</button>';
     }
 
-    var cancelBlock = '';
-    if (!c.loginPage) {
-      cancelBlock = '<button type="button" class="cmaps-login-cancel" id="cmapsLoginCancel">Cancel</button>';
-    }
+    var cancelBlock = '<button type="button" class="cmaps-login-cancel" id="cmapsLoginCancel">Cancel</button>';
 
     var overlay = document.createElement('div');
     overlay.id = 'cmapsLoginOverlay';
@@ -83,7 +80,15 @@
     if (sso) { sso.addEventListener('click', function () { window.location.href = samlHref(); }); }
 
     var cancel = document.getElementById('cmapsLoginCancel');
-    if (cancel) { cancel.addEventListener('click', closeOverlay); }
+    if (cancel) {
+      cancel.addEventListener('click', function () {
+        // On the map the dialog is an overlay, so Cancel just dismisses it.
+        // On the standalone /login page there is nothing behind it, so Cancel
+        // returns to the main page instead.
+        if (c.loginPage) { window.location.href = c.home || '/'; }
+        else { closeOverlay(); }
+      });
+    }
 
     // On the map (cancelable) allow Esc / backdrop click to dismiss.
     if (!c.loginPage) {

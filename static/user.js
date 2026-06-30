@@ -3198,10 +3198,64 @@ function updateBookings() {
   console.log('[Bookings] updated');
 }
 
+// Lay out the personal-menu box and its three action buttons so they line up
+// with the row below (avatar + username + optional admin button), regardless of
+// how long the user's name is.
+//   - The menu spans from before the avatar to behind the username (or, for
+//     admins, behind the admin-panel button).
+//   - Logout sits on top of the avatar.
+//   - Remove image sits on top of the admin-panel button when present; otherwise
+//     it mirrors the logout button's left gap on the right edge.
+//   - Upload image sits centered between the logout and remove buttons.
+function layoutPersonalMenu() {
+  var menu = document.getElementById("personal_menu");
+  var row = document.querySelector(".avatarbutton_row");
+  if (!menu || !row) { return; }
+
+  var HALF = 40;                 // half of the 80px button width
+  var logoutCenter = 60;         // avatar is at left:20, width 80 -> center 60
+
+  var rowRight = row.offsetLeft + row.offsetWidth;   // right edge of the row
+  var menuWidth = Math.max(390, rowRight);
+  menu.style.width = menuWidth + "px";
+
+  var admin = document.getElementById("adminpanel_button");
+  var removeCenter;
+  if (admin && admin.offsetParent !== null) {
+    // Place "Remove image" on top of the admin-panel button. Convert the admin
+    // button's on-screen centre into the menu's (pre-zoom) local coordinates.
+    var aRect = admin.getBoundingClientRect();
+    var mRect = menu.getBoundingClientRect();
+    var zoom = aRect.width / admin.offsetWidth || 1;
+    removeCenter = (aRect.left + aRect.width / 2 - mRect.left) / zoom;
+  } else {
+    // No admin button: mirror the logout button's 20px left gap on the right.
+    removeCenter = menuWidth - 60;
+  }
+
+  var uploadCenter = (logoutCenter + removeCenter) / 2;
+
+  function place(id, center) {
+    var el = document.getElementById(id);
+    if (el) { el.style.left = (center - HALF) + "px"; }
+  }
+  place("pm_logout_label", logoutCenter);
+  place("pm_logout_btn", logoutCenter);
+  place("pm_upload_label", uploadCenter);
+  place("pm_upload_btn", uploadCenter);
+  place("pm_remove_label", removeCenter);
+  place("pm_remove_btn", removeCenter);
+
+  // Keep the bookings text centered across the (possibly wider) menu.
+  var bookings = document.getElementById("bookingstable");
+  if (bookings) { bookings.style.width = (menuWidth - 40) + "px"; }
+}
+
 function togglePersonalMenu() {
   var x = document.getElementById("personal_menu");
   var admin = document.getElementById("adminpanel_button");
   if (x.style.visibility === "hidden") {
+    layoutPersonalMenu();
     x.style.visibility = "visible";
     if (admin) { admin.classList.add("menu-open"); }
     userBookings();
