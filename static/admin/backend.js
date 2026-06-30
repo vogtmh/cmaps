@@ -1212,7 +1212,7 @@ function saveWorldMap(cb) {
         cb.disabled = false;
         if (missing.length === 0) { persistWorldMap(cb, '1'); return; }
         cb.checked = false; // keep disabled until coordinates are saved
-        openWorldCoords(cb, missing, maps);
+        openWorldCoords(cb, missing);
       })
       .catch(function () { cb.disabled = false; persistWorldMap(cb, '1'); });
     return;
@@ -1262,51 +1262,24 @@ function cleanWorldAddr(a) {
     .trim();
 }
 
-// approxWorldLatLon roughly maps an X/Y pixel on the classic overview image to
-// lat/lon, treating that image as a full equirectangular world map. Values are
-// approximate and meant to be reviewed/edited before saving.
-function approxWorldLatLon(x, y, imgW, imgH) {
-  if (!imgW || !imgH) return null;
-  var lon = (Number(x) / imgW) * 360 - 180;
-  var lat = 90 - (Number(y) / imgH) * 180;
-  if (lon < -180) lon = -180; if (lon > 180) lon = 180;
-  if (lat < -90) lat = -90; if (lat > 90) lat = 90;
-  return { lat: lat, lon: lon };
+// approxWorldLatLon converts a stored X/Y screen position into lat/lon using the
+// exact same projection the dynamic world map renders with (worldProjection in
+// user.js, at the internal 1600px screen width). In other words: imagine the
+// dynamic world map drawn at targetScreenWidth and read off the lat/lon under
+// the pixel where the classic marker sits. It is an approximation (the old
+// overview.png is a slightly different projection) and meant to be reviewed and
+// edited before saving.
+function approxWorldLatLon(x, y) {
+  if (typeof worldProjection !== 'function') return null;
+  var ll = worldProjection().toLatLon(Number(x), Number(y));
+  if (!isFinite(ll.lat) || !isFinite(ll.lon)) return null;
+  if (ll.lon < -180) ll.lon = -180; if (ll.lon > 180) ll.lon = 180;
+  if (ll.lat < -90) ll.lat = -90; if (ll.lat > 90) ll.lat = 90;
+  return { lat: ll.lat, lon: ll.lon };
 }
 
-// calibrateWorldFit builds a linear X->lon / Y->lat mapping from the maps that
-// already have both pixel (X/Y) and geographic (lat/lon) coordinates. Because
-// the classic overview image is an equirectangular projection, lon is linear in
-// X and lat is linear in Y, so a least-squares fit over the known points yields
-// accurate offline estimates for the locations that are still missing. Returns
-// {ax,bx,ay,by} or null when there are too few reference points.
-function calibrateWorldFit(maps) {
-  var px = [], plon = [], py = [], plat = [];
-  (maps || []).forEach(function (m) {
-    var x = Number(m.x), y = Number(m.y), lat = Number(m.lat), lon = Number(m.lon);
-    if (lat === 0 && lon === 0) return;       // no geographic reference
-    if (x === 0 && y === 0) return;           // no pixel reference
-    if (isFinite(x) && isFinite(lon)) { px.push(x); plon.push(lon); }
-    if (isFinite(y) && isFinite(lat)) { py.push(y); plat.push(lat); }
-  });
-  function fit(xs, ys) {
-    var n = xs.length;
-    if (n < 2) return null;
-    var sx = 0, sy = 0, sxx = 0, sxy = 0;
-    for (var i = 0; i < n; i++) { sx += xs[i]; sy += ys[i]; sxx += xs[i] * xs[i]; sxy += xs[i] * ys[i]; }
-    var denom = n * sxx - sx * sx;
-    if (denom === 0) return null;
-    var slope = (n * sxy - sx * sy) / denom;
-    var intercept = (sy - slope * sx) / n;
-    return { slope: slope, intercept: intercept };
-  }
-  var fx = fit(px, plon), fy = fit(py, plat);
-  if (!fx || !fy) return null;
-  return { ax: fx.slope, bx: fx.intercept, ay: fy.slope, by: fy.intercept };
-}
-
-function openWorldCoords(cb, missing, allMaps) {
-  _worldCoordsPending = { cb: cb, rows: missing, imgW: 0, imgH: 0, fit: calibrateWorldFit(allMaps) };
+function openWorldCoords(cb, missing) {
+  _worldCoordsPending = { cb: cb, rows: missing };
   var hint = document.getElementById('worldcoordsGeoHint');
   var geoActions = document.getElementById('worldcoordsGeoActions');
   var configured = (typeof ADMIN_GEOAPIFY_CONFIGURED !== 'undefined') && ADMIN_GEOAPIFY_CONFIGURED;
@@ -1314,15 +1287,6 @@ function openWorldCoords(cb, missing, allMaps) {
   if (geoActions) geoActions.style.display = configured ? 'flex' : 'none';
   var result = document.getElementById('worldcoordsResult');
   if (result) { result.textContent = ''; result.style.color = ''; }
-  // Load the overview image so the offline approximation has real dimensions.
-  var img = new Image();
-  img.onload = function () {
-    _worldCoordsPending.imgW = img.naturalWidth;
-    _worldCoordsPending.imgH = img.naturalHeight;
-    renderWorldCoords();
-  };
-  img.onerror = function () { renderWorldCoords(); };
-  img.src = '../maps/overview.png?ts=' + Date.now();
   document.getElementById('worldcoordsOverlay').style.display = 'block';
   renderWorldCoords();
 }
@@ -1337,14 +1301,8 @@ function renderWorldCoords() {
   pend.rows.forEach(function (m, i) {
     var addr = cleanWorldAddr(m.address);
     var lat = '', lon = '', source = '\u2014';
-    if (pend.fit && (Number(m.x) !== 0 || Number(m.y) !== 0)) {
-      var flon = pend.fit.ax * Number(m.x) + pend.fit.bx;
-      var flat = pend.fit.ay * Number(m.y) + pend.fit.by;
-      lat = flat.toFixed(4); lon = flon.toFixed(4); source = '~from X/Y';
-    } else {
-      var approx = approxWorldLatLon(m.x, m.y, pend.imgW, pend.imgH);
-      if (approx) { lat = approx.lat.toFixed(4); lon = approx.lon.toFixed(4); source = '~approx'; }
-    }
+    var approx = approxWorldLatLon(m.x, m.y);
+    if (approx) { lat = approx.lat.toFixed(4); lon = approx.lon.toFixed(4); source = '~from X/Y'; }
     var label = m.displayname || m.mapname;
     html += '<tr data-mapname="' + esc(m.mapname) + '">'
       + '<td style="white-space:nowrap;">' + esc(label) + '</td>'
