@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -114,6 +115,7 @@ type adminData struct {
 	Mapadmins               []adminUserRow
 	Roles                   []Role
 	Teams                   []Team
+	CustomTypes             []CustomItemType
 	AuditEntries            []AuditEntry
 	AuditFilter             string
 	AuditTypes              []string
@@ -184,12 +186,21 @@ func (app *App) handleAdmin(w http.ResponseWriter, r *http.Request) {
 			syncSub = "saml"
 		}
 	}
+	// Custom item types now live on the Config tab; alias the legacy tab link so
+	// old bookmarks and posts land on the Config tab.
+	if tab == "itemtypes" {
+		tab = "config"
+	}
 	// Fall back to dashboard if the user lacks permission for the tab. The Sync
 	// tab (ldap) is accessible with either the "ldap" permission (LDAP/Robin
 	// subtabs) or the "adminpanel" permission (SAML subtab).
 	if tab != "dashboard" {
 		allowed := app.permLevel(sess, tab) > 0
 		if tab == "ldap" && app.permLevel(sess, "adminpanel") > 0 {
+			allowed = true
+		}
+		// The custom item-types tab reuses the Desks permission.
+		if tab == "itemtypes" && app.permLevel(sess, "desks") > 0 {
 			allowed = true
 		}
 		if !allowed {
@@ -454,7 +465,21 @@ func (app *App) handleAdminPost(w http.ResponseWriter, r *http.Request, sess Ses
 			return "Team created."
 		}
 
+	case "itemtypes":
+		if app.permLevel(sess, "desks") < 2 {
+			return ""
+		}
+		return app.saveItemTypeFromForm(r, sess)
+
 	case "config":
+		// Custom item-type management is rendered on the Config tab; route those
+		// submissions to the item-type handler (gated on the Desks permission).
+		if r.FormValue("deleteType") != "" || r.FormValue("typeLabel") != "" {
+			if app.permLevel(sess, "desks") < 2 {
+				return ""
+			}
+			return app.saveItemTypeFromForm(r, sess)
+		}
 		if app.permLevel(sess, "config") < 2 {
 			return ""
 		}
@@ -463,7 +488,99 @@ func (app *App) handleAdminPost(w http.ResponseWriter, r *http.Request, sess Ses
 	return ""
 }
 
-// normalizeMembers turns a user-entered member list (comma- and/or pipe-separated,
+// itemTypeSlug builds a url-safe, filename-safe id from a label.
+func itemTypeSlug(s string) string {
+	s = strings.ToLower(strings.TrimSpace(s))
+	var b strings.Builder
+	for _, r := range s {
+		switch {
+		case r >= 'a' && r <= 'z', r >= '0' && r <= '9':
+			b.WriteRune(r)
+		case r == ' ' || r == '-' || r == '_':
+			b.WriteByte('-')
+		}
+	}
+	slug := strings.Trim(b.String(), "-")
+	for strings.Contains(slug, "--") {
+		slug = strings.ReplaceAll(slug, "--", "-")
+	}
+	return slug
+}
+
+// saveItemTypeFromForm creates, updates or deletes a custom item type and stores
+// an optional uploaded PNG icon under data/itemtypes/<id>.png.
+func (app *App) saveItemTypeFromForm(r *http.Request, sess Session) string {
+	if del := r.FormValue("deleteType"); del != "" {
+		_ = app.db.DeleteItemType(del)
+		_ = os.Remove(app.cfg.dataPath("itemtypes", filepath.Base(del)+".png"))
+		_ = app.db.AuditLog("Desks", sess.Username, "Custom item type removed ("+del+")")
+		return "Item type removed."
+	}
+
+	label := strings.TrimSpace(r.FormValue("typeLabel"))
+	if label == "" {
+		return ""
+	}
+	orig := r.FormValue("typeOrigID")
+	id := orig
+	if id == "" {
+		id = itemTypeSlug(label)
+	}
+	if id == "" {
+		return "Error: the label must contain letters or digits."
+	}
+
+	t := CustomItemType{
+		ID:          id,
+		Label:       label,
+		Description: strings.TrimSpace(r.FormValue("typeDescription")),
+		Color:       orDefaultStr(strings.TrimSpace(r.FormValue("typeColor")), "#0979D8"),
+		Size:        orDefaultStr(r.FormValue("typeSize"), "medium"),
+	}
+	// Preserve any existing icon on edit unless a new one is uploaded.
+	if orig != "" {
+		if prev, found, _ := app.db.GetItemType(orig); found {
+			t.Icon = prev.Icon
+		}
+	}
+	if r.MultipartForm != nil && len(r.MultipartForm.File["typeIcon"]) > 0 {
+		if err := app.saveItemIcon(id, r.MultipartForm.File["typeIcon"][0]); err != nil {
+			return "Error saving icon: " + err.Error()
+		}
+		t.Icon = "/itemicons/" + id + ".png"
+	}
+	if err := app.db.PutItemType(t); err != nil {
+		return "Error saving item type: " + err.Error()
+	}
+	if orig == "" {
+		_ = app.db.AuditLog("Desks", sess.Username, "Custom item type created ("+id+")")
+		return "Item type created."
+	}
+	_ = app.db.AuditLog("Desks", sess.Username, "Custom item type updated ("+id+")")
+	return "Item type updated."
+}
+
+// saveItemIcon decodes an uploaded image and writes it as a PNG into the data
+// directory's itemtypes folder, named after the item type id.
+func (app *App) saveItemIcon(id string, fh *multipart.FileHeader) error {
+	src, err := fh.Open()
+	if err != nil {
+		return err
+	}
+	defer src.Close()
+
+	img, _, err := image.Decode(src)
+	if err != nil {
+		return err
+	}
+
+	dst, err := os.Create(app.cfg.dataPath("itemtypes", filepath.Base(id)+".png"))
+	if err != nil {
+		return err
+	}
+	defer dst.Close()
+	return png.Encode(dst, img)
+}// normalizeMembers turns a user-entered member list (comma- and/or pipe-separated,
 // possibly with surrounding spaces) into the stored format: full names joined by
 // "|" with no spaces around the pipes.
 func normalizeMembers(s string) string {
@@ -752,6 +869,10 @@ func (app *App) buildAdminData(r *http.Request, sess Session, tab, msg string) a
 		d.LogoHover = app.settingOr("logo_hover", "/static/images/cmaps-hover.png")
 		d.BackupGroups = backupGroups
 		d.WorldMap = app.db.GetSetting("worldmap") == "1"
+		d.CustomTypes, _ = app.db.ListItemTypes()
+		sort.Slice(d.CustomTypes, func(i, j int) bool {
+			return strings.ToLower(d.CustomTypes[i].Label) < strings.ToLower(d.CustomTypes[j].Label)
+		})
 
 	case "ldap":
 		d.LdapSources, _ = app.db.ListLdapSources()
@@ -902,6 +1023,12 @@ func (app *App) buildAdminData(r *http.Request, sess Session, tab, msg string) a
 	case "teams":
 		d.Teams, _ = app.db.ListTeams()
 		sort.Slice(d.Teams, func(i, j int) bool { return d.Teams[i].Teamname < d.Teams[j].Teamname })
+
+	case "itemtypes":
+		d.CustomTypes, _ = app.db.ListItemTypes()
+		sort.Slice(d.CustomTypes, func(i, j int) bool {
+			return strings.ToLower(d.CustomTypes[i].Label) < strings.ToLower(d.CustomTypes[j].Label)
+		})
 
 	case "auditlog":
 		// The audit log can hold 100k+ rows on production, so it is no longer

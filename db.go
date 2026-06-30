@@ -38,13 +38,14 @@ var (
 	bucketAudit     = []byte("auditlog")        // auditlog (key = seq)
 	bucketMeta      = []byte("meta")            // app meta (wizard state, etc.)
 	bucketGeoCfg    = []byte("geoconfig")       // geocoding (geoapify) api key / settings (key = name)
+	bucketItemTypes = []byte("itemtypes")       // admin-defined custom palette item types (key = id)
 )
 
 var allBuckets = [][]byte{
 	bucketSettings, bucketMaps, bucketDesks, bucketLdap, bucketBookings, bucketTeams,
 	bucketRoles, bucketUsers, bucketChangelog, bucketStats, bucketTracking, bucketVips,
 	bucketDepts, bucketRobin, bucketMeeting, bucketWhitelist, bucketLdapSrc, bucketAudit,
-	bucketMeta, bucketDirectory, bucketRobinCfg, bucketRobinDesk, bucketGeoCfg,
+	bucketMeta, bucketDirectory, bucketRobinCfg, bucketRobinDesk, bucketGeoCfg, bucketItemTypes,
 }
 
 type DB struct {
@@ -670,6 +671,49 @@ func (db *DB) NextDeskID(mapName string) (int, error) {
 		}
 	}
 	return max + 1, nil
+}
+
+// --- Custom item types ---
+
+// CustomItemType is an admin-defined palette item (marker) that editors can drag
+// onto a map. It renders with the configured colour/icon/size and is stored on
+// desks with desktype "custom_<ID>".
+type CustomItemType struct {
+	ID          string `json:"id"`          // url-safe slug, also the icon filename stem
+	Label       string `json:"label"`       // shown in the palette + as the marker's name
+	Description string `json:"description"` // palette tile subtitle / tooltip
+	Color       string `json:"color"`       // CSS colour for the marker background
+	Icon        string `json:"icon"`        // uploaded icon filename (served from /itemicons/), or ""
+	Size        string `json:"size"`        // "small" | "medium" | "large"
+}
+
+// Halfsize maps the named size onto the same half-box pixel scale used by the
+// built-in item types (see editItemHalfsize in admin.js / updateDesks in user.js).
+func (t CustomItemType) Halfsize() int {
+	switch t.Size {
+	case "small":
+		return 18
+	case "large":
+		return 40
+	default:
+		return 25
+	}
+}
+
+func (db *DB) ListItemTypes() ([]CustomItemType, error) {
+	return listJSON[CustomItemType](db, bucketItemTypes, "")
+}
+
+func (db *DB) GetItemType(id string) (CustomItemType, bool, error) {
+	return getJSON[CustomItemType](db, bucketItemTypes, []byte(id))
+}
+
+func (db *DB) PutItemType(t CustomItemType) error {
+	return putJSON(db, bucketItemTypes, []byte(t.ID), t)
+}
+
+func (db *DB) DeleteItemType(id string) error {
+	return deleteKey(db, bucketItemTypes, []byte(id))
 }
 
 // --- LDAP mirror ---

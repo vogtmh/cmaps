@@ -9,15 +9,16 @@ function checkHealthStatus() {
     success: function(result){   
       var healtherrors = result.consistency_ldap + result.consistency_desks
       if (healtherrors == 0) {
-        var healthstatus = '<img src="images/dbcheck_ok2.png" style="width:100%;height:100%;" alt="" />'
+        var healthstatus = '<img src="images/dbcheck_ok2.png" style="width:44px;height:44px;" alt="" />'
         document.getElementById('healthstatus').innerHTML= healthstatus
       }
       else {
         var healthstatus = '<a href="admin/?tab=health">'
-                         + '<img src="images/dbcheck_error2.png" style="width:100%;height:100%;" alt="" />'
+                         + '<img src="images/warning.png" style="width:44px;height:44px;" alt="" />'
                          + '</a>'
         document.getElementById('healthstatus').innerHTML = healthstatus
-        $("#healthstatus").show();
+        $("#healthstatus").css('display','flex');
+        $("#healthstatus").css('background-color','#f20000');
       }
       console.log('[HealthStatus] updated');
     }
@@ -380,7 +381,7 @@ function openWorldMapAdd() {
   // expand from it. The panel is position:fixed at right:16/bottom:16, so its
   // final (unscaled) box can be derived from the viewport and its layout size,
   // independent of the current scale(0.2) transform.
-  var addBtn = document.querySelector('.worldmap-add-btn');
+  var addBtn = document.getElementById('inputgrid') || document.querySelector('.worldmap-add-btn');
   if (addBtn) {
     var b = addBtn.getBoundingClientRect();
     var panelRight = window.innerWidth - 16;
@@ -973,16 +974,20 @@ var EDIT_PALETTE = [
     { type: 'ldap-desk',  label: 'Directory desk', desc: 'Seat linked to a directory user; the assignee fills in automatically.', color: 'rgba(180,180,180,0.85)' },
     { type: 'local-desk', label: 'Custom desk',    desc: 'Manually managed seat with your own name, avatar and department.',     color: 'rgba(0,0,255,0.5)' },
     { type: 'hotseat',    label: 'Hot seat',       desc: 'Flexible first-come desk, shown in red.',                               color: 'rgba(208,19,23,0.8)' },
-    { type: 'booking',    label: 'Bookable desk',  desc: 'Reservable desk (green); users can book it for a day.',                color: 'rgba(61,173,30,0.8)' }
+    { type: 'booking',    label: 'Bookable desk',  desc: 'Reservable desk (green); users can book it for a day.',                color: 'rgba(61,173,30,0.8)' },
+    { type: 'blocked',    label: 'Blocked',        desc: 'Marks an unavailable or out-of-service spot.',                         color: 'rgba(180,180,180,0.85)' }
+  ]},
+  { section: 'Desk clusters', items: [
+    { cluster: true, count: 4, cols: 2, rows: 2, diagonal: false, label: '4 desks', desc: 'A tidy 2\u00d72 block of four desks.', color: 'rgba(0,0,255,0.5)' },
+    { cluster: true, count: 6, cols: 3, rows: 2, diagonal: false, label: '6 desks', desc: 'A tidy 3\u00d72 block of six desks.', color: 'rgba(0,0,255,0.5)' }
   ]},
   { section: 'Rooms & areas', items: [
     { type: 'meeting', label: 'Meeting room', desc: 'Conference room with live availability.', color: 'rgba(137,26,183,0.8)', icon: 'meeting.png' },
-    { type: 'floor',   label: 'Floor', desc: 'Navigation marker on the right-hand rail; jumps to a floor or section. Only its vertical position matters.', color: '#d017a8b3', square: true },
-    { type: 'blocked', label: 'Blocked',      desc: 'Marks an unavailable or out-of-service spot.', color: 'rgba(180,180,180,0.85)' },
-    { type: 'exit',    label: 'Exit',         desc: 'Emergency exit marker.', color: 'rgba(84,185,72,0.8)', icon: 'exit.png' }
+    { type: 'restroom', label: 'Restroom',     desc: 'Toilets / washroom.', color: 'rgba(78,81,100,0.8)', icon: 'restroom.png' }
   ]},
   { section: 'Points of interest', items: [
-    { type: 'restroom',    label: 'Restroom',      desc: 'Toilets / washroom.',            color: 'rgba(78,81,100,0.8)',  icon: 'restroom.png' },
+    { type: 'floor',       label: 'Floor', desc: 'Navigation marker on the right-hand rail; jumps to a floor or section. Only its vertical position matters.', color: '#d017a8b3', square: true, icon: 'floor2.png' },
+    { type: 'exit',        label: 'Exit',          desc: 'Emergency exit marker.',         color: 'rgba(84,185,72,0.8)',  icon: 'exit.png' },
     { type: 'food',        label: 'Food & drink',  desc: 'Kitchen, canteen or coffee point.', color: 'rgba(215,125,40,0.8)', icon: 'food.png' },
     { type: 'printer',     label: 'Printer',       desc: 'Printer or copier station.',     color: 'rgba(50,50,50,0.8)',   icon: 'printer.png' },
     { type: 'firstaid',    label: 'First aid',     desc: 'First-aid kit or station.',      color: 'rgba(220,50,50,0.8)',  icon: 'firstaid.png' },
@@ -1001,10 +1006,105 @@ var EDIT_PALETTE_BY_TYPE = (function () {
   return m;
 })();
 
+// Desk types selectable for cluster placement (mirrors the "Desks" section).
+// `type` is the palette key chosen in the dropdown; clusterDeskFields() maps it
+// to the stored desktype plus the matching employee/avatar/department defaults.
+var CLUSTER_DESK_OPTIONS = [
+  { type: 'ldap-desk',  label: 'Directory desk' },
+  { type: 'local-desk', label: 'Custom desk' },
+  { type: 'hotseat',    label: 'Hot seat' },
+  { type: 'booking',    label: 'Bookable desk' },
+  { type: 'blocked',    label: 'Blocked' }
+];
+
+// Resolve the stored desk fields for a cluster palette type. Mirrors what the
+// single-desk editor form submits per type so batch-created cluster desks are
+// indistinguishable from individually placed ones.
+function clusterDeskFields(paletteType) {
+  switch (paletteType) {
+    case 'local-desk': return { desktype: 'localdesk', employee: '',            avatar: '-',       department: '' };
+    case 'hotseat':    return { desktype: 'hotseat',   employee: 'HotSeat',     avatar: 'hotseat', department: '' };
+    case 'booking':    return { desktype: 'booking',   employee: 'Booking',     avatar: 'booking', department: '' };
+    case 'blocked':    return { desktype: 'blocked',   employee: 'Blocked',     avatar: 'blocked', department: '' };
+    case 'ldap-desk':
+    default:           return { desktype: 'addesk',    employee: 'ldap-mirror', avatar: '-',       department: '' };
+  }
+}
+
+// Persisted cluster desk-type choice (cookie). Defaults to Directory desk.
+function getClusterDeskType() {
+  var v = (typeof getCookie === 'function') ? getCookie('cluster_desktype') : '';
+  return v || 'ldap-desk';
+}
+function setClusterDeskType(v) {
+  document.cookie = 'cluster_desktype=' + v + '; expires=Fri, 31 Dec 9999 23:59:59 GMT; SameSite=Lax';
+}
+
+// On-map colour of the currently selected cluster desk type, so cluster previews
+// and the drag ghost match what will actually be placed.
+function clusterDeskColor() {
+  var it = EDIT_PALETTE_BY_TYPE[getClusterDeskType()];
+  return (it && it.color) || 'rgba(0,0,255,0.5)';
+}
+
+// Repaint the cluster preview dots in the sidebar to the selected type's colour.
+function refreshClusterPreviews() {
+  var color = clusterDeskColor();
+  var dots = document.querySelectorAll('.editsidebar_clusterdot');
+  for (var i = 0; i < dots.length; i++) { dots[i].style.background = color; }
+}
+
+// Admin-defined custom item types (injected by index.html as `customItemTypes`,
+// keyed by id). Each becomes a draggable palette tile under "Custom items" and
+// is stored on desks with desktype "custom_<id>".
+function customTypeMap() {
+  return (typeof customItemTypes !== 'undefined' && customItemTypes) ? customItemTypes : {};
+}
+
+// Half the on-map CSS box size (content space) for a custom type's named size,
+// mirroring CustomItemType.Halfsize() in db.go and updateDesks() in user.js.
+function customHalfsizeForSize(size) {
+  switch (size) {
+    case 'small': return 18;
+    case 'large': return 40;
+    default: return 25;
+  }
+}
+
+// The custom type definition for a desktype like "custom_plant", or null.
+function customTypeDef(type) {
+  if (!type || type.indexOf('custom_') !== 0) { return null; }
+  var id = type.slice(7);
+  var m = customTypeMap();
+  return m[id] || null;
+}
+
+// Build palette tile descriptors for every configured custom item type.
+function customPaletteItems() {
+  var m = customTypeMap();
+  var items = [];
+  Object.keys(m).forEach(function (id) {
+    var t = m[id];
+    items.push({
+      custom: true,
+      type: 'custom_' + id,
+      label: t.label || id,
+      desc: t.description || 'Custom item',
+      color: t.color || '#0979D8',
+      iconURL: t.icon || '',
+      size: t.size || 'medium'
+    });
+  });
+  items.sort(function (a, b) { return a.label.toLowerCase() < b.label.toLowerCase() ? -1 : 1; });
+  return items;
+}
+
 // Half the on-map CSS box size (in pre-zoom 1600px space) for a palette type,
 // matching the per-type halfsize used by updateDesks() in user.js. The rendered
 // on-screen diameter of an item is 2*halfsize * itemscale * contentZoom.
 function editItemHalfsize(type) {
+  var custom = customTypeDef(type);
+  if (custom) { return customHalfsizeForSize(custom.size); }
   switch (type) {
     case 'meeting':
     case 'exit':
@@ -1029,7 +1129,9 @@ function editItemHalfsize(type) {
 function editPaletteIconStyle(item) {
   var s = 'background-color:' + item.color + ';';
   s += item.square ? 'border-radius:6px;' : 'border-radius:50%;';
-  if (item.icon) {
+  if (item.iconURL) {
+    s += 'background-image:url("' + item.iconURL + '");background-size:cover;';
+  } else if (item.icon) {
     s += 'background-image:url("images/' + item.icon + '");background-size:cover;';
   }
   return s;
@@ -1040,23 +1142,78 @@ function renderEditPalette() {
   var inner = document.getElementById('editsidebar_inner');
   if (!inner) { return; }
   inner.innerHTML = '';
+
+  // Top row: the trash drop zone (left) and the auto-align tool (right), 50:50.
+  var tools = document.createElement('div');
+  tools.className = 'editsidebar_tools';
+
+  var trash = document.createElement('div');
+  trash.id = 'editsidebar_trash';
+  trash.className = 'edit_sidebar_trash';
+  trash.title = 'Drag an item here to delete it';
+  trash.innerHTML = '<div class="edit_sidebar_trash_icon"></div>'
+                  + '<div class="edit_sidebar_trash_label">Delete</div>';
+  tools.appendChild(trash);
+
+  var alignBtn = document.createElement('button');
+  alignBtn.type = 'button';
+  alignBtn.className = 'editsidebar_toolbtn';
+  alignBtn.title = 'Drag a box around a group of desks to tidy them into evenly aligned rows and columns (preview before applying).';
+  alignBtn.innerHTML = '<span class="editsidebar_toolbtn_icon"></span>'
+                     + '<span class="editsidebar_toolbtn_label">Auto-align desks</span>';
+  alignBtn.addEventListener('click', startAutoAlign);
+  tools.appendChild(alignBtn);
+
+  inner.appendChild(tools);
+
   EDIT_PALETTE.forEach(function (sec) {
     var h = document.createElement('div');
     h.className = 'editsidebar_section';
     h.textContent = sec.section;
     inner.appendChild(h);
 
+    // Desk clusters can be created as any desk type; offer a dropdown (default
+    // Directory desk) whose choice is remembered in a cookie.
+    if (sec.section === 'Desk clusters') {
+      var typeRow = document.createElement('div');
+      typeRow.className = 'editsidebar_clustertype';
+      var typeLbl = document.createElement('label');
+      typeLbl.setAttribute('for', 'cluster_desktype_sel');
+      typeLbl.textContent = 'Desk type';
+      var typeSel = document.createElement('select');
+      typeSel.id = 'cluster_desktype_sel';
+      CLUSTER_DESK_OPTIONS.forEach(function (opt) {
+        var o = document.createElement('option');
+        o.value = opt.type;
+        o.textContent = opt.label;
+        typeSel.appendChild(o);
+      });
+      typeSel.value = getClusterDeskType();
+      typeSel.addEventListener('change', function () {
+        setClusterDeskType(typeSel.value);
+        refreshClusterPreviews();
+      });
+      typeRow.appendChild(typeLbl);
+      typeRow.appendChild(typeSel);
+      inner.appendChild(typeRow);
+    }
+
     var grid = document.createElement('div');
     grid.className = 'editsidebar_grid';
     sec.items.forEach(function (item) {
       var tile = document.createElement('div');
       tile.className = 'editsidebar_tile';
-      tile.setAttribute('data-type', item.type);
+      tile.setAttribute('data-type', item.type || ('cluster' + item.count + (item.diagonal ? 'd' : '')));
       tile.setAttribute('title', item.label + ' \u2014 ' + item.desc);
 
       var icon = document.createElement('div');
       icon.className = 'editsidebar_tile_icon';
-      icon.setAttribute('style', editPaletteIconStyle(item));
+      if (item.cluster) {
+        icon.classList.add('editsidebar_tile_icon_cluster');
+        renderClusterPreviewInto(icon, item);
+      } else {
+        icon.setAttribute('style', editPaletteIconStyle(item));
+      }
       tile.appendChild(icon);
 
       var name = document.createElement('div');
@@ -1079,6 +1236,52 @@ function renderEditPalette() {
     });
     inner.appendChild(grid);
   });
+
+  renderCustomPaletteSection(inner);
+}
+
+// Append a "Custom items" palette section built from the admin-defined custom
+// item types. Drag-to-place creates a marker immediately (no editor form).
+function renderCustomPaletteSection(inner) {
+  var items = customPaletteItems();
+  if (!items.length) { return; }
+
+  var h = document.createElement('div');
+  h.className = 'editsidebar_section';
+  h.textContent = 'Custom items';
+  inner.appendChild(h);
+
+  var grid = document.createElement('div');
+  grid.className = 'editsidebar_grid';
+  items.forEach(function (item) {
+    var tile = document.createElement('div');
+    tile.className = 'editsidebar_tile';
+    tile.setAttribute('data-type', item.type);
+    tile.setAttribute('title', item.label + ' \u2014 ' + item.desc);
+
+    var icon = document.createElement('div');
+    icon.className = 'editsidebar_tile_icon';
+    icon.setAttribute('style', editPaletteIconStyle(item));
+    tile.appendChild(icon);
+
+    var name = document.createElement('div');
+    name.className = 'editsidebar_tile_name';
+    name.textContent = item.label;
+    tile.appendChild(name);
+
+    var desc = document.createElement('div');
+    desc.className = 'editsidebar_tile_desc';
+    desc.textContent = item.desc;
+    tile.appendChild(desc);
+
+    tile.addEventListener('pointerdown', function (ev) {
+      ev.preventDefault();
+      startPaletteDrag(item, ev);
+    });
+
+    grid.appendChild(tile);
+  });
+  inner.appendChild(grid);
 }
 
 function openEditSidebar() {
@@ -1183,6 +1386,12 @@ function startPaletteDrag(item, ev) {
   // Cancel any half-finished drag first.
   endPaletteDrag();
 
+  // Clusters use a dedicated multi-dot ghost; single items use a tinted swatch.
+  if (item.cluster) {
+    startClusterDrag(item, ev);
+    return;
+  }
+
   var ghost = document.createElement('div');
   ghost.className = 'editsidebar_dragghost';
   ghost.setAttribute('style', editPaletteIconStyle(item));
@@ -1247,6 +1456,14 @@ function onPaletteDragUp(ev) {
   var pt = over ? screenToMap(ev.clientX, ev.clientY) : null;
   endPaletteDrag();
   if (over && pt) {
+    if (item.cluster) {
+      placeCluster(item, pt.x, pt.y);
+      return;
+    }
+    if (item.custom) {
+      placeCustomItem(item, pt.x, pt.y);
+      return;
+    }
     // Floor markers ignore the dropped X and lock to the rail.
     var px = (item.type === 'floor') ? FLOOR_RAIL_X : pt.x;
     placeItem(item.type, px, pt.y);
@@ -1330,4 +1547,458 @@ function placeItem(type, x, y) {
     }
     marker.style.borderRadius = pitem.square ? '3px' : '50%';
   }
+}
+
+// ---------------------------------------------------------------------------
+// Cluster placement: drop a pre-aligned block of several desks at once. The
+// cluster is purely a placement TEMPLATE (no schema change) - it creates N
+// INDEPENDENT custom-desk records that can each be moved/edited afterwards.
+// ---------------------------------------------------------------------------
+
+// Centre-to-centre spacing (in the map's 1600px content space) between desks in
+// a cluster. When the map already has desk groups, match their typical spacing
+// so a new cluster blends in; otherwise fall back to a fixed itemscale-based gap.
+function clusterSpacing() {
+  var scale = parseFloat(typeof itemscale !== 'undefined' ? itemscale : 1) || 1;
+  var learned = existingDeskSpacing();
+  if (learned) { return learned; }
+  return 50 * scale;
+}
+
+// Learn the usual centre-to-centre spacing of existing desk groups on the map
+// (median nearest-neighbour distance among round, free-placed desks, in content
+// space). Returns null when there aren't enough desks to infer a spacing, so the
+// caller keeps its default. Clamped to a sane range to avoid odd outliers.
+function existingDeskSpacing() {
+  var src = (result_old && result_old.desks) ? result_old.desks : [];
+  var desks = src
+    .filter(function (d) { return AUTOALIGN_TYPES[d.desktype]; })
+    .map(function (d) { return { x: parseInt(d.x, 10), y: parseInt(d.y, 10) }; })
+    .filter(function (d) { return isFinite(d.x) && isFinite(d.y); });
+  if (desks.length < 4) { return null; }
+  var dists = [];
+  desks.forEach(function (d) {
+    var best = Infinity;
+    desks.forEach(function (e) {
+      if (e === d) { return; }
+      var dd = Math.hypot(d.x - e.x, d.y - e.y);
+      if (dd < best) { best = dd; }
+    });
+    if (isFinite(best) && best > 0) { dists.push(best); }
+  });
+  if (dists.length < 3) { return null; }
+  dists.sort(function (a, b) { return a - b; });
+  var med = dists[Math.floor(dists.length / 2)];
+  if (!isFinite(med) || med <= 0) { return null; }
+  return Math.max(30, Math.min(200, med));
+}
+
+// Relative (dx,dy) offsets of each desk in a cluster around the drop point, in
+// content space. Straight clusters are an even grid; diagonal clusters are the
+// same grid rotated 45deg (centres only - desks stay circles, no rotation).
+function clusterOffsets(item) {
+  var spacing = clusterSpacing();
+  var cols = item.cols, rows = item.rows;
+  var offs = [];
+  for (var r = 0; r < rows; r++) {
+    for (var c = 0; c < cols; c++) {
+      offs.push({
+        dx: (c - (cols - 1) / 2) * spacing,
+        dy: (r - (rows - 1) / 2) * spacing
+      });
+    }
+  }
+  if (item.diagonal) {
+    var k = Math.SQRT1_2; // cos45 == sin45
+    offs = offs.map(function (o) {
+      return { dx: o.dx * k - o.dy * k, dy: o.dx * k + o.dy * k };
+    });
+  }
+  return offs;
+}
+
+// Render a miniature multi-dot preview of a cluster into a tile/ghost element.
+function renderClusterPreviewInto(el, item) {
+  el.innerHTML = '';
+  var offs = clusterOffsets(item);
+  var maxAbs = 1;
+  offs.forEach(function (o) {
+    maxAbs = Math.max(maxAbs, Math.abs(o.dx), Math.abs(o.dy));
+  });
+  var box = 44, dot = 9, fit = (box / 2 - dot / 2 - 2) / maxAbs;
+  var color = clusterDeskColor();
+  offs.forEach(function (o) {
+    var d = document.createElement('span');
+    d.className = 'editsidebar_clusterdot';
+    d.style.background = color;
+    d.style.width = dot + 'px';
+    d.style.height = dot + 'px';
+    d.style.left = (box / 2 + o.dx * fit - dot / 2) + 'px';
+    d.style.top = (box / 2 + o.dy * fit - dot / 2) + 'px';
+    el.appendChild(d);
+  });
+}
+
+// Start dragging a cluster: a floating multi-dot ghost (sized to the real
+// on-screen footprint) follows the cursor; on drop placeCluster() runs.
+function startClusterDrag(item, ev) {
+  var content = document.getElementById('content');
+  var z = content ? (parseFloat(window.getComputedStyle(content).zoom) || 1) : 1;
+  var scale = parseFloat(typeof itemscale !== 'undefined' ? itemscale : 1) || 1;
+  var offs = clusterOffsets(item);
+  var dotSize = 2 * editItemHalfsize('local-desk') * scale * z; // 20*scale*z
+  var color = clusterDeskColor();
+
+  var ghost = document.createElement('div');
+  ghost.className = 'editsidebar_dragghost editsidebar_dragghost_cluster';
+  offs.forEach(function (o) {
+    var d = document.createElement('div');
+    d.style.position = 'absolute';
+    d.style.width = dotSize + 'px';
+    d.style.height = dotSize + 'px';
+    d.style.borderRadius = '50%';
+    d.style.background = color;
+    // Centre the cluster on the cursor: container origin sits at the cursor and
+    // each dot is offset around it (content offset * live content zoom).
+    d.style.left = (o.dx * z - dotSize / 2) + 'px';
+    d.style.top = (o.dy * z - dotSize / 2) + 'px';
+    ghost.appendChild(d);
+  });
+  ghost.style.left = ev.clientX + 'px';
+  ghost.style.top = ev.clientY + 'px';
+  document.body.appendChild(ghost);
+
+  paletteDrag = { item: item, ghost: ghost };
+  document.addEventListener('pointermove', onPaletteDragMove, true);
+  document.addEventListener('pointerup', onPaletteDragUp, true);
+}
+
+// Place a cluster: create N independent custom desks in one batch round-trip.
+function placeCluster(item, cx, cy) {
+  var offs = clusterOffsets(item);
+  var f = clusterDeskFields(getClusterDeskType());
+  var ops = offs.map(function (o) {
+    return {
+      op: 'create', desktype: f.desktype,
+      x: Math.round(cx + o.dx), y: Math.round(cy + o.dy),
+      desknumber: 'Desk', employee: f.employee, avatar: f.avatar, department: f.department
+    };
+  });
+  $.ajax({
+    url: 'rest/update',
+    type: 'post',
+    data: { token: token, mode: 'batch', map: mapname, user: username, ops: JSON.stringify(ops) },
+    dataType: 'JSON',
+    success: function () { updateDesks(); },
+    error: function () { alert('Could not place the desk cluster.'); }
+  });
+}
+
+// Drop-to-place a custom item marker: creates one desk record with desktype
+// "custom_<id>" and the type's label as its name. No editor form is shown;
+// editors can move it by dragging or remove it via the trash zone afterwards.
+function placeCustomItem(item, x, y) {
+  $.ajax({
+    url: 'rest/update',
+    type: 'get',
+    data: {
+      token: token, mode: 'create', map: mapname, user: username,
+      desktype: item.type, x: Math.round(x), y: Math.round(y),
+      desknumber: item.label, employee: '', avatar: '-', department: '- none -'
+    },
+    dataType: 'JSON',
+    success: function () { updateDesks(); },
+    error: function () { alert('Could not place the custom item.'); }
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Auto-align: tidy nearby desks into shared row/column baselines. Detects
+// proximity clusters, snaps each desk to its row-band average Y and column-band
+// average X, previews the result (ghosts), and saves on confirm via mode=batch.
+// ---------------------------------------------------------------------------
+
+// Display desktypes (as returned by /rest/desks) that are round, free-placed
+// desks eligible for auto-align. Floors (rail-locked), meeting rooms and points
+// of interest are intentionally excluded.
+var AUTOALIGN_TYPES = {
+  occupied: 1, addesk: 1, localdesk: 1, hotseat: 1, booking: 1, blocked: 1
+};
+
+// Group items by a coordinate (x or y) into bands whose members are within
+// `tol` of the band's anchor (first member). Anchoring (rather than comparing to
+// the previous element) caps each band's width at `tol` and prevents a dense run
+// of desks from chaining distinct rows/columns into one. Returns a map
+// id -> the band's average coordinate (rounded).
+function autoAlignBands(items, key, tol) {
+  var sorted = items.slice().sort(function (a, b) { return a[key] - b[key]; });
+  var bands = [], cur = [], anchor = 0;
+  sorted.forEach(function (it) {
+    if (cur.length === 0) { cur = [it]; anchor = it[key]; return; }
+    if (it[key] - anchor <= tol) { cur.push(it); }
+    else { bands.push(cur); cur = [it]; anchor = it[key]; }
+  });
+  if (cur.length) { bands.push(cur); }
+  var out = {};
+  bands.forEach(function (band) {
+    var sum = 0;
+    band.forEach(function (it) { sum += it[key]; });
+    var avg = Math.round(sum / band.length);
+    band.forEach(function (it) { out[it.id] = avg; });
+  });
+  return out;
+}
+
+// Median nearest-neighbour distance among the desks (in content space). Used to
+// adapt the clustering/banding tolerances to whatever spacing the map actually
+// uses, instead of a fixed guess that over-merges dense floors.
+function autoAlignMedianSpacing(desks) {
+  if (desks.length < 2) { return 60; }
+  var dists = [];
+  desks.forEach(function (d) {
+    var best = Infinity;
+    desks.forEach(function (e) {
+      if (e === d) { return; }
+      var dd = Math.hypot(d.x - e.x, d.y - e.y);
+      if (dd < best) { best = dd; }
+    });
+    if (isFinite(best)) { dists.push(best); }
+  });
+  if (!dists.length) { return 60; }
+  dists.sort(function (a, b) { return a - b; });
+  var med = dists[Math.floor(dists.length / 2)] || 60;
+  return Math.max(30, Math.min(200, med));
+}
+
+// Compute the list of desk moves needed to tidy a set of desks. When `bounds`
+// (content-space {x1,y1,x2,y2}) is given, only desks whose centre falls inside
+// the selected area are considered. Returns an array of
+// { id, oldX, oldY, newX, newY } for desks that actually move.
+function autoAlignPlan(bounds) {
+  var src = (result_old && result_old.desks) ? result_old.desks : [];
+  var desks = src
+    .filter(function (d) { return AUTOALIGN_TYPES[d.desktype]; })
+    .map(function (d) {
+      return { id: parseInt(d.id, 10), x: parseInt(d.x, 10), y: parseInt(d.y, 10) };
+    });
+  if (bounds) {
+    desks = desks.filter(function (d) {
+      return d.x >= bounds.x1 && d.x <= bounds.x2 && d.y >= bounds.y1 && d.y <= bounds.y2;
+    });
+  }
+  if (desks.length < 2) { return []; }
+
+  // Adapt thresholds to the map's real spacing: cluster pod-neighbours but not
+  // across aisles, and band rows/columns at well under one desk pitch.
+  var med = autoAlignMedianSpacing(desks);
+  var prox = med * 1.7; // centre-distance for "same cluster"
+  var tol = med * 0.45; // row/column banding tolerance
+
+  // Union-find proximity clustering.
+  var parent = desks.map(function (_, i) { return i; });
+  function find(i) { while (parent[i] !== i) { parent[i] = parent[parent[i]]; i = parent[i]; } return i; }
+  function union(a, b) { parent[find(a)] = find(b); }
+  for (var i = 0; i < desks.length; i++) {
+    for (var j = i + 1; j < desks.length; j++) {
+      var dx = desks[i].x - desks[j].x, dy = desks[i].y - desks[j].y;
+      if (Math.sqrt(dx * dx + dy * dy) <= prox) { union(i, j); }
+    }
+  }
+  var groups = {};
+  desks.forEach(function (d, i) { var r = find(i); (groups[r] = groups[r] || []).push(d); });
+
+  var moves = [];
+  Object.keys(groups).forEach(function (k) {
+    var g = groups[k];
+    if (g.length < 2) { return; } // lone desks are left alone
+    var colCanon = autoAlignBands(g, 'x', tol);
+    var rowCanon = autoAlignBands(g, 'y', tol);
+    g.forEach(function (d) {
+      var nx = colCanon[d.id], ny = rowCanon[d.id];
+      if (nx !== d.x || ny !== d.y) {
+        moves.push({ id: d.id, oldX: d.x, oldY: d.y, newX: nx, newY: ny });
+      }
+    });
+  });
+  return moves;
+}
+
+// Remove any auto-align preview overlay + confirm bar + in-progress selection.
+function cancelAutoAlign() {
+  endAutoAlignSelection();
+  var p = document.getElementById('autoalign_preview');
+  if (p && p.parentNode) { p.parentNode.removeChild(p); }
+  var bar = document.getElementById('autoalign_bar');
+  if (bar && bar.parentNode) { bar.parentNode.removeChild(bar); }
+  var sel = document.getElementById('autoalign_select');
+  if (sel && sel.parentNode) { sel.parentNode.removeChild(sel); }
+}
+
+// Render ghost markers at each move's target position (in the map's zoomed
+// content space) plus a Confirm/Cancel bar.
+function renderAutoAlignPreview(moves) {
+  var content = document.getElementById('content');
+  if (!content) { return; }
+  var scale = parseFloat(typeof itemscale !== 'undefined' ? itemscale : 1) || 1;
+  var half = editItemHalfsize('local-desk'); // 10
+
+  var layer = document.createElement('div');
+  layer.id = 'autoalign_preview';
+  moves.forEach(function (m) {
+    var ghost = document.createElement('div');
+    ghost.className = 'autoalign_ghost';
+    ghost.style.zoom = scale;
+    ghost.style.left = (m.newX / scale - half) + 'px';
+    ghost.style.top = (m.newY / scale - half) + 'px';
+    ghost.style.width = (2 * half) + 'px';
+    ghost.style.height = (2 * half) + 'px';
+    layer.appendChild(ghost);
+  });
+  content.appendChild(layer);
+
+  var bar = document.createElement('div');
+  bar.id = 'autoalign_bar';
+  var msg = document.createElement('span');
+  msg.className = 'autoalign_bar_msg';
+  msg.textContent = 'Align ' + moves.length + ' desk' + (moves.length === 1 ? '' : 's') + ' into tidy rows & columns?';
+  bar.appendChild(msg);
+  var apply = document.createElement('button');
+  apply.type = 'button';
+  apply.className = 'autoalign_apply';
+  apply.textContent = 'Apply';
+  apply.addEventListener('click', function () { applyAutoAlign(moves); });
+  bar.appendChild(apply);
+  var cancel = document.createElement('button');
+  cancel.type = 'button';
+  cancel.className = 'autoalign_cancel';
+  cancel.textContent = 'Cancel';
+  cancel.addEventListener('click', cancelAutoAlign);
+  bar.appendChild(cancel);
+  document.body.appendChild(bar);
+}
+
+// Save the computed moves in one batch round-trip, then refresh + clear preview.
+function applyAutoAlign(moves) {
+  var ops = moves.map(function (m) {
+    return { op: 'update', id: m.id, x: m.newX, y: m.newY };
+  });
+  $.ajax({
+    url: 'rest/update',
+    type: 'post',
+    data: { token: token, mode: 'batch', map: mapname, user: username, ops: JSON.stringify(ops) },
+    dataType: 'JSON',
+    success: function () { cancelAutoAlign(); updateDesks(); },
+    error: function () { alert('Could not save the alignment.'); }
+  });
+}
+
+// Entry point wired to the sidebar "Auto-align desks" button. Instead of
+// aligning the whole map, the editor first drags a box around the desks they
+// want tidied; only those are aligned (then previewed + confirmed).
+function startAutoAlign() {
+  cancelAutoAlign();
+  beginAutoAlignSelection();
+}
+
+// In-progress area-selection drag state (null when not selecting).
+var autoAlignSelect = null;
+
+// Enter area-selection mode: show an instruction bar and arm the next drag on
+// the map to draw a selection rectangle.
+function beginAutoAlignSelection() {
+  endAutoAlignSelection();
+
+  var bar = document.createElement('div');
+  bar.id = 'autoalign_bar';
+  var msg = document.createElement('span');
+  msg.className = 'autoalign_bar_msg';
+  msg.textContent = 'Drag a box around the desks you want to align.';
+  bar.appendChild(msg);
+  var cancel = document.createElement('button');
+  cancel.type = 'button';
+  cancel.className = 'autoalign_cancel';
+  cancel.textContent = 'Cancel';
+  cancel.addEventListener('click', cancelAutoAlign);
+  bar.appendChild(cancel);
+  document.body.appendChild(bar);
+
+  autoAlignSelect = { selecting: true, dragging: false, x0: 0, y0: 0, rect: null };
+  document.addEventListener('pointerdown', onAutoAlignSelectDown, true);
+}
+
+function onAutoAlignSelectDown(ev) {
+  if (!autoAlignSelect || !autoAlignSelect.selecting) { return; }
+  // Ignore clicks that are not on the map (e.g. the Cancel button or sidebar).
+  if (!pointOverMap(ev.clientX, ev.clientY)) { return; }
+  // preventDefault suppresses the compatibility mousedown so desk dragging does
+  // not start while we draw the selection box.
+  ev.preventDefault();
+  ev.stopPropagation();
+  autoAlignSelect.dragging = true;
+  autoAlignSelect.x0 = ev.clientX;
+  autoAlignSelect.y0 = ev.clientY;
+
+  var rect = document.createElement('div');
+  rect.id = 'autoalign_select';
+  rect.style.left = ev.clientX + 'px';
+  rect.style.top = ev.clientY + 'px';
+  rect.style.width = '0px';
+  rect.style.height = '0px';
+  document.body.appendChild(rect);
+  autoAlignSelect.rect = rect;
+
+  document.addEventListener('pointermove', onAutoAlignSelectMove, true);
+  document.addEventListener('pointerup', onAutoAlignSelectUp, true);
+}
+
+function onAutoAlignSelectMove(ev) {
+  if (!autoAlignSelect || !autoAlignSelect.dragging) { return; }
+  var x = Math.min(ev.clientX, autoAlignSelect.x0);
+  var y = Math.min(ev.clientY, autoAlignSelect.y0);
+  var w = Math.abs(ev.clientX - autoAlignSelect.x0);
+  var h = Math.abs(ev.clientY - autoAlignSelect.y0);
+  var r = autoAlignSelect.rect;
+  if (!r) { return; }
+  r.style.left = x + 'px';
+  r.style.top = y + 'px';
+  r.style.width = w + 'px';
+  r.style.height = h + 'px';
+}
+
+function onAutoAlignSelectUp(ev) {
+  if (!autoAlignSelect || !autoAlignSelect.dragging) { return; }
+  var x0 = autoAlignSelect.x0, y0 = autoAlignSelect.y0;
+  var x1 = ev.clientX, y1 = ev.clientY;
+  // Convert the box corners to the map's content space.
+  var p0 = screenToMap(Math.min(x0, x1), Math.min(y0, y1));
+  var p1 = screenToMap(Math.max(x0, x1), Math.max(y0, y1));
+  endAutoAlignSelection();
+  var bar = document.getElementById('autoalign_bar');
+  if (bar && bar.parentNode) { bar.parentNode.removeChild(bar); }
+
+  // Ignore an accidental click / tiny box: re-arm the selection.
+  if (!p0 || !p1 || (p1.x - p0.x) < 10 || (p1.y - p0.y) < 10) {
+    beginAutoAlignSelection();
+    return;
+  }
+
+  var bounds = { x1: p0.x, y1: p0.y, x2: p1.x, y2: p1.y };
+  var moves = autoAlignPlan(bounds);
+  if (!moves.length) {
+    cancelAutoAlign();
+    alert('No alignable desks in that area (or they are already tidy). Try selecting a desk cluster.');
+    return;
+  }
+  renderAutoAlignPreview(moves);
+}
+
+// Tear down the selection listeners + rectangle (leaves any preview alone).
+function endAutoAlignSelection() {
+  document.removeEventListener('pointerdown', onAutoAlignSelectDown, true);
+  document.removeEventListener('pointermove', onAutoAlignSelectMove, true);
+  document.removeEventListener('pointerup', onAutoAlignSelectUp, true);
+  if (autoAlignSelect && autoAlignSelect.rect && autoAlignSelect.rect.parentNode) {
+    autoAlignSelect.rect.parentNode.removeChild(autoAlignSelect.rect);
+  }
+  autoAlignSelect = null;
 }

@@ -683,6 +683,16 @@ function showNameplate (deskid, desktype) {
           content += '<div style="color:'+textcolor+'">'+multiresult[m].fname+' '+multiresult[m].lname+'</div>';
         }
         break;
+      default:
+        // Admin-defined custom item types: a simple labelled marker.
+        if (desktype && desktype.indexOf('custom_') === 0) {
+          var ctNp = (typeof customItemTypes !== 'undefined' && customItemTypes[desktype.slice(7)]) ? customItemTypes[desktype.slice(7)] : null;
+          var caption = attr.dsk || (ctNp ? ctNp.label : 'Item');
+          var avatar = (ctNp && ctNp.icon) ? ctNp.icon : 'images/noavatar.png';
+          var avatarcolor = $('#' + attr.id).css('background-color');
+          content = (ctNp && ctNp.description) ? ctNp.description : '';
+        }
+        break;
     }
     if (attr.color != '') {
       var color = attr.color;
@@ -1108,6 +1118,17 @@ function showSticky (deskid, desktype, caption) {
           content += ')">'+multiresult[m].fname+'</div>';  
         }
         content += '</div><div id="stickytext" style="margin-left:10px;width:260px;height:100%;float:left;">'+attr.title + '<br />'+ attr.mail + '<br />'+ attr.phone + '<br />' + attr.mobil + '<br />'+'</div>';
+        break;
+      default:
+        // Admin-defined custom item types: a simple labelled sticky.
+        if (desktype && desktype.indexOf('custom_') === 0) {
+          var ctSt = (typeof customItemTypes !== 'undefined' && customItemTypes[desktype.slice(7)]) ? customItemTypes[desktype.slice(7)] : null;
+          var caption = attr.dsk || (ctSt ? ctSt.label : 'Item');
+          var copylink = caption;
+          var avatar = (ctSt && ctSt.icon) ? ctSt.icon : 'images/noavatar.png';
+          var avatarcolor = $('#' + attr.id).css('background-color');
+          content = (ctSt && ctSt.description) ? ctSt.description : '';
+        }
         break;
     }
     if (attr.color != '') {
@@ -2448,6 +2469,17 @@ function bindDeskHandlers() {
 }
 
 // using the desks API to create all deskitems
+// Half the on-map CSS box size (content space) for a custom item type's named
+// size, mirroring CustomItemType.Halfsize() in db.go and editItemHalfsize() in
+// admin.js so the marker renders at the same size everywhere.
+function customHalfsize(size) {
+  switch (size) {
+    case 'small': return 18;
+    case 'large': return 40;
+    default: return 25;
+  }
+}
+
 function updateDesks(forceRefresh) {    
   mapname = map;
   if (userdate != '') {
@@ -2480,6 +2512,22 @@ function updateDesks(forceRefresh) {
             continue;
           }
           if (counter.id != '') { seenIds[counter.id] = true; }
+          // Admin-defined custom item types render as a coloured/iconed marker
+          // straight from the customItemTypes definition (no per-type CSS class).
+          if (counter.desktype && counter.desktype.indexOf('custom_') === 0) {
+            var ctDef = (typeof customItemTypes !== 'undefined' && customItemTypes[counter.desktype.slice(7)]) ? customItemTypes[counter.desktype.slice(7)] : null;
+            var chalf = customHalfsize(ctDef ? ctDef.size : 'medium');
+            var ccolor = ctDef ? ctDef.color : '#0979D8';
+            var cicon = (ctDef && ctDef.icon) ? ctDef.icon : '';
+            var clabel = counter.dsk || (ctDef ? ctDef.label : 'Item');
+            var cstyle = 'position:absolute;left:' + (counter.x/itemscale-chalf) + 'px;top:' + (counter.y/itemscale-chalf)
+                       + 'px;width:' + (2*chalf) + 'px;height:' + (2*chalf) + 'px;border-radius:50%;background-color:' + ccolor + ';'
+                       + (cicon ? 'background-image:url(\'' + cicon + '\');background-size:cover;background-repeat:no-repeat;background-position:center;' : '')
+                       + 'zoom:' + itemscale + ';';
+            outputdesks += '<div id="' + counter.id + '" class="deskball" data-type="' + counter.desktype + '" style="' + cstyle + '">'
+                        + '<div id="caption' + counter.id + '" class="caption">' + clabel + '</div></div>';
+            continue;
+          }
           switch (counter.desktype) {
   
           case "exit":

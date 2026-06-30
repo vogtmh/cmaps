@@ -144,41 +144,18 @@ $(function(){
   }
   // Keep the trash drop zone the SAME on-screen size as the bottom-right Edit
   // toggle and clear of it. The toggle lives in #buttons_right (zoom:basePage
-  // .scale, UNcapped, anchored right:10px), so it keeps growing past scale 1.0.
-  // The trash sits in the edit sidebar footer whose zoom is CAPPED at 1.0, so to
-  // match the toggle it needs its own extra zoom of basePage.scale/editSidebar
-  // Scale (effective render = editSidebarScale * that = basePage.scale). The
-  // footer's right padding (in its own pre-zoom space) then clears the toggle:
-  //   screen clearance = 10px gap + 80px toggle * basePage.scale + 12px margin
-  //   footer padding    = screen clearance / editSidebarScale
-  var trashEl = document.getElementById('editsidebar_trash');
-  var trashZoom = basePage.scale / (editSidebarScale || 1);
-  if (trashEl) {
-    trashEl.style.zoom = trashZoom;
-  }
+  // Reserve empty space at the bottom of the edit sidebar so the palette never
+  // renders behind the floating bottom-right edit-mode toggle and health icon.
+  // Those live in #buttons_right (zoom:basePage.scale, UNcapped) inside an anchor
+  // fixed at bottom:40*scale. Their box rises ~65px (toggle incl. margins / the
+  // same-height health icon beside it) above that anchor, so the cluster reaches
+  // about (40 + 65) * scale from the viewport bottom; add ~10px padding so the
+  // toggle and health icon never touch the palette. Converted into the footer's
+  // own CAPPED-zoom space that is /editSidebarScale.
   var footerEl = document.getElementById('editsidebar_footer');
   if (footerEl) {
-    var toggleClearScreen = 10 + (80 * basePage.scale) + 12;
-    var footerPadRight = Math.ceil(toggleClearScreen / (editSidebarScale || 1));
-    footerEl.style.paddingRight = footerPadRight + 'px';
-    // Stretch the trash to fill the remaining footer width left of the toggle.
-    // CSS `zoom` scales layout too, so the trash occupies (width * trashZoom) in
-    // the footer's pre-zoom space. The footer is 340px wide (border-box) with a
-    // 14px left padding and footerPadRight on the right, so the free content
-    // width in footer space is (340 - 14 - footerPadRight); divide by trashZoom
-    // to get the trash's own CSS width that exactly fills it.
-    if (trashEl) {
-      var freeFooterSpace = 340 - 14 - footerPadRight;
-      var trashWidth = Math.max(80, Math.floor(freeFooterSpace / trashZoom));
-      trashEl.style.width = trashWidth + 'px';
-    }
-    // Raise the trash so it shares the Edit toggle's bottom edge and sits level
-    // beside it (next to each other). The toggle is anchored at bottom:40*scale
-    // with a ~5px margin, so its box bottom is ~45*scale from the viewport
-    // bottom; converted into the footer's pre-zoom space that is 45*scale /
-    // editSidebarScale. The footer auto-grows upward to fit the raised trash.
-    var footerPadBottom = Math.ceil((45 * basePage.scale) / (editSidebarScale || 1));
-    footerEl.style.paddingBottom = footerPadBottom + 'px';
+    var reserveScreen = (40 + 65 + 10) * basePage.scale;
+    footerEl.style.height = Math.ceil(reserveScreen / (editSidebarScale || 1)) + 'px';
   }
   var leftW = ((typeof searchSidebarWidth === 'number') && searchSidebarWidth > 0) ? searchSidebarWidth * basePage.scale : 0;
   var rightW = ((typeof editSidebarWidth === 'number') && editSidebarWidth > 0) ? editSidebarWidth * editSidebarScale : 0;
@@ -217,7 +194,7 @@ $(function(){
   buttonsleftanchor.attr('style', 'position:fixed; left: 10px; bottom: '+ (25*basePage.scale) + 'px; z-index:5;');
   buttonsleft.attr('style', 'position:relative; height:80px;background: transparent; zoom:' + basePage.scale + ';');
   buttonsrightanchor.attr('style', 'position:fixed; right: 10px; bottom: '+ (40*basePage.scale) + 'px; z-index:5;');
-  buttonsright.attr('style', 'position:relative; height:auto;width:80px;background: transparent; zoom:' + basePage.scale + ';');
+  buttonsright.attr('style', 'position:relative; display:flex; flex-direction:row; align-items:center; justify-content:flex-end; gap:8px; width:auto; background: transparent; zoom:' + basePage.scale + ';');
   
   datepicker.attr('style', 'position:relative;width:180px;height:175px;padding:15px 15px 10px 15px;background-color:#333;border-radius:10px 10px 0px 0px;display:none;zoom:' + basePage.scale + ';z-index:0;pointer-events:auto;');
   clock.attr('style', 'position:relative;width:180px;text-align:center;background-color:#333;border-radius:10px 10px 0px 0px;padding:10px;cursor:pointer;zoom:' + basePage.scale + ';z-index:1;pointer-events:auto;');

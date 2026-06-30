@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"image"
 	_ "image/gif"
 	_ "image/jpeg"
@@ -11,6 +12,19 @@ import (
 	"strconv"
 	"strings"
 )
+
+// batchDeskOp is a single create/update operation in a mode=batch request.
+type batchDeskOp struct {
+	Op         string `json:"op"`
+	ID         int    `json:"id"`
+	Desktype   string `json:"desktype"`
+	X          int    `json:"x"`
+	Y          int    `json:"y"`
+	Desknumber string `json:"desknumber"`
+	Employee   string `json:"employee"`
+	Avatar     string `json:"avatar"`
+	Department string `json:"department"`
+}
 
 // handleRestUpdate serves /rest/update for desk and map mutations. The legacy
 // predictable date token is REPLACED with a session + "desks" write permission
@@ -64,7 +78,7 @@ func (app *App) handleRestUpdate(w http.ResponseWriter, r *http.Request) {
 
 	switch mode {
 	case "create":
-		if mapName == "" || get("x") == "" || get("y") == "" || desknumber == "" || (employee == "" && desktype != "localdesk") {
+		if mapName == "" || get("x") == "" || get("y") == "" || desknumber == "" || (employee == "" && desktype != "localdesk" && !strings.HasPrefix(desktype, "custom_")) {
 			_ = app.db.AuditLog("Desks", "System", "Missing parameters on create")
 			http.Error(w, "parameters missing", http.StatusBadRequest)
 			return
@@ -78,7 +92,7 @@ func (app *App) handleRestUpdate(w http.ResponseWriter, r *http.Request) {
 		_ = app.db.AuditLog("Desks", user, "ID "+status+" created: Dsk="+desknumber+" Empl="+employee)
 
 	case "update":
-		if mapName == "" || get("id") == "" || get("x") == "" || get("y") == "" || desknumber == "" || (employee == "" && desktype != "localdesk") {
+		if mapName == "" || get("id") == "" || get("x") == "" || get("y") == "" || desknumber == "" || (employee == "" && desktype != "localdesk" && !strings.HasPrefix(desktype, "custom_")) {
 			http.Error(w, "parameters missing", http.StatusBadRequest)
 			return
 		}
@@ -97,6 +111,57 @@ func (app *App) handleRestUpdate(w http.ResponseWriter, r *http.Request) {
 		_ = app.db.DeleteDesk(mapName, id)
 		status, info, data = strconv.Itoa(id), "deleted", "deleted"
 		_ = app.db.AuditLog("Desks", user, "ID "+status+" deleted")
+
+	case "batch":
+		// Bulk create/update of desks in a single round-trip. Used by cluster
+		// placement and auto-align. The ops are supplied as a JSON array in the
+		// "ops" form field so the request still goes through the normal form
+		// parsing above (the body is already consumed by ParseForm).
+		if mapName == "" || get("ops") == "" {
+			http.Error(w, "parameters missing", http.StatusBadRequest)
+			return
+		}
+		var ops []batchDeskOp
+		if err := json.Unmarshal([]byte(get("ops")), &ops); err != nil {
+			http.Error(w, "invalid ops: "+err.Error(), http.StatusBadRequest)
+			return
+		}
+		results := make([]map[string]string, 0, len(ops))
+		for _, op := range ops {
+			dept := op.Department
+			if dept == "- none -" || dept == "NULL" {
+				dept = ""
+			}
+			switch op.Op {
+			case "create":
+				if op.Desknumber == "" || (op.Employee == "" && op.Desktype != "localdesk" && !strings.HasPrefix(op.Desktype, "custom_")) {
+					continue
+				}
+				newID, _ := app.db.NextDeskID(mapName)
+				_ = app.db.PutDesk(Desk{
+					ID: newID, Map: mapName, Desktype: op.Desktype, X: op.X, Y: op.Y,
+					Desknumber: op.Desknumber, Employee: op.Employee, Avatar: op.Avatar, Department: dept,
+				})
+				results = append(results, map[string]string{"status": strconv.Itoa(newID), "info": op.Desknumber, "data": op.Employee})
+			case "update":
+				if op.ID == 0 {
+					continue
+				}
+				existing, found, _ := app.db.GetDesk(mapName, op.ID)
+				if !found {
+					continue
+				}
+				// Auto-align only moves desks: keep all other fields intact and
+				// just overwrite the coordinates.
+				existing.X = op.X
+				existing.Y = op.Y
+				_ = app.db.PutDesk(existing)
+				results = append(results, map[string]string{"status": strconv.Itoa(op.ID), "info": "moved", "data": "moved"})
+			}
+		}
+		_ = app.db.AuditLog("Desks", user, "Batch desk write ("+strconv.Itoa(len(results))+" ops)")
+		writeJSON(w, map[string]interface{}{"update": results})
+		return
 
 	case "createmap":
 		itemscale := get("itemscale")

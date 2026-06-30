@@ -351,17 +351,6 @@
     width: 340px;
 }
 
-.edit_sidebar_title {
-    flex: 0 0 auto;
-    width: 340px;
-    box-sizing: border-box;
-    font-size: 20px;
-    font-weight: bold;
-    padding: 18px 18px 14px 18px;
-    color: #fff;
-    background: #2b2b2b;
-}
-
 .edit_sidebar_inner {
     flex: 1 1 auto;
     width: 340px;
@@ -371,25 +360,19 @@
     padding-bottom: 16px;
 }
 
-/* Footer pinned to the bottom of the edit sidebar; hosts the trash drop zone.
-   The trash is sized like the bottom-right edit-mode toggle and sits just to its
-   left. The right padding clears the fixed toggle and is set at runtime by
-   resize.js (scalePages), because the toggle scales with the window while this
-   footer's scale is capped, so a static value cannot track it. */
+/* Empty footer that reserves bottom space so the palette never renders behind
+   the floating bottom-right edit-mode toggle and health icon (which overlap the
+   sidebar from outside). Its height is set at runtime by resize.js to track the
+   scaled toggle. */
 .edit_sidebar_footer {
     flex: 0 0 auto;
     width: 340px;
     box-sizing: border-box;
-    display: flex;
-    justify-content: flex-end;
-    align-items: flex-end;
-    padding: 12px 95px 22px 14px;
     background: #2b2b2b;
-    border-top: 1px solid #3f3f3f;
 }
 
 .edit_sidebar_trash {
-    width: 80px;
+    flex: 1 1 0;
     height: 60px;
     box-sizing: border-box;
     display: flex;
@@ -402,6 +385,7 @@
     border: 2px dashed #5a5a5a;
     border-radius: 16px;
     color: #9a9a9a;
+    cursor: pointer;
     transition: background-color 120ms ease-in-out, border-color 120ms ease-in-out, color 120ms ease-in-out;
 }
 
@@ -511,6 +495,181 @@
     background-size: contain;
     background-repeat: no-repeat;
     background-position: center;
+}
+
+/* Cluster ghost: a zero-size anchor at the cursor whose child dots are
+   positioned around it (so the cluster is centred on the pointer). */
+.editsidebar_dragghost_cluster {
+    transform: none;
+    width: 0;
+    height: 0;
+    background: none;
+    opacity: 0.9;
+}
+
+/* Multi-dot cluster preview inside a palette tile. */
+.editsidebar_tile_icon_cluster {
+    position: relative;
+}
+
+.editsidebar_clusterdot {
+    position: absolute;
+    border-radius: 50%;
+    pointer-events: none;
+}
+
+/* Top toolbar in the edit sidebar (auto-align, etc.). */
+.editsidebar_tools {
+    display: flex;
+    align-items: stretch;
+    gap: 10px;
+    padding: 12px 14px 4px 14px;
+}
+
+.editsidebar_toolbtn {
+    flex: 1 1 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    height: 60px;
+    padding: 6px 8px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #fff;
+    background: #0979D8;
+    border: none;
+    border-radius: 16px;
+    cursor: pointer;
+    transition: background-color 120ms ease-in-out;
+}
+
+.editsidebar_toolbtn_icon {
+    width: 24px;
+    height: 24px;
+    background-image: url('images/align.png');
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: center;
+    pointer-events: none;
+}
+
+.editsidebar_toolbtn_label {
+    font-size: 12px;
+    line-height: 1;
+    pointer-events: none;
+}
+
+.editsidebar_toolbtn:hover {
+    background: #0a87f0;
+}
+
+/* Desk-type selector shown under the "Desk clusters" section header. */
+.editsidebar_clustertype {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 2px 18px 8px 18px;
+}
+
+.editsidebar_clustertype label {
+    font-size: 12px;
+    color: #9a9a9a;
+    white-space: nowrap;
+}
+
+.editsidebar_clustertype select {
+    flex: 1;
+    padding: 4px 6px;
+    font-size: 12px;
+    color: #eee;
+    background: #353535;
+    border: 1px solid #4a4a4a;
+    border-radius: 6px;
+    cursor: pointer;
+}
+
+/* Auto-align preview: ghost markers shown at each desk's target position. They
+   live inside #content so they share the map's CSS zoom (positioned in the same
+   1600px content space as the real desks). */
+#autoalign_preview {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 0;
+    height: 0;
+    pointer-events: none;
+    z-index: 90;
+}
+
+.autoalign_ghost {
+    position: absolute;
+    border: 2px dashed #19c37d;
+    background: rgba(25, 195, 125, 0.25);
+    border-radius: 50%;
+    box-sizing: border-box;
+}
+
+/* Rubber-band rectangle drawn while the editor selects an area to auto-align.
+   Positioned in viewport (fixed) coordinates so it tracks the cursor 1:1
+   regardless of the map's CSS zoom. */
+#autoalign_select {
+    position: fixed;
+    border: 2px dashed #19c37d;
+    background: rgba(25, 195, 125, 0.12);
+    z-index: 99999;
+    pointer-events: none;
+    box-sizing: border-box;
+}
+
+/* Confirm/Cancel bar for an auto-align preview. */
+#autoalign_bar {
+    position: fixed;
+    left: 50%;
+    bottom: 28px;
+    transform: translateX(-50%);
+    z-index: 100000;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    background: #2b2b2b;
+    border: 1px solid #444;
+    border-radius: 12px;
+    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
+}
+
+.autoalign_bar_msg {
+    font-size: 14px;
+    color: #fff;
+}
+
+#autoalign_bar button {
+    padding: 8px 16px;
+    font-size: 13px;
+    font-weight: 600;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+}
+
+.autoalign_apply {
+    background: #19c37d;
+    color: #fff;
+}
+
+.autoalign_apply:hover {
+    background: #1bd488;
+}
+
+.autoalign_cancel {
+    background: #4a4a4a;
+    color: #fff;
+}
+
+.autoalign_cancel:hover {
+    background: #585858;
 }
 
 /* Type label shown in the item editor in place of the legacy type dropdown
@@ -2508,6 +2667,16 @@ input[type=submit]:hover, input[type=button]:hover {
     border-radius: 50%;
     cursor: pointer;
     position: relative;
+}
+
+/* Add button in the bottom-right control row: matches the health/edit boxes
+   and turns green on hover. */
+#inputgrid {
+    background-color: #333;
+    transition: background-color 0.15s ease;
+}
+#inputgrid:hover {
+    background-color: #559F35;
 }
 .worldmap-add-btn:hover {
     background-color: #559F35;

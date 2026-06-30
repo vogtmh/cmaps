@@ -83,6 +83,7 @@ type indexData struct {
 	AvatarURL string
 
 	DepartmentsJSON template.JS
+	ItemTypesJSON   template.JS
 	LogoRegular     string
 	LogoHover       string
 	TeamsContact    string
@@ -222,6 +223,14 @@ func (app *App) renderIndex(w http.ResponseWriter, r *http.Request, sess Session
 	}
 	deptJSON, _ := json.Marshal(deptObj)
 
+	// Admin-defined custom item types, keyed by id, for palette + marker rendering.
+	itemTypeObj := map[string]CustomItemType{}
+	itemTypes, _ := app.db.ListItemTypes()
+	for _, t := range itemTypes {
+		itemTypeObj[t.ID] = t
+	}
+	itemTypesJSON, _ := json.Marshal(itemTypeObj)
+
 	// Timezone region + offset.
 	region := "Europe/Berlin"
 	if mi, found, _ := app.db.GetMap(mapName); found && mi.Timezone != "" {
@@ -344,6 +353,7 @@ func (app *App) renderIndex(w http.ResponseWriter, r *http.Request, sess Session
 		AvatarURL: avatarURL,
 
 		DepartmentsJSON: template.JS(deptJSON),
+		ItemTypesJSON:   template.JS(itemTypesJSON),
 		LogoRegular:     app.settingOr("logo_regular", "/static/images/cmaps-regular.png"),
 		LogoHover:       app.settingOr("logo_hover", "/static/images/cmaps-hover.png"),
 		TeamsContact:    app.db.GetSetting("teamsContact"),

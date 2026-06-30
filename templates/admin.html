@@ -243,6 +243,126 @@
       <div id="vipCategories" class="vip-cats">Loading&hellip;</div>
     </div>
 
+    <!-- Custom item types -->
+    <div class="sync-card">
+      <div class="sync-card-head">
+        <h2 class="sync-card-title">Custom item types</h2>
+        <span class="sync-badge sync-badge-accent">{{len .CustomTypes}} type(s)</span>
+        {{if gt .PermDesks 1}}
+        <button type="button" class="sync-btn sync-btn-sm" onclick="openAddType()" style="margin-left:auto;">Add item type</button>
+        {{end}}
+      </div>
+      <p class="sync-card-hint">Custom item types appear in the editor palette under &ldquo;Custom items&rdquo;. Drag one onto a map to place a marker. Markers render with the configured colour, icon and size.</p>
+      {{if .CustomTypes}}
+      <table class="sync-table">
+        <thead>
+          <tr>
+            <th class="sync-td-min">Icon</th><th>Label</th><th>Description</th><th class="sync-td-min">Size</th>{{if gt .PermDesks 1}}<th class="sync-td-min">Actions</th>{{end}}
+          </tr>
+        </thead>
+        <tbody>
+        {{range .CustomTypes}}
+          <tr>
+            <td class="sync-td-min">
+              {{if .Icon}}<img src="..{{.Icon}}" alt="" style="width:26px;height:26px;object-fit:contain;vertical-align:middle;background:{{.Color}};border-radius:50%;">
+              {{else}}<span style="display:inline-block;width:26px;height:26px;border-radius:50%;background:{{.Color}};vertical-align:middle;"></span>{{end}}
+            </td>
+            <td>{{.Label}}</td>
+            <td style="max-width:560px;white-space:normal;">{{if .Description}}{{.Description}}{{else}}&mdash;{{end}}</td>
+            <td class="sync-td-min">{{.Size}}</td>
+            {{if gt $.PermDesks 1}}
+            <td class="sync-td-min">
+              <div style="display:flex;gap:6px;">
+                <button type="button" class="sync-btn sync-btn-sm"
+                  data-id="{{.ID}}" data-label="{{.Label}}" data-description="{{.Description}}"
+                  data-color="{{.Color}}" data-size="{{.Size}}"
+                  onclick="openEditType(this)">Edit</button>
+                <form action="?tab=config" method="post" style="margin:0;" onsubmit="return confirm('Delete item type &quot;{{.Label}}&quot;? Existing markers of this type will lose their icon.');">
+                  <input type="hidden" name="tab" value="config">
+                  <input type="hidden" name="deleteType" value="{{.ID}}">
+                  <button type="submit" class="sync-btn sync-btn-sm sync-btn-danger">Delete</button>
+                </form>
+              </div>
+            </td>
+            {{end}}
+          </tr>
+        {{end}}
+        </tbody>
+      </table>
+      {{else}}
+      <div class="sync-empty">No custom item types configured yet.</div>
+      {{end}}
+    </div>
+
+    {{if gt .PermDesks 1}}
+    <!-- Add item type modal -->
+    <div id="addTypeOverlay" class="sync-modal">
+      <div class="sync-modal-box">
+        <div class="sync-modal-head">
+          <h2>Add item type</h2>
+          <button type="button" class="sync-btn sync-btn-sm" onclick="closeTypeModal('addTypeOverlay')">Close</button>
+        </div>
+        <form action="?tab=config" method="post" enctype="multipart/form-data">
+          <input type="hidden" name="tab" value="config">
+          <div class="sync-form-grid">
+            <div class="sync-field"><label class="sync-label">Label</label><input class="sync-input" type="text" name="typeLabel" placeholder="e.g. Plant" required></div>
+            <div class="sync-field"><label class="sync-label">Colour</label><input class="sync-input" type="color" name="typeColor" value="#0979D8" style="height:40px;padding:2px;"></div>
+            <div class="sync-field"><label class="sync-label">Size</label>
+              <select class="sync-input" name="typeSize">
+                <option value="small">Small</option>
+                <option value="medium" selected>Medium</option>
+                <option value="large">Large</option>
+              </select>
+            </div>
+            <div class="sync-field"><label class="sync-label">Icon (PNG, optional)</label><input class="sync-input" type="file" name="typeIcon" accept="image/*"></div>
+            <div class="sync-field sync-field-wide"><label class="sync-label">Description</label><textarea class="sync-textarea sync-textarea-text" name="typeDescription" placeholder="Shown as the palette tile subtitle"></textarea></div>
+          </div>
+          <div class="sync-form-actions"><button type="submit" class="sync-btn sync-btn-primary">Create item type</button></div>
+        </form>
+      </div>
+    </div>
+    <!-- Edit item type modal -->
+    <div id="editTypeOverlay" class="sync-modal">
+      <div class="sync-modal-box">
+        <div class="sync-modal-head">
+          <h2>Edit item type</h2>
+          <button type="button" class="sync-btn sync-btn-sm" onclick="closeTypeModal('editTypeOverlay')">Close</button>
+        </div>
+        <form action="?tab=config" method="post" enctype="multipart/form-data">
+          <input type="hidden" name="tab" value="config">
+          <input type="hidden" name="typeOrigID" id="editTypeOrigID">
+          <div class="sync-form-grid">
+            <div class="sync-field"><label class="sync-label">Label</label><input class="sync-input" type="text" name="typeLabel" id="editTypeLabel" required></div>
+            <div class="sync-field"><label class="sync-label">Colour</label><input class="sync-input" type="color" name="typeColor" id="editTypeColor" style="height:40px;padding:2px;"></div>
+            <div class="sync-field"><label class="sync-label">Size</label>
+              <select class="sync-input" name="typeSize" id="editTypeSize">
+                <option value="small">Small</option>
+                <option value="medium">Medium</option>
+                <option value="large">Large</option>
+              </select>
+            </div>
+            <div class="sync-field"><label class="sync-label">Replace icon (PNG, optional)</label><input class="sync-input" type="file" name="typeIcon" accept="image/*"></div>
+            <div class="sync-field sync-field-wide"><label class="sync-label">Description</label><textarea class="sync-textarea sync-textarea-text" name="typeDescription" id="editTypeDescription"></textarea></div>
+          </div>
+          <div class="sync-form-actions"><button type="submit" class="sync-btn sync-btn-primary">Save changes</button></div>
+        </form>
+      </div>
+    </div>
+    <script>
+      function openAddType() { document.getElementById('addTypeOverlay').style.display = 'block'; }
+      function closeTypeModal(id) { document.getElementById(id).style.display = 'none'; }
+      function openEditType(btn) {
+        var d = btn.dataset;
+        document.getElementById('editTypeOrigID').value = d.id;
+        document.getElementById('editTypeLabel').value = d.label;
+        document.getElementById('editTypeColor').value = d.color || '#0979D8';
+        document.getElementById('editTypeSize').value = d.size || 'medium';
+        document.getElementById('editTypeDescription').value = d.description || '';
+        document.getElementById('editTypeOverlay').style.display = 'block';
+      }
+    </script>
+    {{end}}
+
   {{if gt .PermConfig 1}}
   <!-- Export modal -->
   <div id="exportOverlay" class="sync-modal">
