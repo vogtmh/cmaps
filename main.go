@@ -111,6 +111,10 @@ func main() {
 	// Background AD mirror refresh (no-op until an AD source is configured).
 	app.StartADSyncScheduler(6 * time.Hour)
 
+	// Background EntraID (Microsoft Graph) mirror refresh (no-op until the
+	// EntraID app registration is configured). Same schedule as the AD sync.
+	app.StartEntraSyncScheduler(6 * time.Hour)
+
 	// Background Robin meeting-room refresh (no-op until Robin is configured).
 	app.StartRobinScheduler(5 * time.Minute)
 

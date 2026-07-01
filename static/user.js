@@ -3511,7 +3511,8 @@ $(function() {
         // sub-columns when it would be taller than the viewport. The panel
         // width then sizes itself to the columns via flexbox.
         $('#mapspanel .maps-col').css('max-height', hoehe+'px')
-        $("#mapspanel").slideToggle("fast");
+        // Open/close with the same springy overshoot as the user menu.
+        document.getElementById('mapspanel').classList.toggle('open');
       }
     });
     

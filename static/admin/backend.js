@@ -359,7 +359,7 @@ function syncLDAP(ldap_id, adminuser) {
 }
 
 function showSyncSub(name) {
-  var subs = ['ldap', 'saml', 'robin', 'geo'];
+  var subs = ['ldap', 'entra', 'saml', 'robin', 'geo'];
   // Fall back to the first available subsection if the requested one is not
   // rendered (e.g. the user lacks the matching permission).
   if (!document.getElementById('syncsub_' + name)) {
@@ -731,6 +731,78 @@ function updateRobinDeskModeDesc() {
 function startLdapSync() {
   startSync('ldap', '../rest/ldap/sync', '../rest/ldap/progress', 'ldap');
 }
+
+// ── EntraID (Microsoft Graph) ────────────────────────────────
+function startEntraSync() {
+  startSync('entra', '../rest/entra/sync', '../rest/entra/progress', 'entra');
+}
+
+// testEntra validates the stored credentials against Microsoft Graph without
+// running a full sync.
+function testEntra() {
+  var out = document.getElementById('entraTestResult');
+  var btn = document.getElementById('entraTestBtn');
+  if (out) { out.textContent = 'Testing\u2026'; out.style.color = ''; }
+  if (btn) btn.disabled = true;
+  $.ajax({
+    url: '../rest/entra/test', type: 'GET', dataType: 'JSON',
+    success: function (d) {
+      if (!out) return;
+      if (d && d.ok) {
+        out.style.color = 'var(--sy-ok)';
+        out.textContent = d.message || 'Connection successful.';
+      } else {
+        out.style.color = 'var(--sy-danger)';
+        out.textContent = 'Failed: ' + ((d && d.message) || 'unknown error');
+      }
+    },
+    error: function () {
+      if (out) { out.style.color = 'var(--sy-danger)'; out.textContent = 'Request failed (forbidden or server error).'; }
+    },
+    complete: function () { if (btn) btn.disabled = false; }
+  });
+}
+
+// saveEntra posts the credentials form without a full page reload, then
+// refreshes the Sync tab so the "Configured" badge and comparison update.
+function saveEntra(ev) {
+  if (ev && ev.preventDefault) ev.preventDefault();
+  var form = ev && ev.target ? ev.target : document.forms['SaveEntra'];
+  var statusEl = document.getElementById('entraSaveStatus');
+  if (statusEl) statusEl.textContent = 'Saving\u2026';
+  $.ajax({
+    url: '?tab=ldap&partial=1', type: 'POST', data: new FormData(form),
+    processData: false, contentType: false,
+    complete: function () {
+      if (statusEl) statusEl.textContent = 'Saved.';
+      loadAdminTab('ldap', 'entra', false);
+    }
+  });
+  return false;
+}
+
+// updateEntraAuthMethod toggles the secret vs certificate credential fields
+// based on the selected authentication method.
+function updateEntraAuthMethod() {
+  var sel = document.getElementById('entraAuthMethod');
+  var secret = document.getElementById('entraSecretFields');
+  var cert = document.getElementById('entraCertFields');
+  var isCert = sel && sel.value === 'certificate';
+  if (secret) secret.style.display = isCert ? 'none' : '';
+  if (cert) cert.style.display = isCert ? '' : 'none';
+}
+
+// showEntraCmpTab toggles the LDAP <-> EntraID comparison panels.
+function showEntraCmpTab(name) {
+  var tabs = ['diff', 'same', 'ldap', 'entra'];
+  tabs.forEach(function (t) {
+    var panel = document.getElementById('entraCmp_' + t);
+    var nav = document.getElementById('entraCmpNav_' + t);
+    if (panel) panel.style.display = (t === name) ? 'block' : 'none';
+    if (nav) nav.classList.toggle('active', t === name);
+  });
+}
+
 // ── Geoapify geocoding ───────────────────────────────────────
 // Saves the API key, tests it against a single address, and runs a manual
 // batch geocode of every location. There is no scheduler — syncing is always

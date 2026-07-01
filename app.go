@@ -24,6 +24,7 @@ type App struct {
 
 	robinProg syncProgress
 	ldapProg  syncProgress
+	entraProg syncProgress
 
 	// robinDeskProg tracks the background desk-data diagnostic so the admin Sync
 	// tab can show a live progress bar + log.

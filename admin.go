@@ -67,6 +67,16 @@ type RobinAdDuplicate struct {
 	Rendered  bool
 }
 
+// EntraLdapRow is one person in the LDAP vs EntraID mirror comparison. Users are
+// matched between the two mirrors by e-mail (case-insensitive). LdapDesks and
+// EntraDesks list each side's office/desk placements for that person.
+type EntraLdapRow struct {
+	Name       string
+	Mail       string
+	LdapDesks  string
+	EntraDesks string
+}
+
 // settingDescriptions maps general settings to a short explanation shown as a
 // subtitle under each variable name in the admin "base variables" list.
 var settingDescriptions = map[string]string{
@@ -135,6 +145,17 @@ type adminData struct {
 	RobinDeskCount          int
 	RobinAdSameDesk         []RobinAdOverlap
 	RobinAdDuplicates       []RobinAdDuplicate
+	EntraSet                bool
+	EntraTenant             string
+	EntraClient             string
+	EntraAuthMethod         string
+	EntraLastSync           string
+	EntraHasSync            bool
+	EntraCount              int
+	EntraMatchedSame        []EntraLdapRow
+	EntraMatchedDiff        []EntraLdapRow
+	EntraOnlyLdap           []EntraLdapRow
+	EntraOnlyEntra          []EntraLdapRow
 	Maps                    []mapRow
 	DeskMaps                []string
 	Mapadmins               []adminUserRow
@@ -285,6 +306,29 @@ func (app *App) handleAdminPost(w http.ResponseWriter, r *http.Request, sess Ses
 				}
 			}
 			return "Robin map updated."
+		}
+		if r.FormValue("saveEntra") != "" {
+			method := strings.TrimSpace(r.FormValue("entraAuthMethod"))
+			if method != "secret" && method != "certificate" {
+				method = "secret"
+			}
+			_ = app.db.SetEntraSetting("entraTenantID", strings.TrimSpace(r.FormValue("entraTenantID")))
+			_ = app.db.SetEntraSetting("entraClientID", strings.TrimSpace(r.FormValue("entraClientID")))
+			_ = app.db.SetEntraSetting("entraAuthMethod", method)
+			// Secrets/cert material are only overwritten when a new value is
+			// submitted, so re-saving the form without re-entering them keeps the
+			// stored credentials intact.
+			if secret := strings.TrimSpace(r.FormValue("entraClientSecret")); secret != "" {
+				_ = app.db.SetEntraSetting("entraClientSecret", secret)
+			}
+			if cert := strings.TrimSpace(r.FormValue("entraCertPem")); cert != "" {
+				_ = app.db.SetEntraSetting("entraCertPem", cert)
+			}
+			if key := strings.TrimSpace(r.FormValue("entraKeyPem")); key != "" {
+				_ = app.db.SetEntraSetting("entraKeyPem", key)
+			}
+			_ = app.db.AuditLog("LDAP", sess.Username, "EntraID credentials updated")
+			return "EntraID settings saved."
 		}
 		if r.FormValue("saveRobin") != "" {
 			if tok := strings.TrimSpace(r.FormValue("robintoken")); tok != "" {
@@ -1054,6 +1098,108 @@ func (app *App) buildAdminData(r *http.Request, sess Session, tab, msg string) a
 			}
 			return d.RobinAdDuplicates[i].Name < d.RobinAdDuplicates[j].Name
 		})
+
+		// --- EntraID connection + LDAP <-> EntraID mirror comparison ----------
+		d.EntraTenant = app.db.GetEntraSetting("entraTenantID")
+		d.EntraClient = app.db.GetEntraSetting("entraClientID")
+		d.EntraAuthMethod = app.db.GetEntraSetting("entraAuthMethod")
+		if d.EntraAuthMethod == "" {
+			d.EntraAuthMethod = "secret"
+		}
+		d.EntraSet = app.entraConfigured()
+		d.EntraLastSync = app.db.GetEntraSetting("entraLastSync")
+		d.EntraHasSync = d.EntraLastSync != ""
+		entraUsers, _ := app.db.ListEntraLdap()
+		d.EntraCount = len(entraUsers)
+		// Users are matched between the two mirrors strictly by e-mail
+		// (case-insensitive). People with no e-mail cannot be matched.
+		type entraCmp struct {
+			name  string
+			mail  string
+			ldap  map[string]bool
+			entra map[string]bool
+		}
+		cmp := map[string]*entraCmp{}
+		add := func(u LdapUser, fromEntra bool) {
+			mail := strings.ToLower(strings.TrimSpace(u.Mail))
+			if mail == "" {
+				return
+			}
+			row := cmp[mail]
+			if row == nil {
+				row = &entraCmp{mail: strings.TrimSpace(u.Mail), ldap: map[string]bool{}, entra: map[string]bool{}}
+				cmp[mail] = row
+			}
+			if row.name == "" {
+				row.name = strings.TrimSpace(u.Givenname + " " + u.Surname)
+			}
+			off := strings.TrimSpace(u.Office)
+			if off == "" {
+				return
+			}
+			if fromEntra {
+				row.entra[off] = true
+			} else {
+				row.ldap[off] = true
+			}
+		}
+		for _, u := range ldapUsers {
+			add(u, false)
+		}
+		for _, u := range entraUsers {
+			add(u, true)
+		}
+		deskList := func(set map[string]bool) string {
+			out := make([]string, 0, len(set))
+			for k := range set {
+				out = append(out, k)
+			}
+			sort.Strings(out)
+			return strings.Join(out, ", ")
+		}
+		sameSet := func(a, b map[string]bool) bool {
+			if len(a) != len(b) {
+				return false
+			}
+			for k := range a {
+				if !b[k] {
+					return false
+				}
+			}
+			return true
+		}
+		for _, row := range cmp {
+			r := EntraLdapRow{
+				Name:       row.name,
+				Mail:       row.mail,
+				LdapDesks:  deskList(row.ldap),
+				EntraDesks: deskList(row.entra),
+			}
+			inLdap := len(row.ldap) > 0
+			inEntra := len(row.entra) > 0
+			switch {
+			case inLdap && inEntra && sameSet(row.ldap, row.entra):
+				d.EntraMatchedSame = append(d.EntraMatchedSame, r)
+			case inLdap && inEntra:
+				d.EntraMatchedDiff = append(d.EntraMatchedDiff, r)
+			case inLdap:
+				d.EntraOnlyLdap = append(d.EntraOnlyLdap, r)
+			case inEntra:
+				d.EntraOnlyEntra = append(d.EntraOnlyEntra, r)
+			}
+		}
+		byName := func(rows []EntraLdapRow) func(i, j int) bool {
+			return func(i, j int) bool {
+				if rows[i].Name != rows[j].Name {
+					return rows[i].Name < rows[j].Name
+				}
+				return rows[i].Mail < rows[j].Mail
+			}
+		}
+		sort.Slice(d.EntraMatchedSame, byName(d.EntraMatchedSame))
+		sort.Slice(d.EntraMatchedDiff, byName(d.EntraMatchedDiff))
+		sort.Slice(d.EntraOnlyLdap, byName(d.EntraOnlyLdap))
+		sort.Slice(d.EntraOnlyEntra, byName(d.EntraOnlyEntra))
 
 	case "maps":
 		maps, _ := app.db.ListMaps()

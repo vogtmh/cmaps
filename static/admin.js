@@ -1874,12 +1874,11 @@ function autoAlignPlan(contains) {
     // angled pods are tidied on their own (rotation makes shared lines ambiguous).
     var theta = autoAlignDominantAngle(g);
     if (theta === 0) {
-      var colCanon = autoAlignBands(g, 'x', tol);
-      var rowCanon = autoAlignBands(g, 'y', tol);
+      var pc = autoAlignPodCanon(g, tol);
       g.forEach(function (d) {
         axisDesks.push({ id: d.id, x: d.x, y: d.y });
-        xCanonById[d.id] = colCanon[d.id];
-        yCanonById[d.id] = rowCanon[d.id];
+        xCanonById[d.id] = pc.x[d.id];
+        yCanonById[d.id] = pc.y[d.id];
       });
       return;
     }
@@ -1918,6 +1917,47 @@ function autoAlignPlan(contains) {
     }
   });
   return moves;
+}
+
+// Compute per-desk canonical column/row coordinates for one axis-aligned pod.
+// A desk that sits alone on both a column band and a row band while being flanked
+// by real lines on every side (e.g. a 5th desk centred inside a 2x2 pod) is
+// placed at the exact midpoint of its neighbouring lines rather than left on its
+// own slightly-off position, so it stays perfectly centred.
+function autoAlignPodCanon(g, tol) {
+  var colCanon = autoAlignBands(g, 'x', tol);
+  var rowCanon = autoAlignBands(g, 'y', tol);
+  var colMembers = {}, rowMembers = {};
+  g.forEach(function (d) {
+    (colMembers[colCanon[d.id]] = colMembers[colCanon[d.id]] || []).push(d.id);
+    (rowMembers[rowCanon[d.id]] = rowMembers[rowCanon[d.id]] || []).push(d.id);
+  });
+  var colLines = Object.keys(colMembers).map(Number).sort(function (a, b) { return a - b; });
+  var rowLines = Object.keys(rowMembers).map(Number).sort(function (a, b) { return a - b; });
+  function midpoint(lines, v) {
+    var below = -Infinity, above = Infinity;
+    lines.forEach(function (l) {
+      if (l < v && l > below) { below = l; }
+      if (l > v && l < above) { above = l; }
+    });
+    return Math.round((below + above) / 2);
+  }
+  var xById = {}, yById = {};
+  g.forEach(function (d) {
+    var cx = colCanon[d.id], cy = rowCanon[d.id];
+    var aloneX = colMembers[cx].length === 1;
+    var aloneY = rowMembers[cy].length === 1;
+    var flankedX = cx > colLines[0] && cx < colLines[colLines.length - 1];
+    var flankedY = cy > rowLines[0] && cy < rowLines[rowLines.length - 1];
+    if (aloneX && aloneY && flankedX && flankedY) {
+      xById[d.id] = midpoint(colLines, cx);
+      yById[d.id] = midpoint(rowLines, cy);
+    } else {
+      xById[d.id] = cx;
+      yById[d.id] = cy;
+    }
+  });
+  return { x: xById, y: yById };
 }
 
 // Collapse per-pod band centres (an id->value map) onto shared lines: values

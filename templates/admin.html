@@ -486,6 +486,9 @@
     {{if gt .PermLdap 0}}
     <button type="button" class="sync-tab" id="syncnav_ldap" onclick="showSyncSub('ldap')"><span class="sync-navdot"></span>LDAP</button>
     {{end}}
+    {{if gt .PermLdap 0}}
+    <button type="button" class="sync-tab" id="syncnav_entra" onclick="showSyncSub('entra')"><span class="sync-navdot"></span>EntraID</button>
+    {{end}}
     {{if gt .PermAdminpanel 0}}
     <button type="button" class="sync-tab" id="syncnav_saml" onclick="showSyncSub('saml')"><span class="sync-navdot"></span>SAML SSO</button>
     {{end}}
@@ -573,6 +576,130 @@
       <pre class="sync-log" id="ldapLog" style="display:none;"></pre>
     </div>
     {{end}}
+  </div>
+  {{end}}
+
+  {{if gt .PermLdap 0}}
+  <div id="syncsub_entra" class="syncsub" style="display:none;">
+    <div class="sync-card">
+      <div class="sync-card-head">
+        <h2 class="sync-card-title">EntraID connection</h2>
+        <div style="display:flex; gap:10px; align-items:center;">
+          {{if .EntraSet}}<span class="sync-badge sync-badge-ok">Configured</span>{{else}}<span class="sync-badge sync-badge-warn">Not configured</span>{{end}}
+          {{if gt .PermLdap 1}}
+          <button type="button" class="sync-toggle-btn" id="entraCfgToggle" onclick="toggleCollapse('entraCfgCollapse', this)"><span class="caret">&#9654;</span> Configure</button>
+          {{if .EntraSet}}
+          <button type="button" class="sync-btn" id="entraTestBtn" onClick="testEntra()">Test connection</button>
+          <button type="button" class="sync-btn sync-btn-primary" id="entraSyncBtn" onClick="startEntraSync()">Run sync now</button>
+          {{end}}
+          {{end}}
+        </div>
+      </div>
+      <p class="sync-card-hint">
+        Sync users from Microsoft Entra ID via an app registration (Microsoft Graph). The
+        same office/desk placements as LDAP are mirrored into a separate store so the two
+        directories can be compared side by side.
+        {{if .EntraHasSync}}Last sync {{.EntraLastSync}} &middot; {{.EntraCount}} placement(s).{{end}}
+      </p>
+
+      {{if gt .PermLdap 1}}
+      <div class="sync-collapse" id="entraCfgCollapse">
+        <form name="SaveEntra" action="?tab=ldap&partial=1" method="post" onsubmit="return saveEntra(event);">
+          <input type="hidden" name="tab" value="ldap">
+          <input type="hidden" name="saveEntra" value="1">
+          <div class="sync-form-grid">
+            <div class="sync-field"><label class="sync-label">Directory (tenant) ID</label><input class="sync-input" type="text" name="entraTenantID" value="{{.EntraTenant}}" placeholder="00000000-0000-0000-0000-000000000000"></div>
+            <div class="sync-field"><label class="sync-label">Application (client) ID</label><input class="sync-input" type="text" name="entraClientID" value="{{.EntraClient}}" placeholder="00000000-0000-0000-0000-000000000000"></div>
+            <div class="sync-field"><label class="sync-label">Authentication</label>
+              <select class="sync-select" id="entraAuthMethod" name="entraAuthMethod" onchange="updateEntraAuthMethod()">
+                <option value="secret"{{if eq .EntraAuthMethod "secret"}} selected{{end}}>Client secret</option>
+                <option value="certificate"{{if eq .EntraAuthMethod "certificate"}} selected{{end}}>Certificate</option>
+              </select>
+            </div>
+          </div>
+          <div class="sync-form-grid" id="entraSecretFields">
+            <div class="sync-field sync-field-wide"><label class="sync-label">Client secret</label><input class="sync-input" type="password" name="entraClientSecret" placeholder="{{if .EntraSet}}(unchanged){{else}}Client secret value{{end}}"></div>
+          </div>
+          <div class="sync-form-grid" id="entraCertFields" style="display:none;">
+            <div class="sync-field sync-field-wide"><label class="sync-label">Certificate (PEM)</label><textarea class="sync-input" name="entraCertPem" rows="4" placeholder="-----BEGIN CERTIFICATE-----&#10;{{if .EntraSet}}(unchanged){{end}}"></textarea></div>
+            <div class="sync-field sync-field-wide"><label class="sync-label">Private key (PEM)</label><textarea class="sync-input" name="entraKeyPem" rows="4" placeholder="-----BEGIN PRIVATE KEY-----&#10;{{if .EntraSet}}(unchanged){{end}}"></textarea></div>
+          </div>
+          <div class="sync-form-actions">
+            <button type="submit" class="sync-btn sync-btn-primary">Save settings</button>
+            <span id="entraSaveStatus" class="sync-card-hint" style="margin-left:10px;"></span>
+          </div>
+        </form>
+      </div>
+      {{end}}
+
+      <div id="entraTestResult" class="sync-status-text" style="margin-top:10px;"></div>
+
+      {{if gt .PermLdap 1}}
+      <div class="sync-form-actions" style="margin-top:8px;">
+        <button type="button" class="sync-btn" id="entraReloadBtn" style="display:none;">View updated results</button>
+      </div>
+      <div class="sync-progress" id="entraProgress">
+        <div class="sync-progress-head"><span id="entraProgStage">Working…</span><span id="entraProgCount"></span></div>
+        <div class="sync-progress-track"><div class="sync-progress-fill" id="entraProgFill"></div></div>
+      </div>
+      <pre class="sync-log" id="entraLog" style="display:none;"></pre>
+      {{end}}
+    </div>
+
+    <div class="sync-card">
+      <div class="sync-card-head"><h2 class="sync-card-title">LDAP &harr; EntraID comparison</h2></div>
+      <p class="sync-card-hint">Compares the cached LDAP mirror against the cached EntraID mirror. People are matched by e-mail (case-insensitive); no fresh sync is run.</p>
+      <div class="robin-rtabs">
+        <button type="button" class="robin-rtab active" id="entraCmpNav_diff" onclick="showEntraCmpTab('diff')">Different desks{{if .EntraMatchedDiff}} <span class="sync-badge sync-badge-warn">{{len .EntraMatchedDiff}}</span>{{end}}</button>
+        <button type="button" class="robin-rtab" id="entraCmpNav_same" onclick="showEntraCmpTab('same')">Same desks ({{len .EntraMatchedSame}})</button>
+        <button type="button" class="robin-rtab" id="entraCmpNav_ldap" onclick="showEntraCmpTab('ldap')">LDAP only ({{len .EntraOnlyLdap}})</button>
+        <button type="button" class="robin-rtab" id="entraCmpNav_entra" onclick="showEntraCmpTab('entra')">EntraID only ({{len .EntraOnlyEntra}})</button>
+      </div>
+
+      <div id="entraCmp_diff">
+        {{if .EntraMatchedDiff}}
+        <table class="sync-table">
+          <thead><tr><th>Name</th><th>E-mail</th><th>LDAP desks</th><th>EntraID desks</th></tr></thead>
+          <tbody>
+          {{range .EntraMatchedDiff}}<tr><td>{{.Name}}</td><td>{{.Mail}}</td><td>{{.LdapDesks}}</td><td>{{.EntraDesks}}</td></tr>{{end}}
+          </tbody>
+        </table>
+        {{else}}<div class="sync-empty">No people with differing desks between LDAP and EntraID.</div>{{end}}
+      </div>
+
+      <div id="entraCmp_same" style="display:none;">
+        {{if .EntraMatchedSame}}
+        <table class="sync-table">
+          <thead><tr><th>Name</th><th>E-mail</th><th>Desks</th></tr></thead>
+          <tbody>
+          {{range .EntraMatchedSame}}<tr><td>{{.Name}}</td><td>{{.Mail}}</td><td>{{.LdapDesks}}</td></tr>{{end}}
+          </tbody>
+        </table>
+        {{else}}<div class="sync-empty">No people with matching desks in both directories.</div>{{end}}
+      </div>
+
+      <div id="entraCmp_ldap" style="display:none;">
+        {{if .EntraOnlyLdap}}
+        <table class="sync-table">
+          <thead><tr><th>Name</th><th>E-mail</th><th>LDAP desks</th></tr></thead>
+          <tbody>
+          {{range .EntraOnlyLdap}}<tr><td>{{.Name}}</td><td>{{.Mail}}</td><td>{{.LdapDesks}}</td></tr>{{end}}
+          </tbody>
+        </table>
+        {{else}}<div class="sync-empty">No people are placed only in LDAP.</div>{{end}}
+      </div>
+
+      <div id="entraCmp_entra" style="display:none;">
+        {{if .EntraOnlyEntra}}
+        <table class="sync-table">
+          <thead><tr><th>Name</th><th>E-mail</th><th>EntraID desks</th></tr></thead>
+          <tbody>
+          {{range .EntraOnlyEntra}}<tr><td>{{.Name}}</td><td>{{.Mail}}</td><td>{{.EntraDesks}}</td></tr>{{end}}
+          </tbody>
+        </table>
+        {{else}}<div class="sync-empty">No people are placed only in EntraID.</div>{{end}}
+      </div>
+    </div>
   </div>
   {{end}}
 
@@ -1074,6 +1201,8 @@
   <script>
     showSyncSub("{{if .SyncSub}}{{.SyncSub}}{{else}}ldap{{end}}");
     if (typeof showRobinResultTab === 'function') { showRobinResultTab('rooms'); }
+    if (typeof updateEntraAuthMethod === 'function') { updateEntraAuthMethod(); }
+    if (typeof showEntraCmpTab === 'function') { showEntraCmpTab('diff'); }
   </script>
   {{if gt .PermAdminpanel 0}}<script>loadSamlSettings();</script>{{end}}
 

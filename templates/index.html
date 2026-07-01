@@ -72,9 +72,30 @@
   <!-- Location -->
   <div class="headeritem" id="locationcontrol" style="width:240px;">
     {{if not .NoDescription}}<span class="headeritem_text">Location</span>{{end}}
-    <a style="cursor:pointer" id="toggle_maps">
-      <div class="headeritem_maps" style="margin-top:10px; margin-bottom:0px;">{{.MapTitle}}</div>
-    </a>
+    <div id="locationmapswrap" style="position:relative; float:left;">
+      <a style="cursor:pointer" id="toggle_maps">
+        <div class="headeritem_maps" style="margin-top:10px; margin-bottom:0px;">{{.MapTitle}}</div>
+      </a>
+
+      <!-- Maps panel (anchored under the location dropdown button) -->
+      <div class="headeritem" id="mapspanel" style="position:absolute;top:59px;left:0;margin:0;width:auto;min-width:160px;height:auto;background-color:#333333;padding-bottom: 5px; border-radius: 0px 0px 10px 10px;">
+        <div class="maps-col" id="mapspanel_real">
+          {{range .OtherMaps}}
+          <a href="/?map={{.Name}}" style="text-decoration: none;"><div class="headeritem_maps">{{.Label}}</div></a>
+          {{end}}
+        </div>
+        {{if .PlaceholderMaps}}
+        <div class="maps-section" id="mapspanel_nomap">
+          <div class="maps-section-header">No floor plan yet</div>
+          <div class="maps-col">
+            {{range .PlaceholderMaps}}
+            <a href="/?map={{.Name}}" style="text-decoration: none;"><div class="headeritem_maps headeritem_maps_nomap" title="No floor plan yet">{{.Label}}</div></a>
+            {{end}}
+          </div>
+        </div>
+        {{end}}
+      </div>
+    </div>
   </div>
 
   <!-- Floor -->
@@ -129,25 +150,6 @@
       <input type="hidden" name="applysettings" value="1">
       <input type="submit" value="Apply settings" style="font-size:1.2em; margin-top:20px;margin-left:25%;width:50%">
     </form>
-  </div>
-
-  <!-- Maps panel -->
-  <div class="headeritem" id="mapspanel" style="width:auto;min-width:160px;height:auto;float:left;background-color:#333333;margin-top:0px;left:{{if .NoDescription}}755{{else}}827{{end}}px;padding-bottom: 5px; border-radius: 0px 0px 10px 10px; display:none;">
-    <div class="maps-col" id="mapspanel_real">
-      {{range .OtherMaps}}
-      <a href="/?map={{.Name}}" style="text-decoration: none;"><div class="headeritem_maps">{{.Label}}</div></a>
-      {{end}}
-    </div>
-    {{if .PlaceholderMaps}}
-    <div class="maps-section" id="mapspanel_nomap">
-      <div class="maps-section-header">No floor plan yet</div>
-      <div class="maps-col">
-        {{range .PlaceholderMaps}}
-        <a href="/?map={{.Name}}" style="text-decoration: none;"><div class="headeritem_maps headeritem_maps_nomap" title="No floor plan yet">{{.Label}}</div></a>
-        {{end}}
-      </div>
-    </div>
-    {{end}}
   </div>
 
 </div>

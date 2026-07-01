@@ -39,6 +39,8 @@ var (
 	bucketMeta      = []byte("meta")            // app meta (wizard state, etc.)
 	bucketGeoCfg    = []byte("geoconfig")       // geocoding (geoapify) api key / settings (key = name)
 	bucketItemTypes = []byte("itemtypes")       // admin-defined custom palette item types (key = id)
+	bucketEntraLdap = []byte("entraidmirror")   // EntraID (Graph) office-filtered mirror, same shape as ldapmirror
+	bucketEntraCfg  = []byte("entraidconfig")   // EntraID app-registration credentials / last-sync (key = name)
 )
 
 var allBuckets = [][]byte{
@@ -46,6 +48,7 @@ var allBuckets = [][]byte{
 	bucketRoles, bucketUsers, bucketChangelog, bucketStats, bucketTracking, bucketVips,
 	bucketDepts, bucketRobin, bucketMeeting, bucketWhitelist, bucketLdapSrc, bucketAudit,
 	bucketMeta, bucketDirectory, bucketRobinCfg, bucketRobinDesk, bucketGeoCfg, bucketItemTypes,
+	bucketEntraLdap, bucketEntraCfg,
 }
 
 type DB struct {
@@ -805,6 +808,51 @@ func (db *DB) SetLdapAvatar(userid string, has bool) error {
 		}
 		return nil
 	})
+}
+
+// --- EntraID mirror (Microsoft Graph, same shape as the LDAP mirror) ---
+//
+// The EntraID directory sync stores its office-filtered desk placements in a
+// separate bucket so it never overwrites the LDAP mirror and the two can be
+// compared side by side. It reuses LdapUser and ldapKey for an apples-to-apples
+// comparison with the LDAP data.
+
+func (db *DB) ListEntraLdap() ([]LdapUser, error) {
+	return listJSON[LdapUser](db, bucketEntraLdap, "")
+}
+
+// ReplaceEntraLdap clears the EntraID mirror and stores the given users (full sync).
+func (db *DB) ReplaceEntraLdap(users []LdapUser) error {
+	return db.bolt.Update(func(tx *bolt.Tx) error {
+		if err := tx.DeleteBucket(bucketEntraLdap); err != nil && err != bolt.ErrBucketNotFound {
+			return err
+		}
+		b, err := tx.CreateBucket(bucketEntraLdap)
+		if err != nil {
+			return err
+		}
+		for _, u := range users {
+			data, err := json.Marshal(u)
+			if err != nil {
+				return err
+			}
+			if err := b.Put(ldapKey(u), data); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
+// --- EntraID configuration (tenant, client id, auth method + secret/cert) ---
+
+func (db *DB) GetEntraSetting(name string) string {
+	v, _, _ := getJSON[string](db, bucketEntraCfg, []byte(name))
+	return v
+}
+
+func (db *DB) SetEntraSetting(name, value string) error {
+	return putJSON(db, bucketEntraCfg, []byte(name), value)
 }
 
 // --- Directory (full AD snapshot) ---
