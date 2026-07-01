@@ -1324,6 +1324,7 @@ function showSticky (deskid, desktype, caption) {
         dataType: 'JSON',
         success: function(result){
           updateDesks();
+          if (typeof checkHealthStatus === 'function') { checkHealthStatus(); }
         },
         error: function (result) {
           alert('Could not update desk');
@@ -1343,6 +1344,7 @@ function showSticky (deskid, desktype, caption) {
         dataType: 'JSON',
         success: function(result){
           updateDesks();
+          if (typeof checkHealthStatus === 'function') { checkHealthStatus(); }
         },
         error: function (result) {
           alert('Could not delete desk');
