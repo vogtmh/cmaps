@@ -1738,7 +1738,7 @@ function placeCustomItem(item, x, y) {
 // desks eligible for auto-align. Floors (rail-locked), meeting rooms and points
 // of interest are intentionally excluded.
 var AUTOALIGN_TYPES = {
-  occupied: 1, addesk: 1, localdesk: 1, hotseat: 1, booking: 1, blocked: 1
+  occupied: 1, addesk: 1, localdesk: 1, hotseat: 1, booking: 1, blocked: 1, shareddesk: 1
 };
 
 // When true, autoAlignPlan dumps a full JSON diagnostic of the selection,
