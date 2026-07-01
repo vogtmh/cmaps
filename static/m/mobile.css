@@ -48,6 +48,11 @@ body { overflow: hidden; }
    padding-bottom covers the home-indicator region exactly. */
 @media all and (display-mode: standalone) {
 	#m_app { height: 100vh; }
+	/* In the installed PWA iOS overlays the status bar / notch on the content
+	   (viewport-fit=cover), so push the map down by the top inset. Android
+	   standalone reserves its own status bar (safe-top = 0), so this is a no-op
+	   there. Other views already carry their own top safe-area padding. */
+	#m_mapview { padding-top: var(--m-safe-top); }
 }
 
 /* ---------- Top bar ---------- */
