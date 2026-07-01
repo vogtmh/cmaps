@@ -1,0 +1,539 @@
+/* CompanyMaps mobile UI — separate touch-first layout served under /m/.
+   Independent of the desktop cmaps.css. */
+
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+:root {
+	--m-accent: #0979D8;
+	--m-accent-dark: #0a6bbf;
+	--m-bg: #1b2a4a;
+	--m-card: rgba(15, 23, 42, 0.72);
+	--m-text: #eef2f8;
+	--m-muted: #9fb0c9;
+	--m-border: rgba(255, 255, 255, 0.14);
+	--m-danger: #ff5a5a;
+	--m-topbar-h: 52px;
+	--m-tabbar-h: 58px;
+	--m-safe-top: env(safe-area-inset-top, 0px);
+	--m-safe-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+html, body {
+	margin: 0;
+	padding: 0;
+	height: 100%;
+	background-color: var(--m-bg);
+	background-image: url('/images/background.png');
+	color: var(--m-text);
+	font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+	font-size: 16px;
+	overscroll-behavior: none;
+}
+
+body { overflow: hidden; }
+
+#m_app {
+	display: flex;
+	flex-direction: column;
+	height: 100vh;
+	height: 100dvh;
+}
+
+/* ---------- Top bar ---------- */
+#m_topbar {
+	flex: 0 0 auto;
+	height: calc(var(--m-topbar-h) + var(--m-safe-top));
+	padding-top: var(--m-safe-top);
+	background: var(--m-accent);
+	color: #fff;
+	display: flex;
+	align-items: center;
+	padding-left: 6px;
+	padding-right: 6px;
+	box-shadow: 0 1px 4px rgba(0,0,0,0.15);
+	z-index: 30;
+}
+#m_title {
+	flex: 1 1 auto;
+	font-size: 18px;
+	font-weight: 600;
+	text-align: center;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.m_iconbtn {
+	flex: 0 0 auto;
+	min-width: 40px;
+	height: 40px;
+	border: none;
+	background: transparent;
+	color: #fff;
+	font-size: 20px;
+	cursor: pointer;
+	border-radius: 8px;
+	padding: 0 8px;
+}
+.m_iconbtn:active { background: rgba(255,255,255,0.18); }
+.m_iconbtn[hidden] { display: none; }
+
+/* ---------- Main view area ---------- */
+#m_main {
+	flex: 1 1 auto;
+	position: relative;
+	overflow-y: auto;
+	-webkit-overflow-scrolling: touch;
+}
+.m_view { min-height: 100%; }
+.m_view.m_view_scroll { padding: 12px 12px calc(20px + var(--m-safe-bottom)); }
+
+/* ---------- Bottom tab bar ---------- */
+#m_tabbar {
+	flex: 0 0 auto;
+	height: calc(var(--m-tabbar-h) + var(--m-safe-bottom));
+	padding-bottom: var(--m-safe-bottom);
+	background: #333333;
+	border-top: 1px solid rgb(80, 80, 80);
+	display: flex;
+	z-index: 30;
+}
+#m_tabbar[hidden] { display: none; }
+.m_tab {
+	flex: 1 1 0;
+	border: none;
+	background: transparent;
+	color: rgba(255, 255, 255, 0.6);
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 2px;
+	cursor: pointer;
+	font-size: 11px;
+	padding: 4px 0;
+}
+.m_tab[hidden] { display: none; }
+.m_tab:active { background: rgb(80, 80, 80); }
+.m_tab_icon { font-size: 22px; line-height: 1; }
+.m_tab_img { width: 22px; height: 22px; display: block; opacity: 0.6; }
+.m_tab.active .m_tab_img { opacity: 1; }
+.m_tab.active { color: #fff; }
+
+/* ---------- Generic UI ---------- */
+.m_card {
+	background: var(--m-card);
+	border: 1px solid var(--m-border);
+	border-radius: 12px;
+	padding: 14px;
+	margin-bottom: 12px;
+}
+.m_section_title {
+	font-size: 13px;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+	color: var(--m-muted);
+	margin: 4px 2px 8px;
+}
+.m_row {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	padding: 12px 0;
+	border-bottom: 1px solid var(--m-border);
+}
+.m_row:last-child { border-bottom: none; }
+.m_row_main { flex: 1 1 auto; min-width: 0; }
+.m_row_title { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.m_row_sub { font-size: 13px; color: var(--m-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.m_label { font-size: 12px; color: var(--m-muted); margin-bottom: 4px; }
+.m_value { font-size: 16px; word-break: break-word; }
+
+.m_avatar {
+	flex: 0 0 auto;
+	width: 44px;
+	height: 44px;
+	border-radius: 50%;
+	object-fit: cover;
+	background: rgba(255, 255, 255, 0.1);
+}
+.m_avatar.lg { width: 84px; height: 84px; }
+
+.m_btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 8px;
+	width: 100%;
+	padding: 13px 16px;
+	border: none;
+	border-radius: 10px;
+	background: var(--m-accent);
+	color: #fff;
+	font-size: 16px;
+	font-weight: 600;
+	cursor: pointer;
+}
+.m_btn:active { background: var(--m-accent-dark); }
+.m_btn.secondary { background: rgba(255, 255, 255, 0.1); color: var(--m-text); }
+.m_btn.danger { background: var(--m-danger); }
+.m_btn + .m_btn { margin-top: 10px; }
+
+.m_input, .m_select {
+	width: 100%;
+	padding: 12px 14px;
+	border: 1px solid var(--m-border);
+	border-radius: 10px;
+	font-size: 16px;
+	background: rgba(15, 23, 42, 0.6);
+	color: var(--m-text);
+}
+.m_input::placeholder { color: var(--m-muted); }
+.m_field { margin-bottom: 12px; }
+
+.m_search {
+	position: sticky;
+	top: 0;
+	z-index: 5;
+	background: transparent;
+	padding: 10px 0;
+}
+.m_searchbox { position: relative; display: flex; align-items: center; }
+.m_searchbox_icon {
+	position: absolute;
+	left: 15px;
+	width: 18px;
+	height: 18px;
+	opacity: 0.5;
+	pointer-events: none;
+}
+.m_searchinput {
+	-webkit-appearance: none;
+	-moz-appearance: none;
+	appearance: none;
+	box-sizing: border-box;
+	display: block;
+	width: 100%;
+	margin: 0;
+	padding: 14px 16px 14px 44px;
+	border: 1px solid var(--m-border);
+	border-radius: 14px;
+	font-family: inherit;
+	font-size: 16px;
+	line-height: 1.2;
+	background: rgba(10, 16, 30, 0.78);
+	color: var(--m-text);
+	outline: none;
+	transition: border-color .15s, box-shadow .15s, background .15s;
+}
+.m_searchinput::placeholder { color: var(--m-muted); }
+.m_searchinput:focus {
+	border-color: var(--m-accent);
+	background: rgba(10, 16, 30, 0.9);
+	box-shadow: 0 0 0 3px rgba(9, 121, 216, 0.28);
+}
+.m_searchinput::-webkit-search-decoration,
+.m_searchinput::-webkit-search-cancel-button { -webkit-appearance: none; }
+
+/* ---------- Full-screen map selector ---------- */
+#m_mapselector {
+	position: fixed;
+	top: 0;
+	left: 0;
+	right: 0;
+	bottom: calc(var(--m-tabbar-h) + var(--m-safe-bottom));
+	z-index: 20;
+	background-color: var(--m-bg);
+	background-image: url('/images/background.png');
+	padding-top: var(--m-safe-top);
+	/* Slide with transform only. Animating opacity turned this fixed overlay into
+	   a render surface, and Android Chrome then composited the will-change map
+	   layer on top of it (the map bled through the panel). Transform-only keeps a
+	   single stable, fully opaque layer. */
+	transform: translateY(100%);
+	will-change: transform;
+	backface-visibility: hidden;
+	-webkit-backface-visibility: hidden;
+	transition: transform 0.42s cubic-bezier(0.34, 1.4, 0.5, 1);
+}
+#m_mapselector.open {
+	transform: translateY(0);
+	transition: transform 0.42s cubic-bezier(0.34, 1.4, 0.5, 1);
+}
+#m_mapselector[hidden] { display: none; }
+.m_mapsel_panel { display: flex; flex-direction: column; height: 100%; }
+.m_mapsel_list {
+	flex: 1 1 auto;
+	overflow-y: auto;
+	-webkit-overflow-scrolling: touch;
+	padding: 14px 14px calc(24px + var(--m-safe-bottom));
+}
+.m_maprow {
+	display: block;
+	width: 100%;
+	text-align: left;
+	padding: 15px 16px;
+	margin: 8px 0;
+	border: 1px solid var(--m-border);
+	border-radius: 12px;
+	background: var(--m-card);
+	color: var(--m-text);
+	font-size: 16px;
+	font-weight: 600;
+	cursor: pointer;
+}
+.m_maprow:active { background: rgba(255, 255, 255, 0.1); }
+.m_maprow.current {
+	background: rgb(255, 127, 0);
+	border-color: rgb(255, 127, 0);
+}
+.m_mapsel_sep {
+	margin: 18px 4px 6px;
+	font-size: 12px;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.5px;
+	color: var(--m-muted);
+}
+
+.m_toggle {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 12px 0;
+	border-bottom: 1px solid var(--m-border);
+}
+.m_toggle:last-child { border-bottom: none; }
+.m_switch { position: relative; width: 46px; height: 28px; flex: 0 0 auto; }
+.m_switch input { opacity: 0; width: 0; height: 0; }
+.m_switch .track {
+	position: absolute; inset: 0; background: rgba(255, 255, 255, 0.22); border-radius: 999px; transition: background .15s;
+}
+.m_switch .track::before {
+	content: ""; position: absolute; width: 22px; height: 22px; left: 3px; top: 3px;
+	background: #fff; border-radius: 50%; transition: transform .15s; box-shadow: 0 1px 2px rgba(0,0,0,0.3);
+}
+.m_switch input:checked + .track { background: var(--m-accent); }
+.m_switch input:checked + .track::before { transform: translateX(18px); }
+
+.m_empty { text-align: center; color: var(--m-muted); padding: 40px 20px; }
+.m_spinner { text-align: center; color: var(--m-muted); padding: 30px; }
+.m_error { color: var(--m-danger); }
+
+.m_chip {
+	display: inline-block;
+	padding: 3px 10px;
+	border-radius: 999px;
+	font-size: 12px;
+	background: rgba(255, 255, 255, 0.1);
+	color: var(--m-muted);
+}
+.m_chip.ok { background: rgba(40, 180, 80, 0.2); color: #4cd07a; }
+.m_chip.warn { background: rgba(255, 90, 90, 0.18); color: #ff8a8a; }
+
+/* ---------- Login view ---------- */
+#m_login {
+	display: flex;
+	flex-direction: column;
+	justify-content: center;
+	min-height: 100%;
+	padding: 24px;
+}
+#m_login .brand { text-align: center; margin-bottom: 28px; }
+#m_login .brand img { max-width: 180px; max-height: 70px; }
+#m_login .brand h1 { font-size: 22px; margin: 12px 0 0; }
+
+/* ---------- Map view ---------- */
+#m_mapview {
+	position: absolute;
+	inset: 0;
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
+}
+#m_mapstage {
+	flex: 1 1 auto;
+	position: relative;
+	overflow: hidden;
+	background-color: #1b2a4a;
+	background-image: url('/images/background.png');
+	touch-action: none;
+}
+#m_maplayer {
+	position: absolute;
+	left: 0;
+	top: 0;
+	width: 1600px;
+	transform-origin: 0 0;
+	/* Deliberately NOT composited (no will-change / translateZ / backface). The
+	   map image scaled up is far larger than Android Chrome's max GPU texture
+	   size; promoting it to a single layer made whole regions fail to rasterize
+	   (they showed the dark stage background). Letting the browser tile-render it
+	   on the main thread avoids that texture-size limit. */
+}
+#m_mapimg { display: block; width: 1600px; height: auto; pointer-events: none; user-select: none; }
+#m_desklayer { position: absolute; left: 0; top: 0; width: 1600px; }
+
+/* Desk markers mirror the desktop client's .deskball type styling/icons so the
+   mobile map looks identical. Sizes are set inline (2*halfsize*itemscale). */
+.m_desk {
+	position: absolute;
+	transform: translate(-50%, -50%);
+	border-radius: 50%;
+	background-color: rgba(0, 0, 255, 0.7);
+	background-size: cover;
+	background-position: center;
+	background-repeat: no-repeat;
+}
+.m_desk.occupied, .m_desk.occupiedldap, .m_desk.shareddesk { background-color: rgba(0, 0, 255, 0.7); }
+.m_desk.free, .m_desk.blocked { background-color: rgba(180, 180, 180, 0.7); }
+.m_desk.booking_free, .m_desk.booking_booked { background-color: rgba(61, 173, 30, 0.7); }
+.m_desk.hotseat_free, .m_desk.hotseat_booked { background-color: rgba(208, 19, 23, 0.7); }
+.m_desk.booking_booked, .m_desk.hotseat_booked { background-image: url('/images/dot.png'); }
+.m_desk.meeting { background-color: rgba(137, 26, 183, 0.7); background-image: url('/images/meeting.png'); }
+.m_desk.restroom { background-color: rgba(78, 81, 100, 0.7); background-image: url('/images/restroom.png'); }
+.m_desk.exit { background-color: rgba(84, 185, 72, 0.7); background-image: url('/images/exit.png'); }
+.m_desk.printer { background-color: rgba(50, 50, 50, 0.7); background-image: url('/images/printer.png'); }
+.m_desk.firstaid { background-color: rgba(220, 50, 50, 0.7); background-image: url('/images/firstaid.png'); }
+.m_desk.food { background-color: rgba(215, 125, 40, 0.7); background-image: url('/images/food.png'); }
+.m_desk.service { background-color: rgba(70, 190, 190, 0.7); background-image: url('/images/service.png'); }
+.m_desk.keycardlock { background-color: rgba(240, 220, 0, 0.7); background-image: url('/images/keycardlock.png'); }
+.m_desk.keylock { background-color: rgba(240, 220, 0, 0.7); background-image: url('/images/keylock.png'); }
+.m_desk.custom { background-color: var(--m-accent); }
+.m_desk.robin { background-color: #a81f6b; }
+.m_desk.highlight {
+	box-shadow: 0 0 0 3px rgba(242,194,0,0.7), 0 0 14px 5px rgba(242,194,0,0.75);
+	z-index: 6;
+}
+
+/* Meeting-room availability pulse (mirrors desktop green-pulse/blue-pulse).
+   The pulse is rendered as an expanding ring on a ::after pseudo-element and
+   animates only transform + opacity (compositor-friendly). Animating box-shadow
+   here forced the whole pan/zoom-transformed map layer to re-paint every frame,
+   which made all markers flicker on some (meeting-room) maps.
+   NOTE: we deliberately do NOT put will-change on the desks. Promoting every
+   pulsing meeting marker to its own GPU layer made Android Chrome flash black
+   while panning them in/out of view (many child layers churning inside the
+   transformed map layer). The running animation alone lets Chrome composite the
+   ring while idle, and the pan-time suppression below removes it during drags. */
+.m_desk.pulse_available::after,
+.m_desk.pulse_busy::after {
+	content: '';
+	position: absolute;
+	inset: 0;
+	border-radius: 50%;
+	box-sizing: border-box;
+	pointer-events: none;
+	animation: m_pulse_ring 2s ease-out infinite;
+}
+.m_desk.pulse_available::after { border: 2px solid rgba(0, 255, 0, 0.85); }
+.m_desk.pulse_busy::after { border: 2px solid rgba(0, 187, 255, 0.95); }
+/* While a pan/pinch gesture is active the map layer is being transformed every
+   frame; drop the pulse rings entirely so the layer moves as a single clean
+   composited surface (no per-marker layers = no black flicker on Android). */
+#m_mapstage.m_panning .m_desk.pulse_available::after,
+#m_mapstage.m_panning .m_desk.pulse_busy::after { display: none; }
+@keyframes m_pulse_ring {
+	0% { transform: scale(1); opacity: 0.9; }
+	100% { transform: scale(2.4); opacity: 0; }
+}
+
+/* Search result rows reuse the .m_desk type backgrounds as a small leading icon. */
+.m_resicon {
+	position: static;
+	transform: none;
+	flex: 0 0 44px;
+	width: 44px;
+	height: 44px;
+}
+
+/* In-content header (back button + title) used by login / admin sub-views. */
+.m_vhead { display: flex; align-items: center; gap: 10px; margin: 0 0 10px; }
+.m_vback {
+	border: none;
+	background: transparent;
+	font-size: 22px;
+	line-height: 1;
+	color: var(--m-text);
+	cursor: pointer;
+	padding: 4px 8px;
+	border-radius: 8px;
+}
+.m_vback:active { background: rgba(0, 0, 0, 0.06); }
+.m_vtitle { font-size: 18px; font-weight: 600; }
+
+/* Scrollable views get top safe-area padding now that the top bar is gone. */
+.m_view.m_view_scroll { padding-top: calc(12px + var(--m-safe-top)); }
+.m_search { top: var(--m-safe-top); }
+
+/* ---------- Bottom sheet ---------- */
+#m_sheet_backdrop {
+	position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 40;
+}
+#m_sheet_backdrop[hidden] { display: none; }
+#m_sheet {
+	position: fixed;
+	left: 0; right: 0; bottom: 0;
+	z-index: 41;
+	background: #16223c;
+	border-radius: 16px 16px 0 0;
+	padding: 16px 16px calc(20px + var(--m-safe-bottom));
+	max-height: 80%;
+	overflow-y: auto;
+	box-shadow: 0 -4px 20px rgba(0,0,0,0.5);
+	transform: translateY(0);
+}
+#m_sheet[hidden] { display: none; }
+#m_sheet .grabber {
+	width: 40px; height: 4px; border-radius: 2px; background: rgba(255, 255, 255, 0.3);
+	margin: 0 auto 14px;
+}
+.m_sheet_head { display: flex; align-items: center; gap: 14px; margin-bottom: 14px; }
+.m_sheet_head .name { font-size: 19px; font-weight: 700; }
+.m_sheet_head .role { font-size: 14px; color: var(--m-muted); }
+.m_detail_row { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--m-border); }
+.m_detail_row:last-child { border-bottom: none; }
+.m_detail_row .ico { width: 22px; text-align: center; color: var(--m-muted); }
+.m_detail_row a { color: var(--m-accent); text-decoration: none; }
+
+/* Meeting-room availability (Now / Next) block in the detail sheet. */
+.m_meet { display: flex; gap: 8px; margin: 2px 0 14px; }
+.m_meet_col { flex: 1 1 0; border-radius: 10px; padding: 10px 12px; color: #fff; min-width: 0; }
+.m_meet_col .lbl { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; opacity: 0.85; }
+.m_meet_col .val { font-size: 14px; margin-top: 4px; line-height: 1.3; }
+.m_meet_col.now_free { background: #008800; }
+.m_meet_col.now_busy { background: rgb(0, 0, 136); }
+.m_meet_col.next { background: rgb(200, 120, 0); }
+.m_meet_none { color: var(--m-muted); font-size: 14px; margin: 2px 0 14px; }
+
+/* Live meeting status colour in search results (mirrors desktop sidebar). */
+.m_mstat_free { color: rgb(0, 210, 0); }
+.m_mstat_busy { color: rgb(0, 187, 255); }
+
+/* ---------- Toast ---------- */
+#m_toast {
+	position: fixed;
+	left: 50%;
+	bottom: calc(var(--m-tabbar-h) + 16px + var(--m-safe-bottom));
+	transform: translateX(-50%);
+	background: rgba(28,36,48,0.95);
+	color: #fff;
+	padding: 10px 16px;
+	border-radius: 999px;
+	font-size: 14px;
+	z-index: 60;
+	max-width: 90%;
+	text-align: center;
+}
+#m_toast[hidden] { display: none; }
+
+/* ---------- Stats bars ---------- */
+.m_bar_row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.m_bar_label { flex: 0 0 80px; font-size: 12px; color: var(--m-muted); }
+.m_bar_track { flex: 1 1 auto; background: #eef0f3; border-radius: 6px; height: 18px; overflow: hidden; }
+.m_bar_fill { height: 100%; background: var(--m-accent); border-radius: 6px; }
+.m_bar_val { flex: 0 0 auto; font-size: 12px; font-weight: 600; min-width: 30px; text-align: right; }
+
+/* Admin section nav */
+.m_adminmenu .m_row { cursor: pointer; }
+.m_adminmenu .m_row .chev { color: var(--m-muted); }

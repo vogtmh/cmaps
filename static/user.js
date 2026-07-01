@@ -10,7 +10,6 @@ var meetingstatus;
 var printerstatus;
 var stickaddresses;
 var searchtext = "";
-var inMobileMode = false;
 var activecalendar = '';
 var userdate = '';
 
@@ -2146,8 +2145,6 @@ function searchGlobaldesks() {
 // --- Search results sidebar (Google-Maps-style) ---
 
 function openSearchSidebar() {
-  // Skip the sidebar on mobile - the layout there has its own search flow.
-  if (inMobileMode) { return; }
   var sidebar = document.getElementById('searchsidebar');
   if (!sidebar) { return; }
   if (searchSidebarWidth === SEARCH_SIDEBAR_WIDTH) { return; }
@@ -2908,12 +2905,10 @@ function updateTeams() {
         teambox += '<tr><td><a href="'+root+'?findme='+members+'&teamlabel='+teamname+'" style="color:'+textcolor+'">'+teamname+'</a></td></tr>'
         if (teamfound) {
           document.getElementById("addressbook_img").src="images/addressbook_found.png";    
-          if (inMobileMode) {$('#mobile_teambutton').css("background-color", "#ff7f00")} 
         }
         else {
           document.getElementById("addressbook_img").src="images/addressbook.png";
           removePulsateTeams()
-          if (inMobileMode) {$('#mobile_teambutton').css("background-color", "#222")}
         }
       }
         
@@ -2937,7 +2932,6 @@ function updateTeams() {
       $('#teambox').css('overflow-y','scroll');
 
       console.log('[Teams] updated');
-      checkMobile()
     }
   })
 }
@@ -3040,58 +3034,6 @@ function StartClock() {
 
 function KillClock() {
   clearTimeout(clockID);
-}
-
-// loads additional mobile scripts if running on mobile
-function checkMobile() {
-  if( detectMobile() ) {
-    if (inMobileMode) {
-      // already in mobile mode, do nothing
-    } 
-    else {
-      console.log('switching to mobile mode')
-      inMobileMode = true;
-      var script = document.createElement('script');
-      // wait until mobile script has loaded
-      script.onload = function () {
-        addMobileInterface()
-      };
-      script.src = 'mobile.js';
-      document.head.appendChild(script);
-    }
-  }
-
-}
-
-// checks if running on a mobile device and returns true or false
-function detectMobile() {
-  var isMobile = {
-    Android: function() {
-        return navigator.userAgent.match(/Android/i);
-    },
-    BlackBerry: function() {
-        return navigator.userAgent.match(/BlackBerry/i);
-    },
-    iOS: function() {
-        return navigator.userAgent.match(/iPhone|iPad|iPod/i);
-    },
-    Opera: function() {
-        return navigator.userAgent.match(/Opera Mini/i);
-    },
-    Windows: function() {
-        return navigator.userAgent.match(/IEMobile/i) || navigator.userAgent.match(/WPDesktop/i);
-    },
-    any: function() {
-        return (isMobile.Android() || isMobile.BlackBerry() || isMobile.iOS() || isMobile.Opera() || isMobile.Windows());
-    }
-  };
-
-  if( isMobile.any() ) {
-    return true
-  }
-  else {
-    return false
-  }
 }
 
 var announceLive;

@@ -129,6 +129,10 @@ func (app *App) routes(mux *http.ServeMux) {
 	mux.HandleFunc("/login", app.handleLogin)
 	mux.HandleFunc("/logout", app.handleLogout)
 
+	// Dedicated touch-first mobile UI (separate layout under /m/).
+	mux.HandleFunc("/m", app.handleMobile)
+	mux.HandleFunc("/m/", app.handleMobile)
+
 	// Admin panel (GET render + POST CRUD).
 	mux.HandleFunc("/admin", app.handleAdmin)
 	mux.HandleFunc("/admin/", app.handleAdmin)

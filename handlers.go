@@ -99,6 +99,20 @@ func (app *App) handleIndex(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// "Full site" escape link from the mobile UI: remember the opt-out so this
+	// phone keeps the desktop layout, then drop back to a clean URL.
+	if r.Method == http.MethodGet && r.URL.Query().Get("desktop") == "1" {
+		http.SetCookie(w, &http.Cookie{
+			Name:     "force_desktop",
+			Value:    "1",
+			Path:     "/",
+			SameSite: http.SameSiteLaxMode,
+			Expires:  time.Now().AddDate(1, 0, 0),
+		})
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+		return
+	}
+
 	sess, ok := app.currentSession(r)
 
 	// Until initial setup is complete, only an authenticated admin may proceed
@@ -150,6 +164,13 @@ func (app *App) handleIndex(w http.ResponseWriter, r *http.Request) {
 
 	if ok {
 		app.db.AddVisit()
+	}
+
+	// Phone visitors get the dedicated mobile UI unless they opted out via the
+	// "Full site" link (force_desktop=1). Reached only once setup is complete.
+	if r.Method == http.MethodGet && isMobileUA(r) && !wantsDesktop(r) {
+		http.Redirect(w, r, "/m/", http.StatusSeeOther)
+		return
 	}
 
 	app.renderIndex(w, r, sess, ok)

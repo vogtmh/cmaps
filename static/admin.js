@@ -1292,7 +1292,6 @@ function renderCustomPaletteSection(inner) {
 }
 
 function openEditSidebar() {
-  if (inMobileMode) { return; }
   if (typeof map !== 'undefined' && map === 'overview') { return; }
   var sb = document.getElementById('editsidebar');
   if (!sb) { return; }
@@ -1314,10 +1313,10 @@ function closeEditSidebar() {
   if (typeof window.cmapsRescale === 'function') { window.cmapsRescale(); }
 }
 
-// Show the palette only while editing a detail map (not on the overview, not on
-// mobile). Called from applyUsermodeUI (user.js) and on initial load.
+// Show the palette only while editing a detail map (not on the overview).
+// Called from applyUsermodeUI (user.js) and on initial load.
 function applyEditSidebar() {
-  if (setting_usermode === 'edit' && (typeof map === 'undefined' || map !== 'overview') && !inMobileMode) {
+  if (setting_usermode === 'edit' && (typeof map === 'undefined' || map !== 'overview')) {
     openEditSidebar();
   } else {
     closeEditSidebar();

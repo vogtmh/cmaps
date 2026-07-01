@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+	<meta name="theme-color" content="#0979D8">
+	<meta name="mobile-web-app-capable" content="yes">
+	<meta name="apple-mobile-web-app-capable" content="yes">
+	<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+	<title>{{.AppTitle}}</title>
+	<link rel="icon" href="/favicons/favicon.ico">
+	<link rel="stylesheet" href="/static/m/mobile.css?v={{assetver}}">
+</head>
+<body>
+	<div id="m_app">
+		<!-- View container (one section visible at a time) -->
+		<main id="m_main"></main>
+
+		<!-- Bottom tab bar -->
+		<nav id="m_tabbar" hidden>
+			<button class="m_tab" data-view="map" type="button">
+				<span class="m_tab_icon"><img class="m_tab_img" id="m_tab_map_img" src="/images/mobile-map.png" alt=""></span><span class="m_tab_label">Map</span>
+			</button>
+			<button class="m_tab" data-view="search" type="button">
+				<span class="m_tab_icon"><img class="m_tab_img" src="/images/mobile-find.png" alt=""></span><span class="m_tab_label">Search</span>
+			</button>
+			<button class="m_tab" data-view="admin" type="button" hidden>
+				<span class="m_tab_icon"><img class="m_tab_img" src="/images/mobile-admin.png" alt=""></span><span class="m_tab_label">Admin</span>
+			</button>
+			<button class="m_tab" data-view="settings" type="button">
+				<span class="m_tab_icon"><img class="m_tab_img" src="/images/mobile-settings.png" alt=""></span><span class="m_tab_label">Settings</span>
+			</button>
+		</nav>
+	</div>
+
+	<!-- Full-screen map selector -->
+	<div id="m_mapselector" hidden></div>
+
+	<!-- Bottom sheet (desk / person detail) -->
+	<div id="m_sheet_backdrop" hidden></div>
+	<div id="m_sheet" hidden></div>
+
+	<div id="m_toast" hidden></div>
+
+	<script>var mobileBootstrap = {{.Bootstrap}};</script>
+	<script src="/static/tools/jquery3.js"></script>
+	<script src="/static/m/mobile-app.js?v={{assetver}}"></script>
+</body>
+</html>

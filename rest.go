@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io/fs"
 	"net/http"
+	"os"
 	"sort"
 	"strings"
 	"time"
@@ -67,6 +68,18 @@ func (app *App) handleRestConfig(w http.ResponseWriter, r *http.Request) {
 		sort.Slice(maps, func(i, j int) bool { return maps[i].Mapname < maps[j].Mapname })
 		items := make([]map[string]interface{}, 0, len(maps))
 		for i, m := range maps {
+			// A map is a placeholder when it has no floor-plan image on disk
+			// (same signal the desktop uses). The legacy "-nomap" marker is
+			// still honoured but no longer required. "overview" is never a
+			// placeholder.
+			placeholder := false
+			if strings.Contains(strings.ToLower(m.Mapname), "-nomap") {
+				placeholder = true
+			} else if strings.ToLower(m.Mapname) != "overview" {
+				if _, err := os.Stat(app.cfg.dataPath("maps", m.Mapname+".png")); err != nil {
+					placeholder = true
+				}
+			}
 			items = append(items, map[string]interface{}{
 				"id":          i + 1,
 				"mapname":     m.Mapname,
@@ -80,6 +93,7 @@ func (app *App) handleRestConfig(w http.ResponseWriter, r *http.Request) {
 				"y":           m.MapY,
 				"lat":         m.Lat,
 				"lon":         m.Lon,
+				"placeholder": placeholder,
 			})
 		}
 		writeJSON(w, map[string]interface{}{"maps": items})

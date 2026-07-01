@@ -18,7 +18,7 @@ var (
 	bucketSettings  = []byte("settings")        // config_general (variable -> value)
 	bucketMaps      = []byte("maplist")         // config_maplist (key = mapname)
 	bucketDesks     = []byte("desks")           // desks_<map> (key = "<map>:<id>")
-	bucketLdap      = []byte("ldapmirror")      // ldap-mirror (key = userid/ipphone)
+	bucketLdap      = []byte("ldapmirror")      // ldap-mirror (key = userid+office, one row per desk placement)
 	bucketDirectory = []byte("directory")       // full AD directory, all users (key = samaccountname)
 	bucketBookings  = []byte("bookings")        // bookings (key = seq)
 	bucketTeams     = []byte("teams")           // config_teams (key = teamname)
@@ -720,12 +720,21 @@ func (db *DB) DeleteItemType(id string) error {
 
 func (db *DB) ListLdap() ([]LdapUser, error) { return listJSON[LdapUser](db, bucketLdap, "") }
 
-func (db *DB) PutLdap(u LdapUser) error {
-	key := u.Userid
-	if key == "" {
-		key = u.Mail
+// ldapKey builds the mirror bucket key for a placement. A user may hold several
+// desks (office "A|B" split into separate placements by deriveMirrorUsers), so
+// the key combines userid and office to keep every placement distinct. Without
+// the office component all but the last placement of a multi-desk user would
+// overwrite each other, dropping the person from every desk except one.
+func ldapKey(u LdapUser) []byte {
+	id := u.Userid
+	if id == "" {
+		id = u.Mail
 	}
-	return putJSON(db, bucketLdap, []byte(key), u)
+	return []byte(id + "\x00" + u.Office)
+}
+
+func (db *DB) PutLdap(u LdapUser) error {
+	return putJSON(db, bucketLdap, ldapKey(u), u)
 }
 
 // ReplaceLdap clears the mirror and stores the given users (used by full sync).
@@ -739,15 +748,11 @@ func (db *DB) ReplaceLdap(users []LdapUser) error {
 			return err
 		}
 		for _, u := range users {
-			key := u.Userid
-			if key == "" {
-				key = u.Mail
-			}
 			data, err := json.Marshal(u)
 			if err != nil {
 				return err
 			}
-			if err := b.Put([]byte(key), data); err != nil {
+			if err := b.Put(ldapKey(u), data); err != nil {
 				return err
 			}
 		}
@@ -755,10 +760,11 @@ func (db *DB) ReplaceLdap(users []LdapUser) error {
 	})
 }
 
-// SetLdapAvatar updates the stored HasAvatar flag for one mirrored user (keyed
-// by userid). Called after a manual avatar upload/delete so the change is
-// reflected immediately without waiting for the next hourly sync. A no-op if the
-// user is not in the mirror or the flag is already set as requested.
+// SetLdapAvatar updates the stored HasAvatar flag for a mirrored user. Called
+// after a manual avatar upload/delete so the change is reflected immediately
+// without waiting for the next hourly sync. A user may have several placements
+// (one per desk), so every entry with a matching userid is updated. A no-op if
+// the user is not in the mirror.
 func (db *DB) SetLdapAvatar(userid string, has bool) error {
 	if userid == "" {
 		return nil
@@ -768,23 +774,36 @@ func (db *DB) SetLdapAvatar(userid string, has bool) error {
 		if b == nil {
 			return nil
 		}
-		data := b.Get([]byte(userid))
-		if data == nil {
-			return nil
+		// Collect the keys to update first: mutating the bucket while iterating
+		// with a cursor can invalidate it.
+		var keys [][]byte
+		c := b.Cursor()
+		for k, v := c.First(); k != nil; k, v = c.Next() {
+			var u LdapUser
+			if err := json.Unmarshal(v, &u); err != nil {
+				return err
+			}
+			if u.Userid == userid && u.HasAvatar != has {
+				key := make([]byte, len(k))
+				copy(key, k)
+				keys = append(keys, key)
+			}
 		}
-		var u LdapUser
-		if err := json.Unmarshal(data, &u); err != nil {
-			return err
+		for _, k := range keys {
+			var u LdapUser
+			if err := json.Unmarshal(b.Get(k), &u); err != nil {
+				return err
+			}
+			u.HasAvatar = has
+			nd, err := json.Marshal(u)
+			if err != nil {
+				return err
+			}
+			if err := b.Put(k, nd); err != nil {
+				return err
+			}
 		}
-		if u.HasAvatar == has {
-			return nil
-		}
-		u.HasAvatar = has
-		nd, err := json.Marshal(u)
-		if err != nil {
-			return err
-		}
-		return b.Put([]byte(userid), nd)
+		return nil
 	})
 }
 
