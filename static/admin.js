@@ -1827,22 +1827,29 @@ function autoAlignDominantAngle(desks) {
 // { id, oldX, oldY, newX, newY } for desks that actually move.
 function autoAlignPlan(contains) {
   var src = (result_old && result_old.desks) ? result_old.desks : [];
-  var desks = src
-    .filter(function (d) { return AUTOALIGN_TYPES[d.desktype]; })
-    .map(function (d) {
-      return { id: parseInt(d.id, 10), x: parseInt(d.x, 10), y: parseInt(d.y, 10) };
-    });
-  if (typeof contains === 'function') {
-    desks = desks.filter(contains);
-  }
+  // Map every desk to a lightweight {id,x,y,raw} probe so the selection
+  // predicate can be applied uniformly, then split into alignable vs rejected.
+  var allProbes = src.map(function (d) {
+    return { id: parseInt(d.id, 10), x: parseInt(d.x, 10), y: parseInt(d.y, 10), raw: d };
+  });
+  var inSelection = (typeof contains === 'function')
+    ? allProbes.filter(contains)
+    : allProbes;
+  var desks = inSelection.filter(function (d) { return AUTOALIGN_TYPES[d.raw.desktype]; });
+  // Desks caught by the selection but skipped because their type isn't alignable.
+  var rejected = inSelection.filter(function (d) { return !AUTOALIGN_TYPES[d.raw.desktype]; });
 
   // Debug scaffold: everything the planner decides is collected here and dumped
   // to the console (copy/paste it back for diagnosis). Toggle AUTOALIGN_DEBUG.
   var dbg = {
     totalDesksOnMap: src.length,
     alignableTypes: Object.keys(AUTOALIGN_TYPES),
+    inSelectionTotal: inSelection.length,
     matchedInSelection: desks.length,
-    desks: desks.map(function (d) { return { id: d.id, x: d.x, y: d.y }; }),
+    rejectedInSelection: rejected.map(function (d) {
+      return { id: d.id, x: d.x, y: d.y, desktype: d.raw.desktype, desknumber: d.raw.desknumber };
+    }),
+    desks: desks.map(function (d) { return d.raw; }),
     groups: [],
     totalMoves: 0
   };
