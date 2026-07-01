@@ -33,17 +33,19 @@ html, body {
 body { overflow: hidden; }
 
 #m_app {
-	/* Anchor to the visual viewport rather than relying on 100vh/100dvh. In an
-	   installed PWA those units are unreliable: on iOS standalone dvh can stop
-	   short of the home-indicator area (leaving an unused strip), and on Android
-	   dvh shrinks with the soft keyboard and can stay short after the post-login
-	   reload, pushing the tab bar off-screen. position:fixed + inset:0 tracks the
-	   layout viewport (full screen with viewport-fit=cover), so the bottom tab
-	   bar is always anchored and its safe-area padding fills to the very bottom. */
-	position: fixed;
-	inset: 0;
 	display: flex;
 	flex-direction: column;
+	/* Use the large viewport height (100vh), NOT 100dvh and NOT position:fixed
+	   inset:0. Both alternatives misbehave in installed PWAs:
+	   - 100dvh stops short of the iOS home-indicator area (unused strip) and
+	     shrinks with the Android soft keyboard (tab bar drops after the
+	     post-login reload).
+	   - position:fixed + bottom:0 on iOS standalone anchors to the TOP of the
+	     home-indicator inset, so the tab bar's safe-area padding and the
+	     uncovered inset region stack into a doubled empty strip.
+	   100vh is the full, constant screen height on both platforms; the tab bar's
+	   padding-bottom then fills the home-indicator region exactly once. */
+	height: 100vh;
 }
 
 /* ---------- Top bar ---------- */
