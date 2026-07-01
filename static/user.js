@@ -3464,6 +3464,20 @@ function layoutPersonalMenu() {
   if (bookings) { bookings.style.width = (menuWidth - 40) + "px"; }
 }
 
+// In edit mode the edit sidebar is pinned to the right edge and would otherwise
+// sit on top of the header dropdowns that also open on the right (Extras /
+// settings, address book, notifications). While any of those panels is visible
+// we slide the edit sidebar off the right edge (CSS `.pushed`, transform only so
+// the map layout/scale is untouched) and slide it back in once they all close.
+function updateEditSidebarForMenus() {
+  var sb = document.getElementById('editsidebar');
+  if (!sb) { return; }
+  var anyOpen = $('#settingspanel').is(':visible')
+             || $('#addressbook').is(':visible')
+             || $('#announcementbar').is(':visible');
+  sb.classList.toggle('pushed', anyOpen);
+}
+
 function togglePersonalMenu() {
   var x = document.getElementById("personal_menu");
   var admin = document.getElementById("adminpanel_button");
@@ -3506,11 +3520,13 @@ $(function() {
     $( "#addressbook" ).hide();
     $( "#announcementbar" ).hide();
     $("#settingspanel").toggle();
+    updateEditSidebarForMenus();
   });
   $("#toggle_addressbook").click(function() {
     $( "#announcementbar" ).hide();
     $( "#settingspanel" ).hide();
     $( "#addressbook" ).toggle();
+    updateEditSidebarForMenus();
   });
   $("#toggle_announcementbar").click(function() {
     $( "#addressbook" ).hide();
@@ -3519,6 +3535,7 @@ $(function() {
     document.cookie = "announcecookie=" + announceValue+'; expires=Fri, 31 Dec 9999 23:59:59 GMT; SameSite=Lax';
     announceValue = announceLive;
     document.getElementById("announce_img").src = "images/announce.png";
+    updateEditSidebarForMenus();
   });
   // Dismiss the changes modal on backdrop click or Esc.
   $("#changesModal").click(function(e) {

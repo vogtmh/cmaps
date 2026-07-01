@@ -344,11 +344,18 @@
     background: #2b2b2b;
     z-index: 4;
     box-shadow: -2px 0 14px rgba(0, 0, 0, 0.45);
-    transition: width 300ms ease-in-out;
+    transition: width 300ms ease-in-out, transform 300ms ease-in-out;
 }
 
 .edit_sidebar.open {
     width: 340px;
+}
+
+/* Temporarily slid off the right edge while a header dropdown (Extras /
+   settings, address book, notifications) is open, so those panels aren't
+   blocked. Transform only, so the map layout/scale stays put. */
+.edit_sidebar.pushed {
+    transform: translateX(calc(100% + 20px));
 }
 
 .edit_sidebar_inner {
