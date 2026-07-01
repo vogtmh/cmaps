@@ -1741,6 +1741,11 @@ var AUTOALIGN_TYPES = {
   occupied: 1, addesk: 1, localdesk: 1, hotseat: 1, booking: 1, blocked: 1
 };
 
+// When true, autoAlignPlan dumps a full JSON diagnostic of the selection,
+// clustering and banding to the browser console. Temporary aid for debugging
+// "nothing to align" cases.
+var AUTOALIGN_DEBUG = true;
+
 // Group items by a coordinate (x or y) into bands whose members are within
 // `tol` of the band's anchor (first member). Anchoring (rather than comparing to
 // the previous element) caps each band's width at `tol` and prevents a dense run
@@ -1830,13 +1835,32 @@ function autoAlignPlan(contains) {
   if (typeof contains === 'function') {
     desks = desks.filter(contains);
   }
-  if (desks.length < 2) { return []; }
+
+  // Debug scaffold: everything the planner decides is collected here and dumped
+  // to the console (copy/paste it back for diagnosis). Toggle AUTOALIGN_DEBUG.
+  var dbg = {
+    totalDesksOnMap: src.length,
+    alignableTypes: Object.keys(AUTOALIGN_TYPES),
+    matchedInSelection: desks.length,
+    desks: desks.map(function (d) { return { id: d.id, x: d.x, y: d.y }; }),
+    groups: [],
+    totalMoves: 0
+  };
+
+  if (desks.length < 2) {
+    dbg.result = 'ABORT: fewer than 2 alignable desks in the selection';
+    autoAlignDebugDump(dbg);
+    return [];
+  }
 
   // Adapt thresholds to the map's real spacing: cluster pod-neighbours but not
   // across aisles, and band rows/columns at well under one desk pitch.
   var med = autoAlignMedianSpacing(desks);
   var prox = med * 1.7; // centre-distance for "same cluster"
   var tol = med * 0.45; // row/column banding tolerance
+  dbg.medianSpacing = Math.round(med * 100) / 100;
+  dbg.proximity = Math.round(prox * 100) / 100;
+  dbg.bandTolerance = Math.round(tol * 100) / 100;
 
   // Union-find proximity clustering.
   var parent = desks.map(function (_, i) { return i; });
@@ -1850,24 +1874,36 @@ function autoAlignPlan(contains) {
   }
   var groups = {};
   desks.forEach(function (d, i) { var r = find(i); (groups[r] = groups[r] || []).push(d); });
+  dbg.groupCount = Object.keys(groups).length;
 
   var moves = [];
   Object.keys(groups).forEach(function (k) {
     var g = groups[k];
-    if (g.length < 2) { return; } // lone desks are left alone
+    var gdbg = { size: g.length, ids: g.map(function (d) { return d.id; }) };
+    if (g.length < 2) {
+      gdbg.skipped = 'lone desk (needs >=2 in a cluster)';
+      dbg.groups.push(gdbg);
+      return; // lone desks are left alone
+    }
     // Detect the grid's rotation and band in that rotated frame, so desks laid
     // out along an angled wall are tidied into their own rows/columns instead of
     // being forced onto horizontal/vertical lines.
     var theta = autoAlignDominantAngle(g);
+    gdbg.thetaDeg = Math.round(theta * 1800 / Math.PI) / 10;
+    var before = moves.length;
     if (theta === 0) {
       var colCanon = autoAlignBands(g, 'x', tol);
       var rowCanon = autoAlignBands(g, 'y', tol);
+      gdbg.xBands = autoAlignBandsDebug(g, 'x', tol);
+      gdbg.yBands = autoAlignBandsDebug(g, 'y', tol);
       g.forEach(function (d) {
         var nx = colCanon[d.id], ny = rowCanon[d.id];
         if (nx !== d.x || ny !== d.y) {
           moves.push({ id: d.id, oldX: d.x, oldY: d.y, newX: nx, newY: ny });
         }
       });
+      gdbg.movesInGroup = moves.length - before;
+      dbg.groups.push(gdbg);
       return;
     }
     // Rotate the cluster by -theta about its centroid, band the axis-aligned
@@ -1882,6 +1918,8 @@ function autoAlignPlan(contains) {
     });
     var colCanonR = autoAlignBands(rot, 'x', tol);
     var rowCanonR = autoAlignBands(rot, 'y', tol);
+    gdbg.xBandsRotated = autoAlignBandsDebug(rot, 'x', tol);
+    gdbg.yBandsRotated = autoAlignBandsDebug(rot, 'y', tol);
     rot.forEach(function (d) {
       var rx = colCanonR[d.id], ry = rowCanonR[d.id];
       var nx = Math.round(cx + rx * cos - ry * sin);
@@ -1890,8 +1928,46 @@ function autoAlignPlan(contains) {
         moves.push({ id: d.id, oldX: d.sx, oldY: d.sy, newX: nx, newY: ny });
       }
     });
+    gdbg.movesInGroup = moves.length - before;
+    dbg.groups.push(gdbg);
   });
+  dbg.totalMoves = moves.length;
+  autoAlignDebugDump(dbg);
   return moves;
+}
+
+// Debug-only: recompute the banding for a coordinate and return each band's
+// anchor, average and member values, so the console dump shows exactly how rows
+// and columns were grouped (mirrors autoAlignBands' logic).
+function autoAlignBandsDebug(items, key, tol) {
+  var sorted = items.slice().sort(function (a, b) { return a[key] - b[key]; });
+  var bands = [], cur = [], anchor = 0;
+  sorted.forEach(function (it) {
+    if (cur.length === 0) { cur = [it]; anchor = it[key]; return; }
+    if (it[key] - anchor <= tol) { cur.push(it); }
+    else { bands.push(cur); cur = [it]; anchor = it[key]; }
+  });
+  if (cur.length) { bands.push(cur); }
+  return bands.map(function (band) {
+    var sum = 0;
+    band.forEach(function (it) { sum += it[key]; });
+    return {
+      avg: Math.round((sum / band.length) * 10) / 10,
+      count: band.length,
+      values: band.map(function (it) { return Math.round(it[key] * 10) / 10; })
+    };
+  });
+}
+
+// Debug-only: pretty-print the collected auto-align diagnostics to the console.
+function autoAlignDebugDump(dbg) {
+  if (!AUTOALIGN_DEBUG) { return; }
+  try {
+    console.log('%c[auto-align debug] copy everything below this line', 'font-weight:bold;color:#0979D8;');
+    console.log(JSON.stringify(dbg, null, 2));
+  } catch (e) {
+    console.log('[auto-align debug]', dbg);
+  }
 }
 
 // Remove any auto-align preview overlay + confirm bar + in-progress selection.
