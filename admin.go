@@ -34,6 +34,7 @@ type mapRow struct {
 type adminUserRow struct {
 	Username string
 	Name     string
+	Mail     string
 	Role     int
 	RoleName string
 }
@@ -1271,9 +1272,11 @@ func (app *App) buildAdminData(r *http.Request, sess Session, tab, msg string) a
 		// lowercased samaccountname, so we can show a friendly name for every
 		// AD-derived admin (not just those with an office attribute).
 		ldapNames := map[string]string{}
+		ldapMails := map[string]string{}
 		if dir, err := app.db.ListDirectory(); err == nil {
 			for _, d := range dir {
 				ldapNames[strings.ToLower(d.Userid)] = d.DisplayName()
+				ldapMails[strings.ToLower(d.Userid)] = d.Mail
 			}
 		}
 		users, _ := app.db.ListUsers()
@@ -1285,12 +1288,12 @@ func (app *App) buildAdminData(r *http.Request, sess Session, tab, msg string) a
 			// Resolve a display name: prefer a stored full name, then the cached
 			// LDAP data (matched on samaccountname after stripping any DOMAIN\
 			// prefix), and finally fall back to the username itself.
+			sam := u.Username
+			if idx := strings.LastIndex(sam, "\\"); idx >= 0 {
+				sam = sam[idx+1:]
+			}
 			display := strings.TrimSpace(u.Fullname)
 			if display == "" {
-				sam := u.Username
-				if idx := strings.LastIndex(sam, "\\"); idx >= 0 {
-					sam = sam[idx+1:]
-				}
 				if full, ok := ldapNames[strings.ToLower(sam)]; ok {
 					display = full
 				}
@@ -1298,7 +1301,15 @@ func (app *App) buildAdminData(r *http.Request, sess Session, tab, msg string) a
 			if display == "" {
 				display = u.Username
 			}
-			d.Mapadmins = append(d.Mapadmins, adminUserRow{Username: u.Username, Name: display, Role: u.Role, RoleName: name})
+			// Resolve the e-mail: prefer the stored user mail, else the cached
+			// directory mail matched on samaccountname.
+			mail := strings.TrimSpace(u.Mail)
+			if mail == "" {
+				if m, ok := ldapMails[strings.ToLower(sam)]; ok {
+					mail = strings.TrimSpace(m)
+				}
+			}
+			d.Mapadmins = append(d.Mapadmins, adminUserRow{Username: u.Username, Name: display, Mail: mail, Role: u.Role, RoleName: name})
 		}
 		sort.Slice(d.Mapadmins, func(i, j int) bool {
 			return strings.ToLower(d.Mapadmins[i].Name) < strings.ToLower(d.Mapadmins[j].Name)

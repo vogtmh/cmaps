@@ -342,6 +342,8 @@ function hideSticky () {
       element.parentNode.removeChild(element);
     }
     activecalendar = '';
+    // Return the edit sidebar to the palette view + discard any draft (editor only).
+    if (typeof closeSidebarForm === 'function') { closeSidebarForm(); }
 }
 
 function highlightManagers() {
@@ -595,6 +597,7 @@ function showNameplate (deskid, desktype) {
       case "food":
       case "service":
       case "exit":
+      case "firstaid":
       case "keycardlock":
       case "keylock":
       case "floor":
@@ -636,12 +639,6 @@ function showNameplate (deskid, desktype) {
             }
           }
         }
-        break;
-      case "firstaid":
-        var caption = attr.dsk;
-        var avatar = 'images/' + desktype + '.png';
-        var avatarcolor = $('#' + attr.id).css('background-color');
-        content = attr.title + '<br />'+ attr.mail + '<br />'+ attr.phone + '<br />' + attr.mobil + '<br />'
         break;
       case "meeting":
         var caption = attr.empl;
@@ -1256,38 +1253,9 @@ function showSticky (deskid, desktype, caption) {
                           + '<div style="position:absolute; left:' + (attr.x-5) +'px; top:' + (attr.y-5) + 'px; width: 10px; height: 10px; border-radius:50%;background-color: black;z-index:101;"></div>'
                           + '<div style="position:absolute; left:' + attr.x +'px; top:' + (attr.y-1) + 'px; width: 150px; height: 2px; background-color: black;z-index:101;"></div>';
       }
-      if (typeof token !== 'undefined' && setting_usermode == 'edit') {
-        if (attr.x > (targetScreenWidth/2)) { 
-          outputnameplate+='<div class="nameplate_edit" style="top:' + (Number(y_nameplate)+99) +'px;left:' + (attr.x-640) + 'px;">'
-        }
-        else {
-          outputnameplate+='<div class="nameplate_edit" style="top:' + (Number(y_nameplate)+99) +'px;left:' + (Number(attr.x) + 150) + 'px;">'
-        }
-        outputnameplate+='<form class="updateItem" style="width:80%; height: 100%;margin-left:10%;">'
-                          + '<select id="selDesktype" onchange="addInputfields(' + deskidstring + ',' + desktypestring + ')">'
-                          + '<option value="ldap-desk">LDAP synced Desk</option>'
-                          + '<option value="blocked">Blocked</option>'
-                          + '<option value="exit">Exit</option>'
-                          + '<option value="firstaid">First Aid</option>'
-                          + '<option value="floor">Floor</option>'
-                          + '<option value="food">Food</option>'
-                          + '<option value="booking">Booking</option>'
-                          + '<option value="hotseat">Hotseat</option>'
-                          + '<option value="keycardlock">Keycard Lock</option>'
-                          + '<option value="keylock" >Key Lock</option>'
-                          + '<option value="meeting">Meeting</option>'
-                          + '<option value="printer">Printer</option>'
-                          + '<option value="restroom">Restroom</option>'
-                          + '<option value="service">Service</option>'
-                          + '<option value="local-desk">Non-LDAP Desk</option>'
-                          + '</select><div id="inputfields"></div><input type="submit" Value="Apply changes"></form>'
-                          + '<form class="deleteItem" style="width:80%; height: 100%;margin-left:10%;margin-bottom:10px;">'
-                          + '<input type="submit" style="background-color:#f00" value="Delete item">'
-                          + '<input type="hidden" name="apimap" value="' + attr.map +'">'
-                          + '<input type="hidden" id="apideskid" name="apideskid" value="'+ attr.id +'">'
-                          + '</form>'
-                          + '</div>';
-      }
+      // In edit mode the property form now lives in the right-hand sidebar
+      // (openSidebarEdit, admin.js); the on-map plate stays read-only for
+      // reference. See the openSidebarEdit call after the plate is inserted.
     // Remove old sticky if exists
     var element = document.getElementById('stickynameplate');
     if (element !== null) {
@@ -1300,59 +1268,10 @@ function showSticky (deskid, desktype, caption) {
     newElement.setAttribute('id', 'stickynameplate');
     newElement.innerHTML = outputnameplate;
     p.appendChild(newElement);
-    if (typeof token !== 'undefined' && setting_usermode == 'edit') {
-      addInputfields(deskid, desktype, 1);
+    if (typeof token !== 'undefined' && setting_usermode == 'edit' && typeof openSidebarEdit === 'function') {
+      // Show the editable property form in the sidebar for this item.
+      openSidebarEdit(deskid, desktype);
     }
-
-    $('.updateItem').on('submit', function (e) {
-      e.preventDefault();
-      mapname = map;
-      itemid = $("#apideskid").val();
-      itemdesktype = $("#apidesktype").val();
-      itemx = $("#apideskx").val();
-      itemy = $("#apidesky").val();
-      itemdsk = $("#apideskdsk").val();
-      itemempl = $("#apideskempl").val();
-      itemavtr = $("#apideskavtr").val();
-      itemdept = $("#apideskdept").val();
-      if (itemdept == "- none -") {itemdept = 'NULL';}
-      $.ajax({
-        url: 'rest/update',
-        async: true, 
-        type: 'get',
-        data: {token: token, mode: 'update', map: mapname, id: itemid, desktype: itemdesktype, x: itemx, y:itemy, desknumber:itemdsk, employee:itemempl, avatar: itemavtr, department: itemdept, user: username},
-        dataType: 'JSON',
-        success: function(result){
-          updateDesks();
-          if (typeof checkHealthStatus === 'function') { checkHealthStatus(); }
-        },
-        error: function (result) {
-          alert('Could not update desk');
-        }
-      });
-      hideSticky();
-    });
-    $('.deleteItem').on('submit', function (e) {
-      e.preventDefault();
-      mapname = map;
-      itemid = $("#apideskid").val();
-      $.ajax({
-        url: 'rest/update',
-        async: true, 
-        type: 'get',
-        data: {token: token, mode: 'delete', map: mapname, id: itemid, user: username},
-        dataType: 'JSON',
-        success: function(result){
-          updateDesks();
-          if (typeof checkHealthStatus === 'function') { checkHealthStatus(); }
-        },
-        error: function (result) {
-          alert('Could not delete desk');
-          console.log(result);
-        }    
-      });
-      hideSticky();
-    });
 }
 
 function showSharedSelection(fname, lname, title, mail, phone, mobil, avatar, color, sharedindex) {

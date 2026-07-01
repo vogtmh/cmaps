@@ -28,6 +28,13 @@ type deskItem struct {
 	Parsed   string    `json:"parsed"`
 	Booked   string    `json:"booked"`
 	Robin    string    `json:"robin,omitempty"`
+	// Config* preserve the underlying STORED desk configuration on synthetic
+	// overlay items (e.g. a Robin-occupied desk is shown as "occupied" with the
+	// live occupant in Empl). The editor uses these to edit the real item instead
+	// of the transient occupancy values. Empty/omitted on normal items.
+	ConfigType string `json:"configtype,omitempty"`
+	ConfigEmpl string `json:"configempl,omitempty"`
+	ConfigAvtr string `json:"configavtr,omitempty"`
 	// HasAvatar tells the client whether a cached avatar image exists for this
 	// desk's occupant. When false the client uses a single shared placeholder URL
 	// (downloaded once) instead of requesting a unique missing image per person.
@@ -162,6 +169,7 @@ func (app *App) buildMapDesks(mapName, date, search string, vips []VIP, bookings
 					Dsk: d.Desknumber, Empl: rs.Name, Avtr: avtr, Dept: d.Department,
 					Phone: rs.Phone, Mail: rs.Mail, Title: rs.Title, Mobil: rs.Mobile,
 					Booked: booked, Robin: "1", HasAvatar: avatarByUser[strings.ToLower(rs.Userid)],
+					ConfigType: d.Desktype, ConfigEmpl: d.Employee, ConfigAvtr: d.Avatar,
 				}
 				app.appendIfMatch(&items, item, search, rs.Name)
 				continue

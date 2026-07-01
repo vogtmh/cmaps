@@ -557,22 +557,74 @@ function submitWorldMapAdd() {
     });
 }
 
+// --- Property-form field builders (shared by the sidebar add/edit form) ---
+// Each row keeps the same element id/name the create/update submit handlers
+// expect; only the layout/order changes (essential fields first).
+function sbTextRow(label, id, name, value) {
+  var v = (value === undefined || value === null) ? '' : value;
+  return '<div class="sbrow"><div class="sblabel">' + label + '</div>'
+       + '<input type="text" class="sbinput" id="' + id + '" name="' + name + '" value="' + v + '"></div>';
+}
+function sbHidden(id, name, value) {
+  var v = (value === undefined || value === null) ? '' : value;
+  return '<input type="hidden" id="' + id + '" name="' + name + '" value="' + v + '">';
+}
+function sbDeptRow(selectedDept) {
+  var s = '<div class="sbrow"><div class="sblabel">Department</div>'
+        + '<select id="apideskdept" name="formdept" class="sbinput">';
+  $.each(departments, function (x, department) {
+    s += '<option value="' + department + '"' + (department == selectedDept ? ' selected' : '') + '>' + department + '</option>';
+  });
+  s += '</select></div>';
+  return s;
+}
+// Reserved desknumber keywords (POI markers) are blanked when converting an
+// item to a desk so the editor is not asked to keep a placeholder name.
+function sbReservedDsk(d) {
+  switch (d) {
+    case "Exit": case "FirstAid": case "Floor": case "Food":
+    case "KeycardLock": case "KeyLock": case "Meeting":
+    case "Printer": case "Restroom": case "Service":
+      return true;
+  }
+  return false;
+}
+function sbAdvanced(advHtml) {
+  if (!advHtml) { return ''; }
+  return '<div class="sbadv_divider">Advanced</div>' + advHtml;
+}
+
 function addInputfields(deskid, desktype, override, manual) {
 
   // New items overwrite all automatic settings
   if (override == 3) {
     var input = {id: 'NULL', map: map, x: $("#apideskx").val(), y: $("#apidesky").val(), dsk: $("#apideskdsk").val(), empl: $("#apideskempl").val(), avtr: $("#apideskavtr").val(), dept: $("#apideskdept").val()};
     var selected = $("#selDesktype").val();
+    // "ldap-mirror" is the hidden technical employee marker used by directory
+    // desks, not a real description. Don't let it carry over into another type's
+    // Description field when the editor switches the draft's type.
+    if (input.empl === 'ldap-mirror') { input.empl = ''; }
   }
   else if (override == 2) {
     var input = manual;
     var selected = desktype;
-    $("#selDesktype").val('ldap-desk'); 
+    $("#selDesktype").val(desktype);
 
   }
   else {
     attr = result_old.desks.find(o => Object.entries(o).find(([k, value]) => k === 'id' && value === deskid) !== undefined);
     var input = attr;
+    // A Robin-occupied desk arrives as a synthetic "occupied" overlay whose
+    // desktype/empl/avatar reflect the LIVE occupant, not the stored item. Edit
+    // the real underlying configuration instead so we never overwrite it with
+    // transient Robin values. Desknumber/department/coordinates are already the
+    // stored config, so only type/empl/avatar need restoring.
+    if (input && input.configtype) {
+      var cfgMap = { addesk: 'ldap-desk', localdesk: 'local-desk' };
+      desktype = cfgMap[input.configtype] || input.configtype;
+      input = { id: input.id, map: input.map, x: input.x, y: input.y, dsk: input.dsk,
+                empl: (input.configempl || ''), avtr: (input.configavtr || ''), dept: input.dept };
+    }
     if (desktype == "occupiedldap") {desktype="ldap-desk";}
     if (desktype == "occupied") {desktype="local-desk";}
     if (desktype == "free") {
@@ -595,7 +647,12 @@ function addInputfields(deskid, desktype, override, manual) {
     }
   }
 
-  var fields = '';
+  // Build the property form: essential (semantic) fields first, then an
+  // "Advanced" block with coordinates + avatar, then hidden inputs. All element
+  // ids/names are preserved so the create/update submit handlers work unchanged.
+  var ess = ''; // essential fields (top)
+  var adv = ''; // advanced fields (below the divider)
+  var hid = ''; // hidden inputs
   switch (selected) {
     case "exit":
     case "firstaid":
@@ -605,143 +662,77 @@ function addInputfields(deskid, desktype, override, manual) {
     case "printer":
     case "restroom":
     case "service":
-        fields+='<div style="width:30%; float:left;display:inline;">x</div><input type="text" style="width: 70%; float: left;display:inline;" id="apideskx" name="formx" value="' + input.x + '">';
-        fields+='<div style="width:30%; float:left;display:inline;">y</div><input type="text" style="width: 70%; float: left;display:inline;" id="apidesky" name="formy" value="' + input.y + '">';
-        fields+='<div style="width:30%; float:left;display:inline;">Desknumber</div><input type="text" style="width: 70%; float: left;display:inline;" id="apideskdsk" name="formdsk" value="' + input.dsk + '">';
-        fields+='<div style="width:30%; float:left;display:inline;">Description</div><input type="text" style="width: 70%; float: left;display:inline;" id="apideskempl" name="formempl" value="' + input.empl + '">';
-        fields+='<input type="hidden" id="apideskavtr" name="formavtr" value="' + selected + '">';
-        fields+='<input type="hidden" id="apideskdept" name="formdept" value="- none -">';
-        fields+='<input type="hidden" id="apidesktype" name="formdesktype" value="' + selected + '">';
+        // These POI markers have no meaningful desknumber: it is a fixed reserved
+        // keyword derived from the type, so we keep it as a hidden field instead
+        // of asking the editor for it. Only the description + position matter.
+        ess += sbTextRow('Description', 'apideskempl', 'formempl', input.empl);
+        adv += sbTextRow('x', 'apideskx', 'formx', input.x);
+        adv += sbTextRow('y', 'apidesky', 'formy', input.y);
+        hid += sbHidden('apideskdsk', 'formdsk', type2keyword(selected));
+        hid += sbHidden('apideskavtr', 'formavtr', selected);
+        hid += sbHidden('apideskdept', 'formdept', '- none -');
+        hid += sbHidden('apidesktype', 'formdesktype', selected);
         break;
     case "floor":
         // Floor X is locked to the rail; only Y + label are editable.
-        fields+='<input type="hidden" id="apideskx" name="formx" value="' + FLOOR_RAIL_X + '">';
-        fields+='<div style="width:30%; float:left;display:inline;">y</div><input type="text" style="width: 70%; float: left;display:inline;" id="apidesky" name="formy" value="' + input.y + '">';
-        fields+='<div style="width:30%; float:left;display:inline;">Label</div><input type="text" style="width: 70%; float: left;display:inline;" id="apideskempl" name="formempl" value="' + input.empl + '">';
-        fields+='<input type="hidden" id="apideskdsk" name="formdsk" value="Floor">';
-        fields+='<input type="hidden" id="apideskavtr" name="formavtr" value="' + selected + '">';
-        fields+='<input type="hidden" id="apideskdept" name="formdept" value="- none -">';
-        fields+='<input type="hidden" id="apidesktype" name="formdesktype" value="' + selected + '">';
+        ess += sbTextRow('Label', 'apideskempl', 'formempl', input.empl);
+        adv += sbTextRow('y', 'apidesky', 'formy', input.y);
+        hid += sbHidden('apideskx', 'formx', FLOOR_RAIL_X);
+        hid += sbHidden('apideskdsk', 'formdsk', 'Floor');
+        hid += sbHidden('apideskavtr', 'formavtr', selected);
+        hid += sbHidden('apideskdept', 'formdept', '- none -');
+        hid += sbHidden('apidesktype', 'formdesktype', selected);
         break;
     case "meeting":
-        fields+='<div style="width:30%; float:left;display:inline;">x</div><input type="text" style="width: 70%; float: left;display:inline;" id="apideskx" name="formx" value="' + input.x + '">';
-        fields+='<div style="width:30%; float:left;display:inline;">y</div><input type="text" style="width: 70%; float: left;display:inline;" id="apidesky" name="formy" value="' + input.y + '">';
-        fields+='<div style="width:30%; float:left;display:inline;">Desknumber</div><input type="text" style="width: 70%; float: left;display:inline;" id="apideskdsk" name="formdsk" value="' + input.dsk + '">';
-        fields+='<div style="width:30%; float:left;display:inline;">Description</div><input type="text" style="width: 70%; float: left;display:inline;" id="apideskempl" name="formempl" value="' + input.empl + '">';
-        fields+='<div style="width:30%; float:left;display:inline;">Avatar</div><input type="text" style="width: 70%; float: left;display:inline;" id="apideskavtr" name="formavtr" value="' + input.avtr + '">';
-        fields+='<input type="hidden" id="apideskdept" name="formdept" value="- none -">';
-        fields+='<input type="hidden" id="apidesktype" name="formdesktype" value="' + selected + '">';
+        ess += sbTextRow('Desknumber', 'apideskdsk', 'formdsk', input.dsk);
+        ess += sbTextRow('Description', 'apideskempl', 'formempl', input.empl);
+        adv += sbTextRow('x', 'apideskx', 'formx', input.x);
+        adv += sbTextRow('y', 'apidesky', 'formy', input.y);
+        adv += sbTextRow('Avatar', 'apideskavtr', 'formavtr', input.avtr);
+        hid += sbHidden('apideskdept', 'formdept', '- none -');
+        hid += sbHidden('apidesktype', 'formdesktype', selected);
         break;
     case "ldap-desk":
     case "shareddesk":
-        fields+='<div style="width:30%; float:left;display:inline;">x</div><input type="text" style="width: 70%; float: left;display:inline;" id="apideskx" name="formx" value="' + input.x + '">';
-        fields+='<div style="width:30%; float:left;display:inline;">y</div><input type="text" style="width: 70%; float: left;display:inline;" id="apidesky" name="formy" value="' + input.y + '">';
-        fields+='<input type="hidden" id="apidesktype" name="formdesktype" value="addesk">';
-        switch (input.dsk) {
-            case "Exit":
-            case "FirstAid":
-            case "Floor":
-            case "Food":
-            case "KeycardLock":
-            case "KeyLock":
-            case "Meeting":
-            case "Printer":
-            case "Restroom":
-            case "Service":
-                fields+='<div style="width:30%; float:left;display:inline;">Desknumber</div><input type="text" style="width: 70%; float: left;display:inline;" id="apideskdsk" name="formdsk" value="">';
-                break;
-            default:
-                fields+='<div style="width:30%; float:left;display:inline;">Desknumber</div><input type="text" style="width: 70%; float: left;display:inline;" id="apideskdsk" name="formdsk" value="' + input.dsk + '">';
-                break;
-        }
-        fields+='<input type="hidden" id= "apideskempl" name="apideskempl" value="ldap-mirror">';
-        fields+='<input type="hidden" id="apideskavtr" name="formavtr" value="' + input.avtr + '">';
-        fields+='<div style="width:30%; float:left;display:inline;">Department</div>';
-        fields+='<select id="apideskdept" name="formdept" style="width: 70%; float: left;display:inline;">';
-        $.each( departments, function( x, department ){
-          if (department == input.dept) {
-            fields+='<option value = "'+department+'" selected>'+department+'</option>';
-          }
-          else {
-            fields+='<option value = "'+department+'">'+department+'</option>';
-          }
-        });
-        fields+='</select>';
+        ess += sbTextRow('Desknumber', 'apideskdsk', 'formdsk', sbReservedDsk(input.dsk) ? '' : input.dsk);
+        ess += sbDeptRow(input.dept);
+        adv += sbTextRow('x', 'apideskx', 'formx', input.x);
+        adv += sbTextRow('y', 'apidesky', 'formy', input.y);
+        hid += sbHidden('apidesktype', 'formdesktype', 'addesk');
+        hid += '<input type="hidden" id="apideskempl" name="apideskempl" value="ldap-mirror">';
+        hid += sbHidden('apideskavtr', 'formavtr', input.avtr);
         break;
     case "blocked":
     case "booking":
     case "hotseat":
-        fields+='<div style="width:30%; float:left;display:inline;">x</div><input type="text" style="width: 70%; float: left;display:inline;" id="apideskx" name="formx" value="' + input.x + '">';
-        fields+='<div style="width:30%; float:left;display:inline;">y</div><input type="text" style="width: 70%; float: left;display:inline;" id="apidesky" name="formy" value="' + input.y + '">';
-        //fields+='<input type="hidden" id= "apideskempl" name="apideskempl" value="' + type2keyword(selected) + '">';
-        fields+='<input type="hidden" id="apidesktype" name="formdesktype" value="' + selected + '">';
-        switch (input.dsk) {
-            case "Exit":
-            case "FirstAid":
-            case "Floor":
-            case "Food":
-            case "KeycardLock":
-            case "KeyLock":
-            case "Meeting":
-            case "Printer":
-            case "Restroom":
-            case "Service":
-                fields+='<div style="width:30%; float:left;display:inline;">Desknumber</div><input type="text" style="width: 70%; float: left;display:inline;" id="apideskdsk" name="formdsk" value="">';
-                break;
-            default:
-                fields+='<div style="width:30%; float:left;display:inline;">Desknumber</div><input type="text" style="width: 70%; float: left;display:inline;" id="apideskdsk" name="formdsk" value="' + input.dsk + '">';
-                break;
-        }
-        fields+='<div style="width:30%; float:left;display:inline;">Description</div><input type="text" style="width: 70%; float: left;display:inline;" id="apideskempl" name="formempl" value="' + input.empl + '">';
-        fields+='<input type="hidden" id="apideskavtr" name="formavtr" value="' + selected + '">';
-        fields+='<div style="width:30%; float:left;display:inline;">Department</div>';
-        fields+='<select id="apideskdept" name="formdept" style="width: 70%; float: left;display:inline;">';
-        $.each( departments, function( x, department ){
-          if (department == input.dept) {
-            fields+='<option value = "'+department+'" selected>'+department+'</option>';
-          }
-          else {
-            fields+='<option value = "'+department+'">'+department+'</option>';
-          }
-        });
-        fields+='</select>';
-      break;
+        ess += sbTextRow('Desknumber', 'apideskdsk', 'formdsk', sbReservedDsk(input.dsk) ? '' : input.dsk);
+        ess += sbTextRow('Description', 'apideskempl', 'formempl', input.empl);
+        ess += sbDeptRow(input.dept);
+        adv += sbTextRow('x', 'apideskx', 'formx', input.x);
+        adv += sbTextRow('y', 'apidesky', 'formy', input.y);
+        hid += sbHidden('apidesktype', 'formdesktype', selected);
+        hid += sbHidden('apideskavtr', 'formavtr', selected);
+        break;
     case "local-desk":
-      fields+='<div style="width:30%; float:left;display:inline;">x</div><input type="text" style="width: 70%; float: left;display:inline;" id="apideskx" name="formx" value="' + input.x + '">';
-      fields+='<div style="width:30%; float:left;display:inline;">y</div><input type="text" style="width: 70%; float: left;display:inline;" id="apidesky" name="formy" value="' + input.y + '">';
-      fields+='<div style="width:30%; float:left;display:inline;">Desknumber</div><input type="text" style="width: 70%; float: left;display:inline;" id="apideskdsk" name="formdsk" value="' + input.dsk + '">';
-      fields+='<div style="width:30%; float:left;display:inline;">Description</div><input type="text" style="width: 70%; float: left;display:inline;" id="apideskempl" name="formempl" value="' + input.empl + '">';
-      fields+='<div style="width:30%; float:left;display:inline;">Avatar</div><input type="text" style="width: 70%; float: left;display:inline;" id="apideskavtr" name="formavtr" value="' + input.avtr + '">';
-      fields+='<div style="width:30%; float:left;display:inline;">Department</div>';
-      fields+='<select id="apideskdept" name="formdept" style="width: 70%; float: left;display:inline;">';
-      $.each( departments, function( x, department ){
-        if (department == input.dept) {
-          fields+='<option value = "'+department+'" selected>'+department+'</option>';
-        }
-        else {
-          fields+='<option value = "'+department+'">'+department+'</option>';
-        }
-      });
-      fields+='</select>';
-      fields+='<input type="hidden" id="apidesktype" name="formdesktype" value="localdesk">';
-      break;
+        ess += sbTextRow('Desknumber', 'apideskdsk', 'formdsk', input.dsk);
+        ess += sbTextRow('Description', 'apideskempl', 'formempl', input.empl);
+        ess += sbDeptRow(input.dept);
+        adv += sbTextRow('x', 'apideskx', 'formx', input.x);
+        adv += sbTextRow('y', 'apidesky', 'formy', input.y);
+        adv += sbTextRow('Avatar', 'apideskavtr', 'formavtr', input.avtr);
+        hid += sbHidden('apidesktype', 'formdesktype', 'localdesk');
+        break;
     case "newdesk":
-      fields+='<div style="width:30%; float:left;display:inline;">x</div><input type="text" style="width: 70%; float: left;display:inline;" id="apideskx" name="formx" value="' + input.x + '">';
-      fields+='<div style="width:30%; float:left;display:inline;">y</div><input type="text" style="width: 70%; float: left;display:inline;" id="apidesky" name="formy" value="' + input.y + '">';
-      fields+='<div style="width:30%; float:left;display:inline;">Desknumber</div><input type="text" style="width: 70%; float: left;display:inline;" id="apideskdsk" name="formdsk" value="">';
-      //fields+='<input type="hidden" id= "apideskempl" name="apideskempl" value="ldap-mirror">';
-      fields+='<div style="width:30%; float:left;display:inline;">Description</div><input type="text" style="width: 70%; float: left;display:inline;" id="apideskempl" name="formempl" value="' + input.empl + '">';
-      fields+='<input type="hidden" id="apideskavtr" name="formavtr" value="' + input.avtr + '">';
-      fields+='<input type="hidden" id="apidesktype" name="formdesktype" value="addesk">';
-      fields+='<div style="width:30%; float:left;display:inline;">Department</div>';
-      fields+='<select id="apideskdept" name="formdept" style="width: 70%; float: left;display:inline;">';
-      $.each( departments, function( x, department ){
-          fields+='<option value = "'+department+'">'+department+'</option>';
-      });
-      fields+='</select>';
-      break;
+        ess += sbTextRow('Desknumber', 'apideskdsk', 'formdsk', '');
+        ess += sbTextRow('Description', 'apideskempl', 'formempl', input.empl);
+        ess += sbDeptRow(input.dept);
+        adv += sbTextRow('x', 'apideskx', 'formx', input.x);
+        adv += sbTextRow('y', 'apidesky', 'formy', input.y);
+        hid += sbHidden('apideskavtr', 'formavtr', input.avtr);
+        hid += sbHidden('apidesktype', 'formdesktype', 'addesk');
+        break;
   }
-  $("#inputfields").html(fields);
+  $("#inputfields").html(ess + sbAdvanced(adv) + hid);
 }
 
 function type2keyword (word) {
@@ -847,6 +838,12 @@ function dragElement(elmnt, deskType) {
   var diffY;
   var lastDragClientX;
   var lastDragClientY;
+  var dragStarted;
+
+  // Minimum cursor travel (in screen pixels) before a press is treated as a
+  // drag rather than a click. Without this, the tiniest jitter while clicking an
+  // item nudges it and triggers a "move" (DB update) instead of selecting it.
+  var DRAG_THRESHOLD = 5;
 
   if (document.getElementById(elmnt.id)) {
     document.getElementById(elmnt.id).onmousedown = dragMouseDown;
@@ -864,6 +861,7 @@ function dragElement(elmnt, deskType) {
     startItemY = parseInt($('#'+elementId).css("top"));
     startJsX = e.clientX;
     startJsY = e.clientY;
+    dragStarted = false;
     document.onmouseup = closeDragElement;
     // call a function whenever the cursor moves:
     document.onmousemove = elementDrag;
@@ -873,6 +871,17 @@ function dragElement(elmnt, deskType) {
     e = e || window.event;
     e.preventDefault();
     var elementId = (e.target || e.srcElement).id;
+
+    // Ignore sub-threshold jitter so a click that wiggles slightly still selects
+    // the item instead of moving it. Once the cursor crosses the threshold the
+    // press becomes a real drag for the rest of the gesture.
+    if (!dragStarted) {
+      if (Math.abs(e.clientX - startJsX) < DRAG_THRESHOLD &&
+          Math.abs(e.clientY - startJsY) < DRAG_THRESHOLD) {
+        return;
+      }
+      dragStarted = true;
+    }
 
     hideNameplate(1);
     
@@ -1318,6 +1327,7 @@ function openEditSidebar() {
 function closeEditSidebar() {
   var sb = document.getElementById('editsidebar');
   if (sb) { sb.classList.remove('open'); }
+  if (typeof closeSidebarForm === 'function') { closeSidebarForm(); }
   if (editSidebarWidth === 0) { return; }
   editSidebarWidth = 0;
   if (typeof window.cmapsRescale === 'function') { window.cmapsRescale(); }
@@ -1337,6 +1347,12 @@ $(function () {
   // Open the palette on load if the page starts in edit mode. Runs after
   // resize.js has installed window.cmapsRescale (admin.js loads later).
   applyEditSidebar();
+  // Escape cancels an active draft / closes the sidebar editor.
+  document.addEventListener('keydown', function (ev) {
+    if (ev.key === 'Escape' && (draftState || selectedDeskId)) {
+      if (typeof hideSticky === 'function') { hideSticky(); }
+    }
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -1521,49 +1537,319 @@ function migrateFloorsToRail() {
   });
 }
 
-// Open the item editor at (x,y) pre-scoped to the dragged palette type. Reuses
-// type to the correct fields + defaults and wires the create submit), but hides
-// the legacy type dropdown since the type is now chosen from the palette.
+// Drop a new item onto the map: instead of the old "fill form then place"
+// flow, we spawn a live DRAFT marker at (x,y) that can be dragged into position
+// while the property form is shown in the sidebar. Nothing is written to the DB
+// until the editor clicks Save (Back/Escape discards the draft).
 function placeItem(type, x, y) {
-  createDesk(x, y);
-  var sel = document.getElementById('selDesktype');
-  if (sel) {
-    sel.value = type;
-    // override == 3 rebuilds the fields from the selected type, reading the
-    // x/y inputs createDesk just populated.
-    addInputfields(666, 'newdesk', 3);
-    $(sel).hide();
-    var item = EDIT_PALETTE_BY_TYPE[type];
-    if (item && !document.getElementById('np_typelabel')) {
-      var lbl = document.createElement('div');
-      lbl.id = 'np_typelabel';
-      lbl.className = 'np-typelabel';
-      lbl.textContent = item.label;
-      sel.parentNode.insertBefore(lbl, sel);
-    }
+  startDraftPlacement(type, x, y);
+}
+
+// ---------------------------------------------------------------------------
+// Sidebar property form: add (draft) + edit, shown in #editsidebar_form in
+// place of the palette. Coordinates are two-way bound to a preview on the map.
+// ---------------------------------------------------------------------------
+
+var draftState = null;     // { type, x, y } while placing a new item
+var selectedDeskId = null; // id of the desk currently open in the sidebar editor
+
+// The desk-type <select> used by both the add and edit forms. `onchange` differs
+// (new drafts re-read the DOM via override 3; edits re-read the stored desk).
+function deskTypeSelectHtml(onchange) {
+  return '<select id="selDesktype" class="sbinput" onchange="' + onchange + '">'
+    + '<option value="ldap-desk">LDAP synced Desk</option>'
+    + '<option value="blocked">Blocked</option>'
+    + '<option value="exit">Exit</option>'
+    + '<option value="firstaid">First Aid</option>'
+    + '<option value="floor">Floor</option>'
+    + '<option value="food">Food</option>'
+    + '<option value="booking">Booking</option>'
+    + '<option value="hotseat">Hotseat</option>'
+    + '<option value="keycardlock">Keycard Lock</option>'
+    + '<option value="keylock">Key Lock</option>'
+    + '<option value="meeting">Meeting</option>'
+    + '<option value="printer">Printer</option>'
+    + '<option value="restroom">Restroom</option>'
+    + '<option value="service">Service</option>'
+    + '<option value="local-desk">Non-LDAP Desk</option>'
+    + '</select>';
+}
+
+// Render the sidebar form shell (header + type select + #inputfields + actions)
+// and switch the sidebar from the palette view to the form view.
+function buildSidebarForm(opts) {
+  var host = document.getElementById('editsidebar_form');
+  var inner = document.getElementById('editsidebar_inner');
+  var footer = document.getElementById('editsidebar_footer');
+  if (!host) { return; }
+  var deleteForm = '';
+  if (opts.mode === 'edit') {
+    deleteForm = '<form class="sidebarDelete">'
+               + '<input type="hidden" id="apideskid" name="apideskid" value="' + opts.deskid + '">'
+               + '<input type="submit" class="sbbtn sbbtn_delete" value="Delete item">'
+               + '</form>';
   }
-  // Tint the placement preview marker to match the dragged item.
-  var marker = document.getElementById('newdeskitem');
+  host.innerHTML =
+      '<div class="editsidebar_form_head">'
+    + '<button type="button" class="editsidebar_back" onclick="hideSticky()">&#8592; Back</button>'
+    + '<span class="editsidebar_form_title">' + opts.title + '</span>'
+    + '</div>'
+    + '<form class="sidebarItem">'
+    + '<div class="sbrow"><div class="sblabel">Type</div>' + opts.typeSelect + '</div>'
+    + '<div id="inputfields"></div>'
+    + '<div class="editsidebar_form_actions">'
+    + '<input type="submit" class="sbbtn sbbtn_save" value="Save">'
+    + '</div>'
+    + '</form>'
+    + deleteForm;
+  if (inner) { inner.style.display = 'none'; }
+  if (footer) { footer.style.display = 'none'; }
+  host.style.display = 'flex';
+}
+
+// Restore the palette view and clear any active draft/selection.
+function closeSidebarForm() {
+  clearDraft();
+  if (selectedDeskId) { highlightSelected(selectedDeskId, false); selectedDeskId = null; }
+  var host = document.getElementById('editsidebar_form');
+  var inner = document.getElementById('editsidebar_inner');
+  var footer = document.getElementById('editsidebar_footer');
+  if (host) { host.style.display = 'none'; host.innerHTML = ''; }
+  if (inner) { inner.style.display = ''; }
+  if (footer) { footer.style.display = ''; }
+}
+
+function clearDraft() {
+  var m = document.getElementById('draftitem');
+  if (m && m.parentNode) { m.parentNode.removeChild(m); }
+  draftState = null;
+}
+
+function highlightSelected(id, on) {
+  var el = document.getElementById(id);
+  if (!el) { return; }
+  if (on) { el.classList.add('deskselected'); }
+  else { el.classList.remove('deskselected'); }
+}
+
+// --- New item (draft) -------------------------------------------------------
+
+function startDraftPlacement(type, x, y) {
+  hideSticky(); // clear any nameplate/overlay + previous draft/form
+  if (type === 'floor') { x = FLOOR_RAIL_X; }
+  draftState = { type: type, x: x, y: y };
+
+  // Spawn the draggable draft marker in content space (matches how real desks
+  // are positioned: centre at (x,y), diameter = 2*halfsize*itemscale).
+  var content = document.getElementById('content');
+  var marker = document.createElement('div');
+  marker.id = 'draftitem';
+  marker.style.position = 'absolute';
+  marker.style.zIndex = '95';
+  marker.style.cursor = 'move';
+  content.appendChild(marker);
+  restyleDraftMarker(type);
+  attachDraftDrag(marker, type);
+
+  // Build the create form and render the type-specific fields with the drop coords.
+  buildSidebarForm({ mode: 'create', title: 'New item', typeSelect: deskTypeSelectHtml('onDraftTypeChange()') });
+  $("#selDesktype").val(type);
+  addInputfields(0, type, 2, { id: 'NULL', map: mapname, x: x, y: y, dsk: '', empl: '', avtr: '', dept: '' });
+  bindCoordPreview();
+  wireSidebarCreateSubmit();
+  openEditSidebar();
+}
+
+// Re-render the fields when the editor changes a draft's type, keeping the
+// coordinates typed so far and re-styling the preview marker.
+function onDraftTypeChange() {
+  var t = $("#selDesktype").val();
+  if (draftState) { draftState.type = t; }
+  addInputfields(0, 'newdesk', 3); // override 3 reads current #apideskx/#apidesky + #selDesktype
+  restyleDraftMarker(t);
+  bindCoordPreview();
+}
+
+// Size/tint the draft marker to the item type (WYSIWYG preview) and place it at
+// the current draft centre.
+function restyleDraftMarker(type) {
+  var marker = document.getElementById('draftitem');
+  if (!marker || !draftState) { return; }
+  var scale = parseFloat(typeof itemscale !== 'undefined' ? itemscale : 1) || 1;
+  var size = 2 * editItemHalfsize(type) * scale;
   var pitem = EDIT_PALETTE_BY_TYPE[type];
-  if (marker && pitem) {
-    // Resize the marker to the item's real on-map size (content space:
-    // diameter = 2*halfsize * itemscale) so the preview is WYSIWYG. createDesk
-    // builds a 20px desk ball by default, which is wrong for meeting rooms,
-    // floors and points of interest.
-    var scale = parseFloat(typeof itemscale !== 'undefined' ? itemscale : 1) || 1;
-    var size = 2 * editItemHalfsize(type) * scale;
-    marker.style.width = size + 'px';
-    marker.style.height = size + 'px';
-    marker.style.left = (x - size / 2) + 'px';
-    marker.style.top = (y - size / 2) + 'px';
+  var cx = draftState.x, cy = draftState.y;
+  if (type === 'floor') { cx = FLOOR_RAIL_X; draftState.x = cx; }
+  marker.style.width = size + 'px';
+  marker.style.height = size + 'px';
+  marker.style.left = (cx - size / 2) + 'px';
+  marker.style.top = (cy - size / 2) + 'px';
+  marker.style.backgroundImage = '';
+  if (pitem) {
     marker.style.backgroundColor = pitem.color;
     if (pitem.icon) {
       marker.style.backgroundImage = 'url("images/' + pitem.icon + '")';
       marker.style.backgroundSize = 'cover';
     }
     marker.style.borderRadius = pitem.square ? '3px' : '50%';
+  } else {
+    marker.style.backgroundColor = 'rgba(74,163,255,0.85)';
+    marker.style.borderRadius = '50%';
   }
 }
+
+// Dedicated drag handler for the draft marker (kept separate from dragElement so
+// it never persists to the DB - it only moves the preview + syncs the coords).
+function attachDraftDrag(marker, type) {
+  marker.onmousedown = function (e) {
+    e = e || window.event;
+    e.preventDefault();
+    var startLeft = parseFloat(marker.style.left) || 0;
+    var startTop = parseFloat(marker.style.top) || 0;
+    var startX = e.clientX, startY = e.clientY;
+    var pageScale = parseFloat(window.getComputedStyle(document.getElementById('content')).zoom) || 1;
+    document.onmousemove = function (ev) {
+      ev = ev || window.event;
+      ev.preventDefault();
+      var dx = (ev.clientX - startX) / pageScale;
+      var dy = (ev.clientY - startY) / pageScale;
+      var newLeft = (type === 'floor') ? startLeft : (startLeft + dx);
+      var newTop = startTop + dy;
+      marker.style.left = newLeft + 'px';
+      marker.style.top = newTop + 'px';
+      var half = (parseFloat(marker.style.width) || 0) / 2;
+      var cx = (type === 'floor') ? FLOOR_RAIL_X : Math.round(newLeft + half);
+      var cy = Math.round(newTop + half);
+      if (draftState) { draftState.x = cx; draftState.y = cy; }
+      var xf = document.getElementById('apideskx'); if (xf) { xf.value = cx; }
+      var yf = document.getElementById('apidesky'); if (yf) { yf.value = cy; }
+    };
+    document.onmouseup = function () {
+      document.onmousemove = null;
+      document.onmouseup = null;
+    };
+  };
+}
+
+// Typing into the x/y fields moves the draft preview marker.
+function bindCoordPreview() {
+  var xf = document.getElementById('apideskx');
+  var yf = document.getElementById('apidesky');
+  var marker = document.getElementById('draftitem');
+  if (!marker) { return; }
+  function apply() {
+    var w = parseFloat(marker.style.width) || 0;
+    var h = parseFloat(marker.style.height) || 0;
+    var cx = xf ? parseInt(xf.value, 10) : NaN;
+    var cy = yf ? parseInt(yf.value, 10) : NaN;
+    if (draftState && draftState.type === 'floor') { cx = FLOOR_RAIL_X; }
+    if (!isFinite(cx) && draftState) { cx = draftState.x; }
+    if (!isFinite(cy) && draftState) { cy = draftState.y; }
+    if (draftState) { draftState.x = cx; draftState.y = cy; }
+    marker.style.left = (cx - w / 2) + 'px';
+    marker.style.top = (cy - h / 2) + 'px';
+  }
+  if (xf) { xf.addEventListener('input', apply); }
+  if (yf) { yf.addEventListener('input', apply); }
+}
+
+function wireSidebarCreateSubmit() {
+  $('.sidebarItem').off('submit').on('submit', function (e) {
+    e.preventDefault();
+    var itemdesktype = $("#apidesktype").val();
+    var itemx = $("#apideskx").val();
+    var itemy = $("#apidesky").val();
+    var itemdsk = $("#apideskdsk").val();
+    var itemempl = $("#apideskempl").val();
+    var itemavtr = $("#apideskavtr").val();
+    var itemdept = $("#apideskdept").val();
+    if (itemdept == "- none -" || itemdept == "" || typeof itemdept === 'undefined') { itemdept = 'NULL'; }
+    if (itemavtr == "" || typeof itemavtr === 'undefined') { itemavtr = 'NULL'; }
+    $.ajax({
+      url: 'rest/update',
+      async: true,
+      type: 'get',
+      data: { token: token, mode: 'create', map: mapname, id: 'new', desktype: itemdesktype, x: itemx, y: itemy, desknumber: itemdsk, employee: itemempl, avatar: itemavtr, department: itemdept, user: username },
+      dataType: 'JSON',
+      success: function () { hideSticky(); updateDesks(); checkHealthStatus(); },
+      error: function () { alert('Could not create item. Please check if all attributes have been entered.'); }
+    });
+  });
+}
+
+// --- Edit existing item -----------------------------------------------------
+
+// Open the sidebar editor for an existing desk. Called from showSticky (user.js)
+// in edit mode, so the read-only nameplate stays on the map for reference.
+function openSidebarEdit(deskid, desktype) {
+  clearDraft();
+  if (selectedDeskId && selectedDeskId !== deskid) { highlightSelected(selectedDeskId, false); }
+  selectedDeskId = deskid;
+  var onchange = "addInputfields('" + deskid + "','" + desktype + "')";
+  buildSidebarForm({ mode: 'edit', title: 'Edit item', typeSelect: deskTypeSelectHtml(onchange), deskid: deskid });
+  addInputfields(deskid, desktype, 1); // override 1: pick the mapped type + set the dropdown
+  bindEditCoordPreview(deskid);
+  wireSidebarEditSubmit(deskid);
+  highlightSelected(deskid, true);
+  openEditSidebar();
+}
+
+// Typing into x/y previews the move by repositioning the real desk element; the
+// change is only persisted on Save (a redraw restores it otherwise).
+function bindEditCoordPreview(deskid) {
+  var el = document.getElementById(deskid);
+  var xf = document.getElementById('apideskx');
+  var yf = document.getElementById('apidesky');
+  if (!el) { return; }
+  var scale = parseFloat(typeof itemscale !== 'undefined' ? itemscale : 1) || 1;
+  function apply() {
+    var half = (parseFloat(el.style.width) || 0) / 2;
+    var cx = xf ? parseInt(xf.value, 10) : NaN;
+    var cy = yf ? parseInt(yf.value, 10) : NaN;
+    if (isFinite(cx)) { el.style.left = (cx / scale - half) + 'px'; }
+    if (isFinite(cy)) { el.style.top = (cy / scale - half) + 'px'; }
+  }
+  if (xf) { xf.addEventListener('input', apply); }
+  if (yf) { yf.addEventListener('input', apply); }
+}
+
+function wireSidebarEditSubmit(deskid) {
+  $('.sidebarItem').off('submit').on('submit', function (e) {
+    e.preventDefault();
+    var itemid = $("#apideskid").val() || deskid;
+    var itemdesktype = $("#apidesktype").val();
+    var itemx = $("#apideskx").val();
+    var itemy = $("#apidesky").val();
+    var itemdsk = $("#apideskdsk").val();
+    var itemempl = $("#apideskempl").val();
+    var itemavtr = $("#apideskavtr").val();
+    var itemdept = $("#apideskdept").val();
+    if (itemdept == "- none -") { itemdept = 'NULL'; }
+    $.ajax({
+      url: 'rest/update',
+      async: true,
+      type: 'get',
+      data: { token: token, mode: 'update', map: mapname, id: itemid, desktype: itemdesktype, x: itemx, y: itemy, desknumber: itemdsk, employee: itemempl, avatar: itemavtr, department: itemdept, user: username },
+      dataType: 'JSON',
+      success: function () { hideSticky(); updateDesks(); checkHealthStatus(); },
+      error: function () { alert('Could not update item'); }
+    });
+  });
+  $('.sidebarDelete').off('submit').on('submit', function (e) {
+    e.preventDefault();
+    var itemid = $("#apideskid").val() || deskid;
+    $.ajax({
+      url: 'rest/update',
+      async: true,
+      type: 'get',
+      data: { token: token, mode: 'delete', map: mapname, id: itemid, user: username },
+      dataType: 'JSON',
+      success: function () { hideSticky(); updateDesks(); checkHealthStatus(); },
+      error: function () { alert('Could not delete item'); }
+    });
+  });
+}
+
 
 // ---------------------------------------------------------------------------
 // Cluster placement: drop a pre-aligned block of several desks at once. The

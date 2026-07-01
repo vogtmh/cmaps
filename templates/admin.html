@@ -1456,7 +1456,7 @@
       <table class="sync-table">
         <thead>
           <tr>
-            <th>Name</th><th>Username</th><th>Role</th>{{if gt .PermUsers 1}}<th class="sync-td-min"></th>{{end}}
+            <th>Name</th><th>Username</th><th>Mail</th><th>Role</th>{{if gt .PermUsers 1}}<th class="sync-td-min"></th>{{end}}
           </tr>
         </thead>
         <tbody>
@@ -1464,6 +1464,7 @@
           <tr>
             <td>{{.Name}}</td>
             <td>{{.Username}}</td>
+            <td>{{if .Mail}}{{.Mail}}{{else}}&mdash;{{end}}</td>
             <td>
               {{if gt $.PermUsers 1}}
               {{$curRole := .Role}}
