@@ -35,17 +35,19 @@ body { overflow: hidden; }
 #m_app {
 	display: flex;
 	flex-direction: column;
-	/* Use the large viewport height (100vh), NOT 100dvh and NOT position:fixed
-	   inset:0. Both alternatives misbehave in installed PWAs:
-	   - 100dvh stops short of the iOS home-indicator area (unused strip) and
-	     shrinks with the Android soft keyboard (tab bar drops after the
-	     post-login reload).
-	   - position:fixed + bottom:0 on iOS standalone anchors to the TOP of the
-	     home-indicator inset, so the tab bar's safe-area padding and the
-	     uncovered inset region stack into a doubled empty strip.
-	   100vh is the full, constant screen height on both platforms; the tab bar's
-	   padding-bottom then fills the home-indicator region exactly once. */
-	height: 100vh;
+	/* Browser mode (default): 100dvh tracks the DYNAMIC viewport, so the tab bar
+	   stays above the browser's address/toolbar (otherwise 100vh's large viewport
+	   extends behind them — the bar is covered on iOS Safari and off-screen on
+	   Android Chrome). */
+	height: 100dvh;
+}
+
+/* Installed PWA (no browser chrome): use the full, constant 100vh. dvh here would
+   stop short of the iOS home-indicator area and shrink with the Android keyboard
+   after the post-login reload; 100vh fills the screen once and the tab bar's
+   padding-bottom covers the home-indicator region exactly. */
+@media all and (display-mode: standalone) {
+	#m_app { height: 100vh; }
 }
 
 /* ---------- Top bar ---------- */
