@@ -1167,9 +1167,19 @@ function renderEditPalette() {
   alignBtn.className = 'editsidebar_toolbtn';
   alignBtn.title = 'Drag a box around a group of desks to tidy them into evenly aligned rows and columns (preview before applying).';
   alignBtn.innerHTML = '<span class="editsidebar_toolbtn_icon"></span>'
-                     + '<span class="editsidebar_toolbtn_label">Auto-align desks</span>';
-  alignBtn.addEventListener('click', startAutoAlign);
+                     + '<span class="editsidebar_toolbtn_label">Auto-align</span>';
+  alignBtn.addEventListener('click', function () { startAutoAlign('box'); });
   tools.appendChild(alignBtn);
+
+  var lassoBtn = document.createElement('button');
+  lassoBtn.type = 'button';
+  lassoBtn.id = 'editsidebar_lassobtn';
+  lassoBtn.className = 'editsidebar_toolbtn';
+  lassoBtn.title = 'Draw a freeform loop around desks to tidy them into evenly aligned rows and columns (preview before applying).';
+  lassoBtn.innerHTML = '<span class="editsidebar_toolbtn_icon editsidebar_toolbtn_icon_lasso"></span>'
+                     + '<span class="editsidebar_toolbtn_label">Lasso align</span>';
+  lassoBtn.addEventListener('click', function () { startAutoAlign('lasso'); });
+  tools.appendChild(lassoBtn);
 
   inner.appendChild(tools);
 
@@ -1776,21 +1786,49 @@ function autoAlignMedianSpacing(desks) {
   return Math.max(30, Math.min(200, med));
 }
 
-// Compute the list of desk moves needed to tidy a set of desks. When `bounds`
-// (content-space {x1,y1,x2,y2}) is given, only desks whose centre falls inside
-// the selected area are considered. Returns an array of
+// Estimate the dominant grid orientation of a desk set (in radians). Desks are
+// often laid out on a grid that is rotated to follow an angled wall or aisle, so
+// snapping to horizontal/vertical would fight the layout. We take each desk's
+// nearest-neighbour direction, fold it into a quarter turn (grid axes are
+// perpendicular, so directions 90 deg apart are equivalent) via a 4x circular
+// mean, and return the rotation that makes the grid axis-aligned. Near-zero
+// results snap to 0 so ordinary axis-aligned grids are left exactly as before.
+function autoAlignDominantAngle(desks) {
+  if (desks.length < 2) { return 0; }
+  var sumSin = 0, sumCos = 0, n = 0;
+  desks.forEach(function (d) {
+    var best = Infinity, bx = 0, by = 0;
+    desks.forEach(function (e) {
+      if (e === d) { return; }
+      var dd = Math.hypot(d.x - e.x, d.y - e.y);
+      if (dd > 0 && dd < best) { best = dd; bx = e.x - d.x; by = e.y - d.y; }
+    });
+    if (!isFinite(best)) { return; }
+    var ang = Math.atan2(by, bx);
+    sumSin += Math.sin(4 * ang);
+    sumCos += Math.cos(4 * ang);
+    n++;
+  });
+  if (n === 0 || (sumSin === 0 && sumCos === 0)) { return 0; }
+  var theta = Math.atan2(sumSin, sumCos) / 4; // -45 deg .. 45 deg
+  if (Math.abs(theta) < 0.05) { return 0; }   // ~2.9 deg -> treat as axis-aligned
+  return theta;
+}
+
+// Compute the list of desk moves needed to tidy a set of desks. When `contains`
+// (a function taking a desk {id,x,y} in content space and returning a boolean)
+// is given, only desks it accepts are considered — this lets the caller restrict
+// alignment to a dragged box or a freeform lasso. Returns an array of
 // { id, oldX, oldY, newX, newY } for desks that actually move.
-function autoAlignPlan(bounds) {
+function autoAlignPlan(contains) {
   var src = (result_old && result_old.desks) ? result_old.desks : [];
   var desks = src
     .filter(function (d) { return AUTOALIGN_TYPES[d.desktype]; })
     .map(function (d) {
       return { id: parseInt(d.id, 10), x: parseInt(d.x, 10), y: parseInt(d.y, 10) };
     });
-  if (bounds) {
-    desks = desks.filter(function (d) {
-      return d.x >= bounds.x1 && d.x <= bounds.x2 && d.y >= bounds.y1 && d.y <= bounds.y2;
-    });
+  if (typeof contains === 'function') {
+    desks = desks.filter(contains);
   }
   if (desks.length < 2) { return []; }
 
@@ -1817,12 +1855,39 @@ function autoAlignPlan(bounds) {
   Object.keys(groups).forEach(function (k) {
     var g = groups[k];
     if (g.length < 2) { return; } // lone desks are left alone
-    var colCanon = autoAlignBands(g, 'x', tol);
-    var rowCanon = autoAlignBands(g, 'y', tol);
-    g.forEach(function (d) {
-      var nx = colCanon[d.id], ny = rowCanon[d.id];
-      if (nx !== d.x || ny !== d.y) {
-        moves.push({ id: d.id, oldX: d.x, oldY: d.y, newX: nx, newY: ny });
+    // Detect the grid's rotation and band in that rotated frame, so desks laid
+    // out along an angled wall are tidied into their own rows/columns instead of
+    // being forced onto horizontal/vertical lines.
+    var theta = autoAlignDominantAngle(g);
+    if (theta === 0) {
+      var colCanon = autoAlignBands(g, 'x', tol);
+      var rowCanon = autoAlignBands(g, 'y', tol);
+      g.forEach(function (d) {
+        var nx = colCanon[d.id], ny = rowCanon[d.id];
+        if (nx !== d.x || ny !== d.y) {
+          moves.push({ id: d.id, oldX: d.x, oldY: d.y, newX: nx, newY: ny });
+        }
+      });
+      return;
+    }
+    // Rotate the cluster by -theta about its centroid, band the axis-aligned
+    // coordinates, then rotate each aligned point back into map space.
+    var cx = 0, cy = 0;
+    g.forEach(function (d) { cx += d.x; cy += d.y; });
+    cx /= g.length; cy /= g.length;
+    var cos = Math.cos(theta), sin = Math.sin(theta);
+    var rot = g.map(function (d) {
+      var ox = d.x - cx, oy = d.y - cy;
+      return { id: d.id, x: ox * cos + oy * sin, y: -ox * sin + oy * cos, sx: d.x, sy: d.y };
+    });
+    var colCanonR = autoAlignBands(rot, 'x', tol);
+    var rowCanonR = autoAlignBands(rot, 'y', tol);
+    rot.forEach(function (d) {
+      var rx = colCanonR[d.id], ry = rowCanonR[d.id];
+      var nx = Math.round(cx + rx * cos - ry * sin);
+      var ny = Math.round(cy + rx * sin + ry * cos);
+      if (nx !== d.sx || ny !== d.sy) {
+        moves.push({ id: d.id, oldX: d.sx, oldY: d.sy, newX: nx, newY: ny });
       }
     });
   });
@@ -1839,6 +1904,8 @@ function cancelAutoAlign() {
   if (bar && bar.parentNode) { bar.parentNode.removeChild(bar); }
   var sel = document.getElementById('autoalign_select');
   if (sel && sel.parentNode) { sel.parentNode.removeChild(sel); }
+  var lasso = document.getElementById('autoalign_lasso');
+  if (lasso && lasso.parentNode) { lasso.parentNode.removeChild(lasso); }
 }
 
 // Render ghost markers at each move's target position (in the map's zoomed
@@ -1899,35 +1966,41 @@ function applyAutoAlign(moves) {
   });
 }
 
-// Entry point wired to the sidebar "Auto-align desks" button. Instead of
-// aligning the whole map, the editor first drags a box around the desks they
-// want tidied; only those are aligned (then previewed + confirmed).
-function startAutoAlign() {
-  // Toggle: if the tool is already engaged, a second click disables it (same as
-  // pressing Cancel).
-  var btn = document.getElementById('editsidebar_alignbtn');
-  if (btn && btn.classList.contains('active')) {
+// Entry point wired to the sidebar align buttons. Instead of aligning the whole
+// map, the editor first marks the desks they want tidied — either by dragging a
+// box ('box') or drawing a freeform loop ('lasso') — and only those are aligned
+// (then previewed + confirmed).
+var autoAlignMode = 'box';
+
+function startAutoAlign(mode) {
+  mode = (mode === 'lasso') ? 'lasso' : 'box';
+  // Toggle: a second click on the engaged tool disables it (same as Cancel).
+  var activeBtn = document.getElementById(mode === 'lasso' ? 'editsidebar_lassobtn' : 'editsidebar_alignbtn');
+  if (activeBtn && activeBtn.classList.contains('active')) {
     cancelAutoAlign();
     return;
   }
   cancelAutoAlign();
+  autoAlignMode = mode;
   setAutoAlignActive(true);
   beginAutoAlignSelection();
 }
 
-// Toggle the blue "glow" state on the sidebar Auto-align button while the tool
-// is engaged (selecting a box or previewing). Grey when idle, blue when active.
+// Toggle the blue "glow" state on whichever align button is engaged (selecting
+// or previewing). Grey when idle, blue when active.
 function setAutoAlignActive(on) {
-  var btn = document.getElementById('editsidebar_alignbtn');
-  if (btn) { btn.classList.toggle('active', !!on); }
+  var boxBtn = document.getElementById('editsidebar_alignbtn');
+  var lassoBtn = document.getElementById('editsidebar_lassobtn');
+  if (boxBtn) { boxBtn.classList.toggle('active', !!on && autoAlignMode === 'box'); }
+  if (lassoBtn) { lassoBtn.classList.toggle('active', !!on && autoAlignMode === 'lasso'); }
 }
 
 // In-progress area-selection drag state (null when not selecting).
 var autoAlignSelect = null;
 
-// Enter area-selection mode: show an instruction bar and arm the next drag on
-// the map to draw a selection rectangle.
+// Enter selection mode for the current tool: box drag or freeform lasso.
 function beginAutoAlignSelection() {
+  if (autoAlignMode === 'lasso') { beginLassoSelection(); return; }
   endAutoAlignSelection();
 
   var bar = document.createElement('div');
@@ -2005,13 +2078,30 @@ function onAutoAlignSelectUp(ev) {
   }
 
   var bounds = { x1: p0.x, y1: p0.y, x2: p1.x, y2: p1.y };
-  var moves = autoAlignPlan(bounds);
+  var moves = autoAlignPlan(function (d) {
+    return d.x >= bounds.x1 && d.x <= bounds.x2 && d.y >= bounds.y1 && d.y <= bounds.y2;
+  });
   if (!moves.length) {
     cancelAutoAlign();
-    alert('No alignable desks in that area (or they are already tidy). Try selecting a desk cluster.');
+    showAutoAlignToast('No desks to align here \u2014 try selecting a desk cluster.',
+                       (x0 + x1) / 2, (y0 + y1) / 2);
     return;
   }
   renderAutoAlignPreview(moves);
+}
+
+// Show a short-lived message centred on the given viewport point that fades out
+// on its own after ~2s, so the editor never has to dismiss a dialog when a
+// selection contains nothing to align.
+function showAutoAlignToast(text, clientX, clientY) {
+  var t = document.createElement('div');
+  t.className = 'autoalign_toast';
+  t.textContent = text;
+  t.style.left = clientX + 'px';
+  t.style.top = clientY + 'px';
+  document.body.appendChild(t);
+  setTimeout(function () { t.classList.add('fadeout'); }, 1400);
+  setTimeout(function () { if (t.parentNode) { t.parentNode.removeChild(t); } }, 2100);
 }
 
 // Tear down the selection listeners + rectangle (leaves any preview alone).
@@ -2023,4 +2113,131 @@ function endAutoAlignSelection() {
     autoAlignSelect.rect.parentNode.removeChild(autoAlignSelect.rect);
   }
   autoAlignSelect = null;
+  // Lasso teardown (mirrors the box teardown above).
+  document.removeEventListener('pointerdown', onLassoDown, true);
+  document.removeEventListener('pointermove', onLassoMove, true);
+  document.removeEventListener('pointerup', onLassoUp, true);
+  if (autoAlignLasso && autoAlignLasso.svg && autoAlignLasso.svg.parentNode) {
+    autoAlignLasso.svg.parentNode.removeChild(autoAlignLasso.svg);
+  }
+  autoAlignLasso = null;
+}
+
+// ---------------------------------------------------------------------------
+// Lasso (freeform) selection: draw a loop around the desks to align. The path
+// is captured in viewport space (an SVG overlay), converted to a map-space
+// polygon on release, and desks whose centres fall inside it are aligned.
+// ---------------------------------------------------------------------------
+var autoAlignLasso = null; // { drawing, pts:[[x,y]...screen], svg, path }
+
+function beginLassoSelection() {
+  endAutoAlignSelection();
+
+  var bar = document.createElement('div');
+  bar.id = 'autoalign_bar';
+  var msg = document.createElement('span');
+  msg.className = 'autoalign_bar_msg';
+  msg.textContent = 'Draw a loop around the desks you want to align.';
+  bar.appendChild(msg);
+  var cancel = document.createElement('button');
+  cancel.type = 'button';
+  cancel.className = 'autoalign_cancel';
+  cancel.textContent = 'Cancel';
+  cancel.addEventListener('click', cancelAutoAlign);
+  bar.appendChild(cancel);
+  document.body.appendChild(bar);
+
+  autoAlignLasso = { drawing: false, pts: [], svg: null, path: null };
+  document.addEventListener('pointerdown', onLassoDown, true);
+}
+
+function onLassoDown(ev) {
+  if (!autoAlignLasso) { return; }
+  // Ignore clicks that are not on the map (e.g. the Cancel button or sidebar).
+  if (!pointOverMap(ev.clientX, ev.clientY)) { return; }
+  // preventDefault suppresses the compatibility mousedown so desk dragging /
+  // panning does not start while we draw the loop.
+  ev.preventDefault();
+  ev.stopPropagation();
+  autoAlignLasso.drawing = true;
+  autoAlignLasso.pts = [[ev.clientX, ev.clientY]];
+
+  var svgNS = 'http://www.w3.org/2000/svg';
+  var svg = document.createElementNS(svgNS, 'svg');
+  svg.setAttribute('id', 'autoalign_lasso');
+  var path = document.createElementNS(svgNS, 'path');
+  path.setAttribute('class', 'autoalign_lasso_path');
+  svg.appendChild(path);
+  document.body.appendChild(svg);
+  autoAlignLasso.svg = svg;
+  autoAlignLasso.path = path;
+  updateLassoPath();
+
+  document.addEventListener('pointermove', onLassoMove, true);
+  document.addEventListener('pointerup', onLassoUp, true);
+}
+
+function onLassoMove(ev) {
+  if (!autoAlignLasso || !autoAlignLasso.drawing) { return; }
+  var pts = autoAlignLasso.pts;
+  var last = pts[pts.length - 1];
+  // Skip near-duplicate points to keep the path light.
+  if (!last || Math.hypot(ev.clientX - last[0], ev.clientY - last[1]) >= 3) {
+    pts.push([ev.clientX, ev.clientY]);
+    updateLassoPath();
+  }
+}
+
+function updateLassoPath() {
+  if (!autoAlignLasso || !autoAlignLasso.path || !autoAlignLasso.pts.length) { return; }
+  var d = 'M' + autoAlignLasso.pts.map(function (p) { return p[0] + ',' + p[1]; }).join(' L') + ' Z';
+  autoAlignLasso.path.setAttribute('d', d);
+}
+
+function onLassoUp(ev) {
+  if (!autoAlignLasso || !autoAlignLasso.drawing) { return; }
+  var pts = autoAlignLasso.pts.slice();
+  var cxScreen = 0, cyScreen = 0;
+  pts.forEach(function (p) { cxScreen += p[0]; cyScreen += p[1]; });
+  if (pts.length) { cxScreen /= pts.length; cyScreen /= pts.length; }
+  endAutoAlignSelection();
+  var bar = document.getElementById('autoalign_bar');
+  if (bar && bar.parentNode) { bar.parentNode.removeChild(bar); }
+
+  // Too small a scribble to be a loop: re-arm the lasso.
+  if (pts.length < 3) {
+    beginLassoSelection();
+    return;
+  }
+  // Convert the screen path into a map-space polygon.
+  var poly = [];
+  pts.forEach(function (p) {
+    var m = screenToMap(p[0], p[1]);
+    if (m) { poly.push([m.x, m.y]); }
+  });
+  if (poly.length < 3) {
+    cancelAutoAlign();
+    showAutoAlignToast('Couldn\u2019t read that loop \u2014 try again.', cxScreen, cyScreen);
+    return;
+  }
+  var moves = autoAlignPlan(function (d) { return pointInPolygon(d.x, d.y, poly); });
+  if (!moves.length) {
+    cancelAutoAlign();
+    showAutoAlignToast('No desks to align in that loop \u2014 encircle a desk cluster.', cxScreen, cyScreen);
+    return;
+  }
+  renderAutoAlignPreview(moves);
+}
+
+// Ray-casting point-in-polygon test. `poly` is an array of [x,y] in map space.
+function pointInPolygon(x, y, poly) {
+  var inside = false;
+  for (var i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    var xi = poly[i][0], yi = poly[i][1];
+    var xj = poly[j][0], yj = poly[j][1];
+    var intersect = ((yi > y) !== (yj > y)) &&
+                    (x < (xj - xi) * (y - yi) / (yj - yi) + xi);
+    if (intersect) { inside = !inside; }
+  }
+  return inside;
 }
