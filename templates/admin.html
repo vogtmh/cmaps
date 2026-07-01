@@ -867,13 +867,16 @@
         <input type="hidden" name="saveRobinOptions" value="1">
         <div class="sync-field">
           <label class="sync-label">Show Robin desk reservations</label>
-          <select class="sync-select" name="robinDeskMode" style="max-width:280px;">
-            <option value="off"{{if eq .RobinDeskMode "off"}} selected{{end}}>Off</option>
-            <option value="sync"{{if eq .RobinDeskMode "sync"}} selected{{end}}>Sync only, don&rsquo;t display</option>
-            <option value="unused"{{if eq .RobinDeskMode "unused"}} selected{{end}}>Unused desks only</option>
-            <option value="all"{{if eq .RobinDeskMode "all"}} selected{{end}}>All desks</option>
-          </select>
-          <p class="sync-card-hint">When on, desks that are occupied in Robin right now are overlaid live on the map. &ldquo;Sync only&rdquo; keeps the occupancy cache fresh without overlaying anything, so you can switch to a display mode later without waiting for a sync. &ldquo;Unused desks only&rdquo; overlays only desks that have no assigned employee and no native booking.</p>
+          <div style="display:flex; align-items:flex-start; gap:16px; flex-wrap:wrap;">
+            <select class="sync-select" name="robinDeskMode" id="robinDeskModeSelect" style="max-width:280px; flex:0 0 auto;" onchange="updateRobinDeskModeDesc()">
+              <option value="off"{{if eq .RobinDeskMode "off"}} selected{{end}}>Off</option>
+              <option value="sync"{{if eq .RobinDeskMode "sync"}} selected{{end}}>Sync only, don&rsquo;t display</option>
+              <option value="unused"{{if eq .RobinDeskMode "unused"}} selected{{end}}>Unused desks only</option>
+              <option value="all"{{if eq .RobinDeskMode "all"}} selected{{end}}>All desks</option>
+              <option value="allclear"{{if eq .RobinDeskMode "allclear"}} selected{{end}}>All desks and clear duplicates</option>
+            </select>
+            <p class="sync-card-hint" id="robinDeskModeDesc" style="flex:1 1 240px; min-width:240px; margin:0; align-self:center;">{{if eq .RobinDeskMode "sync"}}Keeps the occupancy cache fresh without overlaying anything, so you can switch to a display mode later without waiting for a sync.{{else if eq .RobinDeskMode "unused"}}Overlays only desks that have no assigned employee and no native booking.{{else if eq .RobinDeskMode "all"}}Overlays every desk that is occupied in Robin right now, on top of the native assignments.{{else if eq .RobinDeskMode "allclear"}}Like &ldquo;All desks&rdquo;, but also hides a person&rsquo;s AD-assigned desk when Robin has them booked on a different desk, so they never appear twice on the same map.{{else}}Robin desk occupancy is neither synced nor shown on the map.{{end}}</p>
+          </div>
         </div>
         <div class="sync-field" style="margin-top:14px;">
           <div class="sync-toggle-row">

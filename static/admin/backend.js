@@ -713,10 +713,24 @@ function showRobinResultTab(name) {
   });
 }
 
+// updateRobinDeskModeDesc shows the description of the selected "Show Robin desk
+// reservations" option to the right of the dropdown.
+function updateRobinDeskModeDesc() {
+  var descs = {
+    off: 'Robin desk occupancy is neither synced nor shown on the map.',
+    sync: 'Keeps the occupancy cache fresh without overlaying anything, so you can switch to a display mode later without waiting for a sync.',
+    unused: 'Overlays only desks that have no assigned employee and no native booking.',
+    all: 'Overlays every desk that is occupied in Robin right now, on top of the native assignments.',
+    allclear: 'Like \u201CAll desks\u201D, but also hides a person\u2019s AD-assigned desk when Robin has them booked on a different desk, so they never appear twice on the same map.'
+  };
+  var sel = document.getElementById('robinDeskModeSelect');
+  var el = document.getElementById('robinDeskModeDesc');
+  if (sel && el) { el.textContent = descs[sel.value] || ''; }
+}
+
 function startLdapSync() {
   startSync('ldap', '../rest/ldap/sync', '../rest/ldap/progress', 'ldap');
 }
-
 // ── Geoapify geocoding ───────────────────────────────────────
 // Saves the API key, tests it against a single address, and runs a manual
 // batch geocode of every location. There is no scheduler — syncing is always

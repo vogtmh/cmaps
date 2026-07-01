@@ -92,7 +92,7 @@ func (app *App) buildMapDesks(mapName, date, search string, vips []VIP, bookings
 	// this map; free desks are therefore never affected.
 	robinMode := app.db.GetRobinSetting("robinDeskMode")
 	robinStatus := map[string]RobinDeskStatus{}
-	if robinMode == "all" || robinMode == "unused" {
+	if robinMode == "all" || robinMode == "unused" || robinMode == "allclear" {
 		sts, _ := app.db.ListRobinDeskStatus(mapName)
 		for _, s := range sts {
 			robinStatus[strings.ToLower(strings.TrimSpace(s.Desknumber))] = s
@@ -124,7 +124,7 @@ func (app *App) buildMapDesks(mapName, date, search string, vips []VIP, bookings
 		// collapse to a single occupied item). "all" overlays any occupied desk;
 		// "unused" only overlays desks with no native occupant and no booking.
 		if rs, ok := robinStatus[strings.ToLower(strings.TrimSpace(d.Desknumber))]; ok {
-			show := robinMode == "all"
+			show := robinMode == "all" || robinMode == "allclear"
 			if robinMode == "unused" {
 				hasUser := strings.TrimSpace(d.Employee) != ""
 				if d.Desktype == "addesk" {
@@ -178,6 +178,29 @@ func (app *App) buildMapDesks(mapName, date, search string, vips []VIP, bookings
 						break
 					}
 				}
+			}
+			// "All desks, clear duplicates": drop an AD placement when Robin has
+			// the same person booked on a *different* desk on this map, so they
+			// appear only at the Robin desk instead of on both.
+			if robinMode == "allclear" && len(matches) > 0 {
+				dn := strings.ToLower(strings.TrimSpace(d.Desknumber))
+				kept := matches[:0]
+				for _, u := range matches {
+					moved := false
+					for _, rs := range robinStatus {
+						if strings.ToLower(strings.TrimSpace(rs.Desknumber)) == dn {
+							continue
+						}
+						if sameRobinPerson(rs, u) {
+							moved = true
+							break
+						}
+					}
+					if !moved {
+						kept = append(kept, u)
+					}
+				}
+				matches = kept
 			}
 			if len(matches) == 0 {
 				item := deskItem{
