@@ -354,6 +354,13 @@ func (app *App) entraConfigured() bool {
 	}
 }
 
+// entraEnabled reports whether the EntraID integration is switched on. It
+// defaults to enabled so that existing configured connections keep working;
+// the admin can explicitly disable it (stored as "0").
+func (app *App) entraEnabled() bool {
+	return app.db.GetEntraSetting("entraEnabled") != "0"
+}
+
 // newEntraClientFromSettings builds a Graph client from the stored settings.
 func (app *App) newEntraClientFromSettings() (*entraClient, error) {
 	tenant := strings.TrimSpace(app.db.GetEntraSetting("entraTenantID"))
@@ -439,7 +446,7 @@ func (app *App) StartEntraSyncScheduler(interval time.Duration) {
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
 		for range ticker.C {
-			if !app.entraConfigured() {
+			if !app.entraEnabled() || !app.entraConfigured() {
 				continue
 			}
 			if n, err := app.RunEntraSync(); err != nil {

@@ -146,6 +146,7 @@ type adminData struct {
 	RobinAdSameDesk         []RobinAdOverlap
 	RobinAdDuplicates       []RobinAdDuplicate
 	EntraSet                bool
+	EntraEnabled            bool
 	EntraTenant             string
 	EntraClient             string
 	EntraAuthMethod         string
@@ -306,6 +307,16 @@ func (app *App) handleAdminPost(w http.ResponseWriter, r *http.Request, sess Ses
 				}
 			}
 			return "Robin map updated."
+		}
+		if r.FormValue("saveEntraEnabled") != "" {
+			if r.FormValue("entraEnabled") == "1" {
+				_ = app.db.SetEntraSetting("entraEnabled", "1")
+				_ = app.db.AuditLog("LDAP", sess.Username, "EntraID integration enabled")
+			} else {
+				_ = app.db.SetEntraSetting("entraEnabled", "0")
+				_ = app.db.AuditLog("LDAP", sess.Username, "EntraID integration disabled")
+			}
+			return "EntraID setting saved."
 		}
 		if r.FormValue("saveEntra") != "" {
 			method := strings.TrimSpace(r.FormValue("entraAuthMethod"))
@@ -1107,6 +1118,7 @@ func (app *App) buildAdminData(r *http.Request, sess Session, tab, msg string) a
 			d.EntraAuthMethod = "secret"
 		}
 		d.EntraSet = app.entraConfigured()
+		d.EntraEnabled = app.entraEnabled()
 		d.EntraLastSync = app.db.GetEntraSetting("entraLastSync")
 		d.EntraHasSync = d.EntraLastSync != ""
 		entraUsers, _ := app.db.ListEntraLdap()

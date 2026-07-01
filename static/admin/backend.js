@@ -781,6 +781,27 @@ function saveEntra(ev) {
   return false;
 }
 
+// saveEntraEnabled flips the EntraID integration on/off and reloads the sub-tab
+// so the badge and available actions reflect the new state.
+function saveEntraEnabled(cb) {
+  var statusEl = document.getElementById('entraEnabledStatus');
+  if (statusEl) { statusEl.style.color = ''; statusEl.textContent = 'Saving\u2026'; }
+  if (cb) cb.disabled = true;
+  var body = 'saveEntraEnabled=1&entraEnabled=' + (cb && cb.checked ? '1' : '0');
+  fetch('?tab=ldap&partial=1', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    credentials: 'same-origin',
+    body: body
+  }).then(function () {
+    if (cb) cb.disabled = false;
+    loadAdminTab('ldap', 'entra', false);
+  }).catch(function () {
+    if (cb) cb.disabled = false;
+    if (statusEl) { statusEl.style.color = '#e06666'; statusEl.textContent = 'Save failed.'; }
+  });
+}
+
 // updateEntraAuthMethod toggles the secret vs certificate credential fields
 // based on the selected authentication method.
 function updateEntraAuthMethod() {

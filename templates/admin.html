@@ -585,7 +585,9 @@
       <div class="sync-card-head">
         <h2 class="sync-card-title">EntraID connection</h2>
         <div style="display:flex; gap:10px; align-items:center;">
-          {{if .EntraSet}}<span class="sync-badge sync-badge-ok">Configured</span>{{else}}<span class="sync-badge sync-badge-warn">Not configured</span>{{end}}
+          {{if not .EntraSet}}<span class="sync-badge sync-badge-warn">Not configured</span>
+          {{else if .EntraEnabled}}<span class="sync-badge sync-badge-ok">Enabled</span>
+          {{else}}<span class="sync-badge sync-badge-warn">Disabled</span>{{end}}
           {{if gt .PermLdap 1}}
           <button type="button" class="sync-toggle-btn" id="entraCfgToggle" onclick="toggleCollapse('entraCfgCollapse', this)"><span class="caret">&#9654;</span> Configure</button>
           {{if .EntraSet}}
@@ -601,6 +603,17 @@
         directories can be compared side by side.
         {{if .EntraHasSync}}Last sync {{.EntraLastSync}} &middot; {{.EntraCount}} placement(s).{{end}}
       </p>
+
+      {{if gt .PermLdap 1}}
+      <div class="sync-toggle-row">
+        <label class="sync-toggle">
+          <input type="checkbox" id="entraEnabledToggle" {{if .EntraEnabled}}checked{{end}} onchange="saveEntraEnabled(this)">
+          <span class="sync-toggle-slider"></span>
+        </label>
+        <span class="sync-toggle-label">Enable EntraID synchronization</span>
+        <span id="entraEnabledStatus" class="sync-status-text" style="margin-left:10px;"></span>
+      </div>
+      {{end}}
 
       {{if gt .PermLdap 1}}
       <div class="sync-collapse" id="entraCfgCollapse">
