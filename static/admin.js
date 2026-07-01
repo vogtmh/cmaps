@@ -688,7 +688,9 @@ function addInputfields(deskid, desktype, override, manual) {
         ess += sbTextRow('Description', 'apideskempl', 'formempl', input.empl);
         adv += sbTextRow('x', 'apideskx', 'formx', input.x);
         adv += sbTextRow('y', 'apidesky', 'formy', input.y);
-        adv += sbTextRow('Avatar', 'apideskavtr', 'formavtr', input.avtr);
+        // Avatar (room preview image) is unused for meeting rooms, so keep it as a
+        // hidden field (preserving any stored value) instead of showing it.
+        hid += sbHidden('apideskavtr', 'formavtr', input.avtr);
         hid += sbHidden('apideskdept', 'formdept', '- none -');
         hid += sbHidden('apidesktype', 'formdesktype', selected);
         break;

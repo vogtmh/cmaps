@@ -989,6 +989,7 @@ function showSticky (deskid, desktype, caption) {
       case "food":
       case "service":
       case "exit":
+      case "firstaid":
       case "keycardlock":
       case "keylock":
       case "floor":
@@ -1032,13 +1033,6 @@ function showSticky (deskid, desktype, caption) {
         else {
           content = 'Please <a href="rest/account" style="color:orange">login</a> to book a desk or check the booking status';
         }
-        break;
-      case "firstaid":
-        var caption = attr.dsk;
-        var copylink = attr.dsk;
-        var avatar = 'images/' + desktype + '.png';
-        var avatarcolor = $('#' + attr.id).css('background-color');
-        content = attr.title + '<br />'+ attr.mail + '<br />'+ attr.phone + '<br />' + attr.mobil + '<br />'
         break;
       case "meeting":
         var caption = attr.empl;

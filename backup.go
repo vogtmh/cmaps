@@ -44,7 +44,8 @@ var backupGroups = []backupGroup{
 
 // backupAssetDirs lists the data-dir subfolders that are bundled into an export
 // (everything that lives under the data dir besides the bolt database). The
-// config.json file lives outside the data dir and is deliberately never exported.
+// config.json file lives outside the data dir and is bundled separately by
+// buildExport with its admin password redacted (see there).
 var backupAssetDirs = []string{"maps", "logos", "avatarcache"}
 
 // handleRestExportStart kicks off building the export zip in the background so
@@ -167,6 +168,22 @@ func (app *App) buildExport() error {
 	if mb, err := json.MarshalIndent(manifest, "", "  "); err == nil {
 		if fw, err := zw.Create("manifest.json"); err == nil {
 			_, _ = fw.Write(mb)
+		}
+	}
+
+	// config.json — bundled so admins get the full configuration, but with the
+	// admin password swapped for a fresh random value so the real break-glass
+	// password is never disclosed in a backup. Parsed as a generic map so any
+	// fields (including ones this build doesn't know about) are preserved.
+	if raw, err := os.ReadFile(configFile); err == nil {
+		var cfgMap map[string]interface{}
+		if json.Unmarshal(raw, &cfgMap) == nil {
+			cfgMap["admin_password"] = generateRandomPassword(16)
+			if cb, err := json.MarshalIndent(cfgMap, "", "  "); err == nil {
+				if fw, err := zw.Create("config.json"); err == nil {
+					_, _ = fw.Write(cb)
+				}
+			}
 		}
 	}
 
