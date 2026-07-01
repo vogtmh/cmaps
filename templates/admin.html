@@ -725,6 +725,7 @@
         {{else}}
         <button type="button" class="robin-rtab" id="robinResNav_people" onclick="showRobinResultTab('people')">Desk reservations{{if .RobinDeskHasSync}} <span class="sync-badge sync-badge-accent">{{.RobinDeskCount}}</span>{{end}}</button>
         {{end}}
+        <button type="button" class="robin-rtab" id="robinResNav_check" onclick="showRobinResultTab('check')">AD &harr; Robin check{{if .RobinAdDuplicates}} <span class="sync-badge sync-badge-warn">{{len .RobinAdDuplicates}}</span>{{end}}</button>
       </div>
 
       <div id="robinRes_rooms" class="robin-rpanel">
@@ -805,6 +806,54 @@
       {{else}}
         <div class="sync-empty">No desk reservations were active at the last sync{{if .RobinDeskHasSync}} ({{.RobinDeskLastSyncTime}}){{end}}.</div>
       {{end}}
+      </div>
+
+      <div id="robinRes_check" class="robin-rpanel" style="display:none;">
+        <p class="sync-card-hint" style="margin-top:0;">Compares the cached AD mirror with the cached Robin desk occupancy &mdash; no sync is triggered, this just shows how the two data sets overlap on the map. Current overlay mode: <strong>{{.RobinDeskMode}}</strong>.</p>
+        <div class="sync-summary">
+          <div class="sync-summary-item"><span class="sync-summary-num" style="color:var(--sy-ok);">{{len .RobinAdSameDesk}}</span><span class="sync-summary-lbl">Same desk, same person</span></div>
+          <div class="sync-summary-item"><span class="sync-summary-num" style="color:var(--sy-warn);">{{len .RobinAdDuplicates}}</span><span class="sync-summary-lbl">Same person, two desks</span></div>
+        </div>
+
+        <h3 class="sync-card-title" style="font-size:1.05em; margin:18px 0 6px;">Same user on the same desk in AD &amp; Robin</h3>
+        <p class="sync-card-hint" style="margin-top:0;">Robin reports the person already seated there by AD, so the AD placement keeps priority and the Robin overlay for this desk is dropped.</p>
+        {{if .RobinAdSameDesk}}
+        <table class="sync-table">
+          <thead><tr><th>Person</th><th>Map</th><th>Desk</th></tr></thead>
+          <tbody>
+          {{range .RobinAdSameDesk}}
+            <tr>
+              <td>{{if .Name}}{{.Name}}{{else}}&mdash;{{end}}</td>
+              <td>{{.Map}}</td>
+              <td><span class="sync-badge sync-badge-ok">{{.Desknumber}}</span></td>
+            </tr>
+          {{end}}
+          </tbody>
+        </table>
+        {{else}}
+        <div class="sync-empty">No desk is claimed by the same person in both AD and Robin.</div>
+        {{end}}
+
+        <h3 class="sync-card-title" style="font-size:1.05em; margin:22px 0 6px;">Same person on two desks &mdash; appears twice on one map</h3>
+        <p class="sync-card-hint" style="margin-top:0;">AD seats the person at one desk while Robin seats them at a different desk on the same map. &ldquo;Shown twice&rdquo; reflects whether the current overlay mode actually renders the Robin desk right now.</p>
+        {{if .RobinAdDuplicates}}
+        <table class="sync-table">
+          <thead><tr><th>Person</th><th>Map</th><th>AD desk</th><th>Robin desk</th><th>Shown twice</th></tr></thead>
+          <tbody>
+          {{range .RobinAdDuplicates}}
+            <tr>
+              <td>{{if .Name}}{{.Name}}{{else}}&mdash;{{end}}</td>
+              <td>{{.Map}}</td>
+              <td><span class="sync-badge sync-badge-ok">{{.AdDesk}}</span></td>
+              <td><span class="sync-badge sync-badge-warn">{{.RobinDesk}}</span></td>
+              <td>{{if .Rendered}}<span class="sync-badge sync-badge-danger">yes</span>{{else}}<span class="sync-badge sync-badge-off">not with current mode</span>{{end}}</td>
+            </tr>
+          {{end}}
+          </tbody>
+        </table>
+        {{else}}
+        <div class="sync-empty">No employee is seated at one desk via AD and another via Robin on the same map.</div>
+        {{end}}
       </div>
     </div>
 

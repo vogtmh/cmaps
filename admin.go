@@ -44,6 +44,29 @@ type kv struct {
 	Description string
 }
 
+// RobinAdOverlap is one desk where the AD mirror and the cached Robin occupancy
+// name the same person at the same desk. The AD placement keeps priority, so the
+// Robin overlay for this desk is dropped (see sameRobinPerson in desks.go).
+type RobinAdOverlap struct {
+	Map        string
+	Desknumber string
+	Name       string
+	Userid     string
+}
+
+// RobinAdDuplicate is one person the AD mirror seats at one desk while Robin
+// seats them at a different desk on the same map, which makes them appear twice
+// on that map. Rendered reflects whether the current robinDeskMode actually
+// overlays the Robin desk, i.e. whether the duplicate is visible right now.
+type RobinAdDuplicate struct {
+	Map       string
+	Name      string
+	Userid    string
+	AdDesk    string
+	RobinDesk string
+	Rendered  bool
+}
+
 // settingDescriptions maps general settings to a short explanation shown as a
 // subtitle under each variable name in the admin "base variables" list.
 var settingDescriptions = map[string]string{
@@ -110,6 +133,8 @@ type adminData struct {
 	RobinDeskHasSync        bool
 	RobinDeskLastSyncTime   string
 	RobinDeskCount          int
+	RobinAdSameDesk         []RobinAdOverlap
+	RobinAdDuplicates       []RobinAdDuplicate
 	Maps                    []mapRow
 	DeskMaps                []string
 	Mapadmins               []adminUserRow
@@ -928,6 +953,107 @@ func (app *App) buildAdminData(r *http.Request, sess Session, tab, msg string) a
 			d.RobinDeskLastSyncTime = dr.Time
 			d.RobinDeskCount = dr.Count
 		}
+
+		// --- AD <-> Robin overlap check (cached data only, no fresh sync) ------
+		// Compares the AD mirror (who AD seats where) against the cached Robin
+		// desk occupancy to surface: (1) desks where both systems name the same
+		// person at the same desk, where the AD placement keeps priority and the
+		// Robin overlay is dropped; and (2) people AD seats at one desk while
+		// Robin seats them at a different desk on the same map, making them show
+		// up twice. This only reads the two caches, mirroring buildMapDesks.
+		ldapUsers, _ := app.db.ListLdap()
+		robinDesks, _ := app.db.ListRobinDeskStatus("")
+		// AD occupants grouped by desk number, plus desk number -> map so an AD
+		// placement can be located on the same map as a Robin reservation.
+		adByDesk := map[string][]LdapUser{}
+		for _, u := range ldapUsers {
+			off := strings.TrimSpace(u.Office)
+			if off == "" {
+				continue
+			}
+			adByDesk[off] = append(adByDesk[off], u)
+		}
+		deskToMap := map[string]string{}
+		if allMaps, err := app.db.ListMaps(); err == nil {
+			for _, m := range allMaps {
+				if m.Mapname == "overview" {
+					continue
+				}
+				desks, _ := app.db.ListDesks(m.Mapname)
+				for _, dsk := range desks {
+					if dsk.Desktype == "addesk" {
+						deskToMap[dsk.Desknumber] = m.Mapname
+					}
+				}
+			}
+		}
+		seenSame := map[string]bool{}
+		seenDup := map[string]bool{}
+		for _, rs := range robinDesks {
+			rdesk := strings.TrimSpace(rs.Desknumber)
+			rmap := strings.TrimSpace(rs.Map)
+			for _, u := range ldapUsers {
+				if !sameRobinPerson(rs, u) {
+					continue
+				}
+				adesk := strings.TrimSpace(u.Office)
+				if adesk == "" {
+					continue
+				}
+				name := strings.TrimSpace(rs.Name)
+				if name == "" {
+					name = strings.TrimSpace(u.Givenname + " " + u.Surname)
+				}
+				uid := u.Userid
+				if uid == "" {
+					uid = rs.Userid
+				}
+				if adesk == rdesk {
+					// Same person, same desk: AD keeps priority.
+					key := rmap + "\x00" + rdesk
+					if !seenSame[key] {
+						seenSame[key] = true
+						d.RobinAdSameDesk = append(d.RobinAdSameDesk, RobinAdOverlap{
+							Map: rmap, Desknumber: rdesk, Name: name, Userid: uid,
+						})
+					}
+					continue
+				}
+				// Different desks only count when both land on the same map.
+				if deskToMap[adesk] != rmap {
+					continue
+				}
+				key := rmap + "\x00" + adesk + "\x00" + rdesk + "\x00" + strings.ToLower(uid)
+				if seenDup[key] {
+					continue
+				}
+				seenDup[key] = true
+				rendered := false
+				switch d.RobinDeskMode {
+				case "all":
+					rendered = true
+				case "unused":
+					// "unused" only overlays a desk with no AD occupant.
+					rendered = len(adByDesk[rdesk]) == 0
+				}
+				d.RobinAdDuplicates = append(d.RobinAdDuplicates, RobinAdDuplicate{
+					Map: rmap, Name: name, Userid: uid,
+					AdDesk: adesk, RobinDesk: rdesk, Rendered: rendered,
+				})
+			}
+		}
+		sort.Slice(d.RobinAdSameDesk, func(i, j int) bool {
+			if d.RobinAdSameDesk[i].Map != d.RobinAdSameDesk[j].Map {
+				return d.RobinAdSameDesk[i].Map < d.RobinAdSameDesk[j].Map
+			}
+			return d.RobinAdSameDesk[i].Desknumber < d.RobinAdSameDesk[j].Desknumber
+		})
+		sort.Slice(d.RobinAdDuplicates, func(i, j int) bool {
+			if d.RobinAdDuplicates[i].Map != d.RobinAdDuplicates[j].Map {
+				return d.RobinAdDuplicates[i].Map < d.RobinAdDuplicates[j].Map
+			}
+			return d.RobinAdDuplicates[i].Name < d.RobinAdDuplicates[j].Name
+		})
 
 	case "maps":
 		maps, _ := app.db.ListMaps()

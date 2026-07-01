@@ -704,7 +704,7 @@ function pollRobinSync() {
 // showRobinResultTab toggles the "Meeting rooms" / "Desk reservations" panels in
 // the Last sync card.
 function showRobinResultTab(name) {
-  var tabs = ['rooms', 'people'];
+  var tabs = ['rooms', 'people', 'check'];
   tabs.forEach(function (t) {
     var panel = document.getElementById('robinRes_' + t);
     var nav = document.getElementById('robinResNav_' + t);
