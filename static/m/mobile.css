@@ -374,6 +374,35 @@ body { overflow: hidden; }
 #m_mapimg { display: block; width: 1600px; height: auto; pointer-events: none; user-select: none; }
 #m_desklayer { position: absolute; left: 0; top: 0; width: 1600px; }
 
+/* Team-leader ring (display preference "Highlight team leaders"). Drawn as a
+   static concentric ring behind the marker; content-box + translate keeps it
+   centred on the desk coordinate regardless of border width. */
+.m_deskring {
+	position: absolute;
+	transform: translate(-50%, -50%);
+	border-radius: 50%;
+	border-style: solid;
+	box-sizing: content-box;
+	background: transparent;
+	pointer-events: none;
+	z-index: 4;
+}
+
+/* Optional name / desk-number labels (display preferences). Centred under the
+   marker; text-shadow keeps them legible over any map background. */
+.m_desklabel {
+	position: absolute;
+	transform: translate(-50%, 0);
+	color: #fff;
+	font-weight: 600;
+	line-height: 1.1;
+	white-space: nowrap;
+	text-align: center;
+	text-shadow: 0 1px 2px rgba(0,0,0,0.9), 0 0 3px rgba(0,0,0,0.85);
+	pointer-events: none;
+	z-index: 5;
+}
+
 /* Desk markers mirror the desktop client's .deskball type styling/icons so the
    mobile map looks identical. Sizes are set inline (2*halfsize*itemscale). */
 .m_desk {

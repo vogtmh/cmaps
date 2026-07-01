@@ -200,15 +200,17 @@
     } else {
       get('/rest/config?mode=maps').done(function (res) {
         var list = (res && res.maps) || [];
-        mapState.maps = list.filter(function (m) { return m.published !== 'no'; });
-        if (!mapState.maps.length) { mapState.maps = list; }
-        var def = (BOOT.defaultMap || '').toLowerCase();
-        var pickable = mapState.maps.filter(function (m) { return m.mapname !== 'overview'; });
-        var found = mapState.maps.some(function (m) { return m.mapname === def; });
-        if (found && def !== 'overview') {
+        // Never surface the overview in the mobile app (it has no world-map
+        // renderer); keep only published, non-overview maps.
+        mapState.maps = list.filter(function (m) { return m.published !== 'no' && m.mapname !== 'overview'; });
+        if (!mapState.maps.length) { mapState.maps = list.filter(function (m) { return m.mapname !== 'overview'; }); }
+        // Remember the last opened map (cookie), like the desktop client. Fall
+        // back to the server default only on the first visit, then to the first
+        // available map.
+        var remembered = (getCookie('map') || '').toLowerCase();
+        var def = remembered || (BOOT.defaultMap || '').toLowerCase();
+        if (def && def !== 'overview' && mapHasName(def)) {
           mapState.current = def;
-        } else if (pickable.length) {
-          mapState.current = pickable[0].mapname;
         } else {
           mapState.current = mapState.maps[0] ? mapState.maps[0].mapname : '';
         }
@@ -230,6 +232,7 @@
     if (!mapState.maps.length) { navigate('map'); return; }
     var active = [], placeholder = [];
     mapState.maps.forEach(function (m) {
+      if (m.mapname === 'overview') { return; }
       (m.placeholder ? placeholder : active).push(m);
     });
     function rows(list) {
@@ -392,10 +395,26 @@
 
   function cap(s) { return s ? s.charAt(0).toUpperCase() + s.slice(1) : s; }
 
+  // Builds one absolutely-positioned text label centred horizontally on (x, y)
+  // inside the scaled map layer (so it zooms with the map). Used for the
+  // optional name / desk-number overlays.
+  function deskLabel(text, x, y, fontPx) {
+    var el = document.createElement('div');
+    el.className = 'm_desklabel';
+    el.textContent = text;
+    el.style.left = x + 'px';
+    el.style.top = y + 'px';
+    el.style.fontSize = fontPx + 'px';
+    return el;
+  }
+
   function renderDesks() {
     var layer = document.getElementById('m_desklayer');
     layer.innerHTML = '';
     var scale = mapState.itemscale || 1;
+    var showNames = getCookie('setting_shownames') === '1';
+    var showNums = getCookie('setting_desknumbers') === '1';
+    var hlLeaders = getCookie('setting_highlightleaders') === '1';
     var seen = {};
     var frag = document.createDocumentFragment();
     mapState.desks.forEach(function (d) {
@@ -406,6 +425,24 @@
       if (!info) { return; }
       var x = parseFloat(d.x) || 0, y = parseFloat(d.y) || 0;
       var sizePx = 2 * info.half * scale;
+
+      // Team-leader ring (desktop "highlight leaders"): desks flagged with a
+      // VIP/leader colour get a coloured ring drawn concentrically behind the
+      // marker. Rendered as a static element (no animation) to stay clear of
+      // the Android compositing issues that plagued animated shadows.
+      if (hlLeaders && d.color) {
+        var rw = Math.max(2, sizePx * 0.16);
+        var ring = document.createElement('div');
+        ring.className = 'm_deskring';
+        ring.style.left = x + 'px';
+        ring.style.top = y + 'px';
+        ring.style.width = sizePx + 'px';
+        ring.style.height = sizePx + 'px';
+        ring.style.borderWidth = rw + 'px';
+        ring.style.borderColor = d.color;
+        frag.appendChild(ring);
+      }
+
       var dot = document.createElement('div');
       dot.className = 'm_desk ' + info.type + (d.robin == 1 ? ' robin' : '');
       dot.style.left = x + 'px';
@@ -414,6 +451,23 @@
       dot.style.height = sizePx + 'px';
       dot.setAttribute('data-id', d.id);
       frag.appendChild(dot);
+
+      // Optional name / desk-number labels (desktop "show names" / "show desk
+      // numbers"). Skipped for facility icons and shared desks, mirroring the
+      // desktop client. Labels live in the scaled map layer so they zoom with
+      // the map; sizes are in map (pre-zoom) px like the markers.
+      if ((showNames || showNums) && !ITEM_TYPES[info.type] && info.type !== 'shareddesk') {
+        var labelY = y + info.half * scale + 1;
+        var fontPx = Math.max(6, 8 * scale);
+        if (showNames && d.fname) {
+          frag.appendChild(deskLabel(d.fname, x, labelY, fontPx));
+          labelY += fontPx * 1.15;
+        }
+        if (showNums && d.dsk) {
+          var num = d.dsk.substring(d.dsk.indexOf('-') + 1);
+          if (num) { frag.appendChild(deskLabel(num, x, labelY, fontPx)); }
+        }
+      }
     });
     layer.appendChild(frag);
 
@@ -947,10 +1001,6 @@
     html += toggleRow('setting_highlightleaders', 'Highlight team leaders');
     html += '</div>';
 
-    // Default map
-    html += '<div class="m_section_title">Default map</div><div class="m_card">' +
-      '<select id="m_defmap" class="m_select"></select></div>';
-
     // Account actions
     html += '<div class="m_section_title">Account</div>' +
       '<button class="m_btn secondary" id="m_fullsite" type="button">Switch to full site</button>';
@@ -962,19 +1012,6 @@
     $main.html(html);
 
     $('#m_login_btn').on('click', function () { navigate('login'); });
-
-    // Populate default-map select
-    var fillMaps = function (maps) {
-      var cur = (getCookie('map') || BOOT.defaultMap || '').toLowerCase();
-      var sel = $('#m_defmap');
-      maps.forEach(function (m) {
-        var label = m.displayname || m.mapname;
-        sel.append('<option value="' + esc(m.mapname) + '"' + (m.mapname === cur ? ' selected' : '') + '>' + esc(label) + '</option>');
-      });
-      sel.on('change', function () { setCookie('map', this.value); toast('Default map saved'); });
-    };
-    if (mapState.maps.length) { fillMaps(mapState.maps); }
-    else { get('/rest/config?mode=maps').done(function (res) { fillMaps(((res && res.maps) || []).filter(function (m) { return m.published !== 'no'; })); }); }
 
     $('#m_fullsite').on('click', function () { location.href = '/?desktop=1'; });
     $('#m_logout').on('click', function () {
@@ -1000,6 +1037,12 @@
     $sheet = $('#m_sheet');
     $backdrop = $('#m_sheet_backdrop');
     $toast = $('#m_toast');
+
+    // Register the PWA service worker (installability + offline shell). Served
+    // from /m/ so it controls the whole mobile scope. Failures are non-fatal.
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/m/sw.js').catch(function () {});
+    }
 
     // Hide the Admin tab unless the user can view at least one section.
     if (!hasAdmin()) { $tabbar.find('.m_tab[data-view="admin"]').attr('hidden', 'hidden'); }

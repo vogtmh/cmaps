@@ -132,6 +132,9 @@ func (app *App) routes(mux *http.ServeMux) {
 	// Dedicated touch-first mobile UI (separate layout under /m/).
 	mux.HandleFunc("/m", app.handleMobile)
 	mux.HandleFunc("/m/", app.handleMobile)
+	// PWA endpoints under /m/ (more specific than /m/, so they take precedence).
+	mux.HandleFunc("/m/sw.js", app.handleMobileServiceWorker)
+	mux.HandleFunc("/m/manifest.webmanifest", app.handleMobileManifest)
 
 	// Admin panel (GET render + POST CRUD).
 	mux.HandleFunc("/admin", app.handleAdmin)

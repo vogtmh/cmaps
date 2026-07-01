@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"html/template"
+	"io/fs"
 	"net/http"
 	"os"
 	"regexp"
@@ -98,4 +99,54 @@ func (app *App) handleMobile(w http.ResponseWriter, r *http.Request) {
 	if err := app.tmpl.ExecuteTemplate(w, "mobile.html", data); err != nil {
 		http.Error(w, "template error", http.StatusInternalServerError)
 	}
+}
+
+// handleMobileServiceWorker serves the PWA service worker at /m/sw.js. Serving
+// it under /m/ (rather than /static/) lets it control the whole /m/ scope
+// without a Service-Worker-Allowed override. The asset-version placeholder is
+// substituted so each deploy yields new bytes (triggering an SW update) and a
+// fresh cache name.
+func (app *App) handleMobileServiceWorker(w http.ResponseWriter, r *http.Request) {
+	b, err := fs.ReadFile(app.staticFS, "m/sw.js")
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	body := strings.ReplaceAll(string(b), "__ASSET_VERSION__", assetVersion)
+	w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
+	// Let the SW control the whole /m/ scope even though the app is a subtree.
+	w.Header().Set("Service-Worker-Allowed", "/m/")
+	// The browser revalidates the SW script on each load; no-cache keeps updates
+	// prompt while still allowing a conditional 304.
+	w.Header().Set("Cache-Control", "no-cache")
+	http.ServeContent(w, r, "sw.js", time.Time{}, strings.NewReader(body))
+}
+
+// handleMobileManifest serves the web app manifest at /m/manifest.webmanifest.
+// It is generated so the installed app name tracks the configured app title.
+func (app *App) handleMobileManifest(w http.ResponseWriter, r *http.Request) {
+	title := app.appTitle()
+	short := title
+	if len(short) > 12 {
+		short = short[:12]
+	}
+	manifest := map[string]interface{}{
+		"id":               "/m/",
+		"name":             title,
+		"short_name":       short,
+		"start_url":        "/m/",
+		"scope":            "/m/",
+		"display":          "standalone",
+		"orientation":      "portrait",
+		"background_color": "#1b2a4a",
+		"theme_color":      "#0979D8",
+		"icons": []map[string]string{
+			{"src": "/favicons/android-chrome-192x192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
+			{"src": "/favicons/android-chrome-512x512.png", "sizes": "512x512", "type": "image/png", "purpose": "any"},
+			{"src": "/favicons/android-chrome-512x512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"},
+		},
+	}
+	w.Header().Set("Content-Type", "application/manifest+json; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-cache")
+	_ = json.NewEncoder(w).Encode(manifest)
 }
