@@ -590,9 +590,22 @@ func (app *App) handleRestEntraTest(w http.ResponseWriter, r *http.Request) {
 	}
 	id, err := strconv.Atoi(r.URL.Query().Get("entraid"))
 	if err != nil {
-		writeJSON(w, map[string]interface{}{"ok": false, "message": "invalid EntraID id"})
+		writeJSON(w, map[string]interface{}{"ok": false, "checks": []testCheck{{Name: "Connection", Status: "fail", Detail: "invalid EntraID id"}}})
 		return
 	}
+	writeJSON(w, app.entraValidate(id))
+}
+
+// entraValidate runs a structured, read-only connectivity test for a single
+// EntraID connection and returns the {ok, checks} payload rendered by the admin
+// test modal. It acquires an access token and confirms Microsoft Graph is
+// reachable — without performing a full sync.
+func (app *App) entraValidate(id int) map[string]interface{} {
+	var checks []testCheck
+	add := func(name, status, detail string) {
+		checks = append(checks, testCheck{Name: name, Status: status, Detail: detail})
+	}
+
 	srcs, _ := app.db.ListEntraSources()
 	var src *EntraSource
 	for i := range srcs {
@@ -602,27 +615,43 @@ func (app *App) handleRestEntraTest(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if src == nil {
-		writeJSON(w, map[string]interface{}{"ok": false, "message": "EntraID source not found"})
-		return
+		return testResult([]testCheck{{Name: "Connection", Status: "fail", Detail: "EntraID connection not found."}})
 	}
+
+	if src.Disabled {
+		add("Connection status", "warn", "This connection is disabled and is skipped during sync.")
+	} else {
+		add("Connection status", "ok", "This connection is enabled.")
+	}
+
 	client, err := newEntraClient(*src)
 	if err != nil {
-		writeJSON(w, map[string]interface{}{"ok": false, "message": err.Error()})
-		return
+		add("Access token", "fail", "Could not build the Graph client: "+err.Error())
+		return testResult(checks)
 	}
+	if _, err := client.accessToken(); err != nil {
+		add("Access token", "fail", "Could not acquire an access token: "+err.Error())
+		return testResult(checks)
+	}
+	add("Access token", "ok", "Access token acquired for tenant "+src.TenantID+".")
+
 	var page struct {
 		Count int              `json:"@odata.count"`
 		Value []entraGraphUser `json:"value"`
 	}
 	if err := client.get("/users?$top=1&$count=true&$select=id,displayName", &page); err != nil {
-		writeJSON(w, map[string]interface{}{"ok": false, "message": err.Error()})
-		return
+		add("Microsoft Graph", "fail", "Graph request failed: "+err.Error())
+		return testResult(checks)
 	}
-	msg := "Connection successful \u2014 token acquired and Microsoft Graph reachable."
+	add("Microsoft Graph", "ok", "Microsoft Graph is reachable.")
+
 	if page.Count > 0 {
-		msg = fmt.Sprintf("Connection successful \u2014 %d user(s) visible in the tenant.", page.Count)
+		add("Users visible", "ok", fmt.Sprintf("%d user(s) visible in the tenant.", page.Count))
+	} else {
+		add("Users visible", "warn", "No users were returned — check the app registration's permissions and scope.")
 	}
-	writeJSON(w, map[string]interface{}{"ok": true, "message": msg})
+
+	return testResult(checks)
 }
 
 // handleRestEntraSyncOne synchronously syncs a single EntraID connection (the

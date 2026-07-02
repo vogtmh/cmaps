@@ -466,6 +466,69 @@ func dialLDAP(src LdapSource) (*ldap.Conn, error) {
 	}
 }
 
+// ldapValidate runs a structured, read-only connectivity test for a single LDAP
+// source and returns the {ok, checks} payload rendered by the admin test modal.
+// It dials the server, binds with the service account and confirms the search
+// base is reachable — without performing a full sync.
+func (app *App) ldapValidate(id int) map[string]interface{} {
+	var checks []testCheck
+	add := func(name, status, detail string) {
+		checks = append(checks, testCheck{Name: name, Status: status, Detail: detail})
+	}
+
+	srcs, _ := app.db.ListLdapSources()
+	var src *LdapSource
+	for i := range srcs {
+		if srcs[i].ID == id {
+			src = &srcs[i]
+			break
+		}
+	}
+	if src == nil {
+		return testResult([]testCheck{{Name: "Connection", Status: "fail", Detail: "LDAP connection not found."}})
+	}
+
+	if src.Disabled {
+		add("Connection status", "warn", "This connection is disabled and is skipped during sync.")
+	} else {
+		add("Connection status", "ok", "This connection is enabled.")
+	}
+
+	conn, err := dialLDAP(*src)
+	if err != nil {
+		add("Server connection", "fail", "Could not connect to "+src.Server+": "+err.Error())
+		return testResult(checks)
+	}
+	defer conn.Close()
+	add("Server connection", "ok", "Connected to "+src.Server+" ("+strings.ToUpper(src.Type)+").")
+
+	if err := conn.Bind(src.LdapUser, src.LdapPass); err != nil {
+		add("Bind", "fail", "Authentication failed for "+src.LdapUser+": "+err.Error())
+		return testResult(checks)
+	}
+	add("Bind", "ok", "Authenticated as "+src.LdapUser+".")
+
+	req := ldap.NewSearchRequest(
+		src.OU,
+		ldap.ScopeWholeSubtree, ldap.NeverDerefAliases,
+		1, 10, false,
+		"(objectClass=*)", []string{"dn"}, nil,
+	)
+	sr, err := conn.Search(req)
+	switch {
+	case err != nil && ldap.IsErrorWithCode(err, ldap.LDAPResultSizeLimitExceeded):
+		add("Search base", "ok", "Search base \""+src.OU+"\" is reachable.")
+	case err != nil:
+		add("Search base", "fail", "Search base \""+src.OU+"\" could not be searched: "+err.Error())
+	case len(sr.Entries) == 0:
+		add("Search base", "warn", "Search base \""+src.OU+"\" is reachable but returned no entries.")
+	default:
+		add("Search base", "ok", "Search base \""+src.OU+"\" is reachable.")
+	}
+
+	return testResult(checks)
+}
+
 // logChange appends a row to the ldap changelog.
 func (app *App) logChange(now time.Time, name, avatar, changeType, oldVal, newVal string) {
 	_ = app.db.AddChangelog(ChangelogEntry{

@@ -359,29 +359,21 @@ function syncLDAP(ldap_id, adminuser) {
 }
 
 // testLDAP validates a single connection's server + bind credentials without
-// running a sync. The outcome is shown in the shared result line under the table.
+// running a sync and shows a structured summary in the shared test modal.
 function testLDAP(id) {
   var btn = document.getElementById('ldaptestbtn' + id);
-  var out = document.getElementById('ldapTestResult');
   var desc = btn ? (btn.getAttribute('data-desc') || '') : '';
+  var title = 'LDAP connection test' + (desc ? ' \u2014 ' + desc : '');
+  var body = openTestModal(title, 'Testing ' + (desc || 'connection') + '\u2026');
   if (btn) { btn.disabled = true; }
-  if (out) { out.style.color = ''; out.textContent = 'Testing ' + (desc || 'connection') + '\u2026'; }
   $.ajax({
     url: '../rest/ldap/test?token=' + token + '&ldapid=' + encodeURIComponent(id),
     async: true, type: 'get', dataType: 'JSON',
     success: function(d) {
-      if (out) {
-        if (d && d.ok) {
-          out.style.color = 'var(--sy-ok)';
-          out.textContent = (desc ? desc + ': ' : '') + (d.message || 'Connection successful.');
-        } else {
-          out.style.color = 'var(--sy-danger)';
-          out.textContent = (desc ? desc + ': ' : '') + 'Failed: ' + ((d && d.error) || 'unknown error');
-        }
-      }
+      if (body) body.innerHTML = renderTestChecks(d, 'Connection looks valid', 'Connection has problems');
     },
     error: function() {
-      if (out) { out.style.color = 'var(--sy-danger)'; out.textContent = 'Request failed (forbidden or server error).'; }
+      if (body) body.textContent = 'Request failed (forbidden or server error).';
     },
     complete: function() { if (btn) btn.disabled = false; }
   });
@@ -615,21 +607,61 @@ function esc(s) {
     .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
+// renderTestChecks turns a {ok, checks:[{name,status,detail}]} test result into
+// the shared SAML/Robin-style summary markup (a header line plus one tinted
+// status icon per check).
+function renderTestChecks(res, okText, failText) {
+  var cls = { ok: 'status-icon-ok', warn: 'status-icon-warn', fail: 'status-icon-fail' };
+  var html = '<div style="display:flex; align-items:center; gap:10px; font-weight:700; margin-bottom:12px;">' +
+    '<span class="status-icon ' + (res && res.ok ? 'status-icon-ok' : 'status-icon-fail') + '"></span>' +
+    ((res && res.ok) ? okText : failText) + '</div>';
+  ((res && res.checks) || []).forEach(function(c) {
+    html += '<div style="display:flex; gap:10px; padding:6px 0; border-top:1px solid rgba(255,255,255,0.08);">' +
+      '<span class="status-icon ' + (cls[c.status] || '') + '" style="margin-top:2px;"></span>' +
+      '<span><strong>' + esc(c.name) + '</strong><br><span style="color:#aaa;">' + esc(c.detail) + '</span></span>' +
+      '</div>';
+  });
+  return html;
+}
+
+// openTestModal shows the shared connection-test modal with the given title and
+// a loading placeholder, returning the body element for the caller to fill in.
+function openTestModal(title, loadingText) {
+  var t = document.getElementById('testResultTitle');
+  var body = document.getElementById('testResultBody');
+  var overlay = document.getElementById('testResultOverlay');
+  if (t) t.textContent = title || 'Connection test';
+  if (body) body.innerHTML = esc(loadingText || 'Testing\u2026');
+  if (overlay) overlay.style.display = 'block';
+  return body;
+}
+
 function showRobinTest() {
   var body = document.getElementById('robinDebugBody');
-  body.textContent = 'Checking Robin credentials\u2026';
-  document.getElementById('robinDebugOverlay').style.display = 'block';
+  var overlay = document.getElementById('robinDebugOverlay');
+  if (body) body.innerHTML = 'Checking Robin credentials\u2026';
+  if (overlay) overlay.style.display = 'block';
   $.ajax({
     url: '../rest/robin/test',
     async: true,
     type: 'get',
     dataType: 'JSON',
-    success: function(d) {
-      var lines = (d && d.log) || [];
-      body.textContent = lines.length ? lines.join('\n') : 'No output returned.';
+    success: function(res) {
+      if (!body) return;
+      var cls = { ok: 'status-icon-ok', warn: 'status-icon-warn', fail: 'status-icon-fail' };
+      var html = '<div style="display:flex; align-items:center; gap:10px; font-weight:700; margin-bottom:12px;">' +
+        '<span class="status-icon ' + (res.ok ? 'status-icon-ok' : 'status-icon-fail') + '"></span>' +
+        (res.ok ? 'Robin connection looks valid' : 'Robin connection has problems') + '</div>';
+      (res.checks || []).forEach(function(c) {
+        html += '<div style="display:flex; gap:10px; padding:6px 0; border-top:1px solid rgba(255,255,255,0.08);">' +
+          '<span class="status-icon ' + (cls[c.status] || '') + '" style="margin-top:2px;"></span>' +
+          '<span><strong>' + esc(c.name) + '</strong><br><span style="color:#aaa;">' + esc(c.detail) + '</span></span>' +
+          '</div>';
+      });
+      body.innerHTML = html;
     },
     error: function() {
-      body.textContent = 'Failed to run the connection test (forbidden or server error).';
+      if (body) body.textContent = 'Failed to run the connection test (forbidden or server error).';
     }
   })
 }
@@ -1108,28 +1140,22 @@ function startEntraSync() {
 }
 
 // testEntra validates one EntraID connection's credentials against Microsoft
-// Graph without running a full sync.
+// Graph without running a full sync and shows a structured summary in the shared
+// test modal.
 function testEntra(id) {
-  var out = document.getElementById('entraTestResult');
   var btn = document.getElementById('entratestbtn' + id);
   var desc = btn ? (btn.getAttribute('data-desc') || '') : '';
-  if (out) { out.textContent = 'Testing ' + desc + '\u2026'; out.style.color = ''; }
+  var title = 'EntraID connection test' + (desc ? ' \u2014 ' + desc : '');
+  var body = openTestModal(title, 'Testing ' + (desc || 'connection') + '\u2026');
   if (btn) btn.disabled = true;
   $.ajax({
     url: '../rest/entra/test?token=' + token + '&entraid=' + encodeURIComponent(id),
     type: 'GET', dataType: 'JSON',
     success: function (d) {
-      if (!out) return;
-      if (d && d.ok) {
-        out.style.color = 'var(--sy-ok)';
-        out.textContent = desc + ': ' + (d.message || 'Connection successful.');
-      } else {
-        out.style.color = 'var(--sy-danger)';
-        out.textContent = desc + ': ' + ((d && d.message) || 'unknown error');
-      }
+      if (body) body.innerHTML = renderTestChecks(d, 'Connection looks valid', 'Connection has problems');
     },
     error: function () {
-      if (out) { out.style.color = 'var(--sy-danger)'; out.textContent = 'Request failed (forbidden or server error).'; }
+      if (body) body.textContent = 'Request failed (forbidden or server error).';
     },
     complete: function () { if (btn) btn.disabled = false; }
   });
@@ -1285,12 +1311,35 @@ function saveGeoapify(ev) {
   return false;
 }
 
+// testGeoapify runs the "Test" button: it geocodes a fixed sample address and
+// shows a structured summary in the shared test modal to confirm the key works.
 function testGeoapify() {
-  var addr = (document.getElementById('geoTestAddress') || {}).value || '';
+  var body = openTestModal('Geocoding test', 'Testing Geoapify\u2026');
+  $.ajax({
+    url: '../rest/geo/test?summary=1',
+    type: 'GET', dataType: 'JSON',
+    success: function (d) {
+      if (body) body.innerHTML = renderTestChecks(d, 'Geocoding looks valid', 'Geocoding has problems');
+      if (d) updateGeoUsage(d.usageMonth, d.usageCount);
+    },
+    error: function () {
+      if (body) body.textContent = 'Request failed (forbidden or server error).';
+    }
+  });
+}
+
+// testGeoapifyAddress runs the "Test an address" card: it geocodes a
+// user-supplied address and shows the resolved coordinates inline.
+function testGeoapifyAddress() {
+  var addr = ((document.getElementById('geoTestAddress') || {}).value || '').trim();
   var out = document.getElementById('geoTestResult');
+  if (!addr) {
+    if (out) { out.style.color = 'var(--sy-danger)'; out.textContent = 'Enter an address to test.'; }
+    return;
+  }
   if (out) { out.textContent = 'Testing\u2026'; out.style.color = ''; }
   $.ajax({
-    url: '../rest/geo/test' + (addr ? ('?address=' + encodeURIComponent(addr)) : ''),
+    url: '../rest/geo/test?address=' + encodeURIComponent(addr),
     type: 'GET', dataType: 'JSON',
     success: function (d) {
       if (!out) return;

@@ -410,52 +410,78 @@ func (app *App) StartRobinLocationScheduler(interval time.Duration) {
 	}()
 }
 
-// robinTestCredentials performs a lightweight, read-only connectivity check that
-// verifies the saved Robin access token (and, if set, the organisation id) are
-// accepted by the Robin API. It makes at most two GET requests and never writes
-// to the meeting cache, the booking feature or the map — unlike a full sync.
-func (app *App) robinTestCredentials() []string {
-	var out []string
-	add := func(format string, args ...interface{}) {
-		out = append(out, fmt.Sprintf(format, args...))
+// robinValidate runs a lightweight, read-only pre-flight check of the Robin
+// configuration and returns a structured result (mirroring the SAML test) so an
+// admin can confirm the token/organisation work without running a sync. It makes
+// at most one GET (the organisation's locations list) and never writes anything.
+func (app *App) robinValidate() map[string]interface{} {
+	type check struct {
+		Name   string `json:"name"`
+		Status string `json:"status"` // ok | warn | fail
+		Detail string `json:"detail"`
+	}
+	var checks []check
+	add := func(name, status, detail string) {
+		checks = append(checks, check{Name: name, Status: status, Detail: detail})
 	}
 
-	if strings.TrimSpace(app.db.GetRobinSetting("robintoken")) == "" {
-		add("No Robin access token configured. Enter a token and save first.")
-		return out
-	}
-
-	// /whoami validates the access token itself, independent of any organisation
-	// id. It is a read-only call and the cheapest way to confirm the key works.
-	var who struct {
-		Data struct {
-			ID    int    `json:"id"`
-			Name  string `json:"name"`
-			Email string `json:"primary_email"`
-		} `json:"data"`
-	}
-	if err := app.robinGet("/whoami", &who); err != nil {
-		add("Access token rejected by Robin: %v", err)
-		return out
-	}
-	if who.Data.Name != "" {
-		add("Access token is valid (authenticated as %s).", who.Data.Name)
+	// Integration switched on?
+	if app.robinEnabled() {
+		add("Robin integration", "ok", "The integration is switched on.")
 	} else {
-		add("Access token is valid.")
+		add("Robin integration", "warn", "Robin is currently disabled; syncing is paused.")
 	}
 
+	token := strings.TrimSpace(app.db.GetRobinSetting("robintoken"))
 	org := strings.TrimSpace(app.db.GetRobinSetting("robinOrganisation"))
-	if org == "" {
-		add("No organisation id configured yet — set one to enable syncing.")
-		return out
+
+	if token != "" {
+		add("Access token", "ok", "An access token is configured.")
+	} else {
+		add("Access token", "fail", "No access token configured.")
 	}
-	locs, err := app.robinListLocations()
-	if err != nil {
-		add("Organisation id \"%s\" could not be verified: %v", org, err)
-		return out
+	if org != "" {
+		add("Organisation id", "ok", org)
+	} else {
+		add("Organisation id", "fail", "No organisation id configured.")
 	}
-	add("Organisation id \"%s\" is valid — %d location(s) visible.", org, len(locs))
-	return out
+
+	// Live API check: requesting the organisation's locations exercises both the
+	// token and the organisation id in one read-only call — the same endpoint
+	// used to discover locations, so if this works, syncing can authenticate too.
+	if token != "" && org != "" {
+		if locs, err := app.robinListLocations(); err != nil {
+			add("API connection", "fail", "Robin rejected the request: "+err.Error())
+		} else {
+			add("API connection", "ok", fmt.Sprintf("Robin returned %d location(s).", len(locs)))
+		}
+	}
+
+	// Location → map mappings.
+	spaces, _ := app.db.ListRobinSpaces()
+	mapped := 0
+	for _, s := range spaces {
+		if strings.TrimSpace(s.Mapname) != "" {
+			mapped++
+		}
+	}
+	switch {
+	case len(spaces) == 0:
+		add("Location mappings", "warn", "No Robin locations discovered/mapped yet.")
+	case mapped == 0:
+		add("Location mappings", "warn", fmt.Sprintf("%d location(s) discovered, none mapped to a map.", len(spaces)))
+	default:
+		add("Location mappings", "ok", fmt.Sprintf("%d of %d location(s) mapped to a map.", mapped, len(spaces)))
+	}
+
+	ok := true
+	for _, c := range checks {
+		if c.Status == "fail" {
+			ok = false
+			break
+		}
+	}
+	return map[string]interface{}{"ok": ok, "checks": checks}
 }
 
 // RunRobinSyncVerbose performs a full Robin meeting sync while collecting a

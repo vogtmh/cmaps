@@ -1277,7 +1277,7 @@
           {{if gt .PermLdap 1}}
           <button type="button" class="sync-toggle-btn" onclick="toggleCollapse('geoCredCollapse', this)"><span class="caret">&#9654;</span> Configure</button>
           {{end}}
-          <button type="button" class="sync-toggle-btn" onclick="toggleCollapse('geoTestCollapse', this)"><span class="caret">&#9654;</span> Test</button>
+          <button type="button" class="sync-btn" onClick="testGeoapify()">Test</button>
           {{if gt .PermLdap 1}}
           <button type="button" class="sync-btn sync-btn-primary" id="geoSyncBtn" onClick="runGeoapifySync()"{{if not .GeoEnabled}} disabled title="Geocoding integration is disabled"{{end}}>Sync all locations now</button>
           {{if .GeoapifySet}}<button type="button" class="sync-btn sync-btn-danger" onClick="deleteGeoConfig()">Delete</button>{{end}}
@@ -1303,15 +1303,6 @@
       </div>
       {{end}}
 
-      <div class="sync-collapse" id="geoTestCollapse">
-        <p class="sync-card-hint">Geocode a single address to confirm the key works. Leave the box blank to use a sample address.</p>
-        <div class="sync-import-row">
-          <input class="sync-input" type="text" id="geoTestAddress" placeholder="Optional: an address to test">
-          <button type="button" class="sync-btn sync-btn-primary" onClick="testGeoapify()">Run test</button>
-        </div>
-        <div id="geoTestResult" class="sync-status-text" style="margin-top:10px;"></div>
-      </div>
-
       {{if gt .PermLdap 1}}
       <p class="sync-card-hint" style="margin-top:14px;">Geocode every map that has an address and store the resulting coordinates on the map.
         Runs once on demand and overwrites existing lat/lon values.<br>
@@ -1333,8 +1324,28 @@
       </table>
       {{end}}
     </div>
+
+    <div class="sync-card">
+      <div class="sync-card-head"><h2 class="sync-card-title">Test an address</h2></div>
+      <p class="sync-card-hint">Geocode any address to preview how Geoapify resolves it. This is a lookup tool only &mdash; it never changes a map&rsquo;s stored coordinates.</p>
+      <div class="sync-import-row">
+        <input class="sync-input" type="text" id="geoTestAddress" placeholder="Enter an address to geocode">
+        <button type="button" class="sync-btn sync-btn-primary" onClick="testGeoapifyAddress()">Run test</button>
+      </div>
+      <div id="geoTestResult" class="sync-status-text" style="margin-top:10px;"></div>
+    </div>
   </div>
   {{end}}
+
+  <div id="testResultOverlay" class="sync-modal">
+    <div class="sync-modal-box">
+      <div class="sync-modal-head">
+        <h2 id="testResultTitle">Connection test</h2>
+        <button type="button" class="sync-btn sync-btn-sm" onClick="document.getElementById('testResultOverlay').style.display='none'">Close</button>
+      </div>
+      <pre id="testResultBody" class="sync-modal-body"></pre>
+    </div>
+  </div>
 
   {{if gt .PermAdminpanel 0}}
   <div id="syncsub_database" class="syncsub" style="display:none;">

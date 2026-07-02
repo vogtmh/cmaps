@@ -1526,6 +1526,27 @@ func (app *App) handleRestLdap(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]interface{}{"status": "ok", "count": count})
 }
 
+// testCheck is one row in a structured connection-test summary, matching the
+// SAML/Robin test UI: a check name, a status (ok|warn|fail) and a human detail.
+type testCheck struct {
+	Name   string `json:"name"`
+	Status string `json:"status"`
+	Detail string `json:"detail"`
+}
+
+// testResult wraps a set of checks into the {ok, checks} payload the admin test
+// modal renders. ok is false when any check failed.
+func testResult(checks []testCheck) map[string]interface{} {
+	ok := true
+	for _, c := range checks {
+		if c.Status == "fail" {
+			ok = false
+			break
+		}
+	}
+	return map[string]interface{}{"ok": ok, "checks": checks}
+}
+
 // handleRestLdapTest validates a single LDAP source's connectivity and bind
 // credentials without running a sync. It dials the server, binds and reports the
 // outcome. Requires the "ldap" feature at read level.
@@ -1537,28 +1558,10 @@ func (app *App) handleRestLdapTest(w http.ResponseWriter, r *http.Request) {
 	}
 	id, err := strconv.Atoi(r.URL.Query().Get("ldapid"))
 	if err != nil {
-		writeJSON(w, map[string]interface{}{"ok": false, "error": "invalid LDAP id"})
+		writeJSON(w, map[string]interface{}{"ok": false, "checks": []testCheck{{Name: "Connection", Status: "fail", Detail: "invalid LDAP id"}}})
 		return
 	}
-	srcs, _ := app.db.ListLdapSources()
-	for _, s := range srcs {
-		if s.ID != id {
-			continue
-		}
-		conn, err := dialLDAP(s)
-		if err != nil {
-			writeJSON(w, map[string]interface{}{"ok": false, "error": err.Error()})
-			return
-		}
-		defer conn.Close()
-		if err := conn.Bind(s.LdapUser, s.LdapPass); err != nil {
-			writeJSON(w, map[string]interface{}{"ok": false, "error": "bind failed: " + err.Error()})
-			return
-		}
-		writeJSON(w, map[string]interface{}{"ok": true, "message": "Connected and bound successfully."})
-		return
-	}
-	writeJSON(w, map[string]interface{}{"ok": false, "error": "LDAP source not found"})
+	writeJSON(w, app.ldapValidate(id))
 }
 
 // handleRestLdapDebug returns diagnostics from the most recent AD sync so the
@@ -1815,12 +1818,8 @@ func (app *App) handleRestRobinTest(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}
-	if !app.robinEnabled() {
-		writeJSON(w, map[string]interface{}{"log": []string{"Robin integration is disabled."}})
-		return
-	}
 	_ = app.db.AuditLog("LDAP", sess.Username, "Robin credentials tested")
-	writeJSON(w, map[string]interface{}{"log": app.robinTestCredentials()})
+	writeJSON(w, app.robinValidate())
 }
 
 // handleRestRobinSync starts a Robin meeting sync in the background (if one is
@@ -1881,8 +1880,11 @@ func (app *App) handleRestGeoTest(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}
-	if !app.geoEnabled() {
-		writeJSON(w, map[string]interface{}{"ok": false, "message": "Geocoding integration is disabled."})
+	// Summary mode: the "Test" button geocodes a fixed sample address and
+	// returns a structured {ok, checks} report for the test modal.
+	if r.URL.Query().Get("summary") == "1" {
+		_ = app.db.AuditLog("LDAP", sess.Username, "Geoapify API key tested")
+		writeJSON(w, app.geoValidate(r.Context()))
 		return
 	}
 	apiKey := app.db.GetGeoSetting("geoapifyApiKey")
