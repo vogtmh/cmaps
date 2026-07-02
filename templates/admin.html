@@ -1624,10 +1624,14 @@
 
 {{else if eq .ActiveTab "desks"}}
   <script>var departments = {{.DepartmentsJSON}};</script>
-  {{range .DeskMaps}}
-  <div id="{{.}}" class="deskstats"><img src="../images/spinner.png" style="margin-left:117px" /></div>
-  <script>deskSummary('{{.}}')</script>
-  {{end}}
+  <div class="sync-wrap">
+    <div class="desk-grid">
+      {{range .DeskMaps}}
+      <div id="{{.}}" class="sync-card desk-card"><img src="../images/spinner.png" style="display:block;margin:24px auto;" /></div>
+      <script>deskSummary('{{.}}')</script>
+      {{end}}
+    </div>
+  </div>
 
 {{else if eq .ActiveTab "users"}}
   <div class="sync-wrap">

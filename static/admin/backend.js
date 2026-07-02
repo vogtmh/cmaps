@@ -2297,20 +2297,9 @@ function deskSummary(map) {
     type: 'get',
     dataType: 'JSON',
     success: function(result){
-      var output  = '<table border="0" style="width:470px; margin-left:30px;">'
-                  + '<tr>'
-                  + '<td style="font-weight: bold;color:lightgrey;text-align:left">'+ucWords(map)+'</td>'
-                  + '<td style="width:130px"></td>'
-                  + '<td style="width:130px"></td><td style="width:130px"></td>'
-                  + '</tr>'
-                  + '<tr>'
-                  + '<td style="font-weight: bold;color:grey;text-align:left">Department</td>'
-                  + '<td style="font-weight: bold;color:lightblue;width:130px;text-align:center;">Total</td>'
-                  + '<td style="font-weight: bold;color:orange;width:130px;text-align:center;">In use</td>'
-                  + '<td style="font-weight: bold;color:green;width:130px;text-align:center;">Free</td>'
-                  + '</tr>'
-                  +  '<tr><td>&nbsp;</td></tr>';
-      // Output departments one by one
+      // Per-department rows. Every department is shown on every card (even
+      // with zero desks) so all cards stay the same height and line up tidily.
+      var rows = '';
       $.each( departments, function( x, department ){
           var all = result.desks.filter(element => element.dept == department);
           var total1 = all.filter(element => element.desktype == 'addesk');
@@ -2320,13 +2309,14 @@ function deskSummary(map) {
           var used1 = total1.filter(element => element.fname != '');
           var usedcount = Object.keys(used1).length + Object.keys(total2).length + Object.keys(total3).length;
           var freecount = totalcount - usedcount;
-          output+='<tr>'
-              + '<td style="color:grey;text-align:left">'+department+'</td>'
-              + '<td style="color:lightblue;text-align:center;">'+totalcount+'</td>'
-              + '<td style="color:orange;text-align:center;">'+usedcount+'</td>'
-              + '<td style="color:green;text-align:center;">'+freecount+'</td>'
+          rows += '<tr>'
+              + '<td>'+dashEsc(department)+'</td>'
+              + '<td class="desk-num desk-total">'+totalcount+'</td>'
+              + '<td class="desk-num desk-used">'+usedcount+'</td>'
+              + '<td class="desk-num desk-free">'+freecount+'</td>'
               + '</tr>';
       });
+
       var all = result.desks;
       var total1 = all.filter(element => element.desktype == 'addesk');
       var total2 = all.filter(element => element.desktype == 'blocked');
@@ -2336,13 +2326,28 @@ function deskSummary(map) {
       var used1 = all.filter(element => element.fname != '');
       var usedcount = Object.keys(used1).length + Object.keys(total2).length + Object.keys(total3).length + Object.keys(total4).length;
       var freecount = totalcount - usedcount;
-      
-      output+='<tr>'
-              + '<td style="color:grey;text-align:left; font-weight:bold;">Summary</td>'
-              + '<td style="color:lightblue; font-weight:bold;text-align:center;">'+totalcount+'</td>'
-              + '<td style="color:orange; font-weight:bold;text-align:center;">'+usedcount+'</td>'
-              + '<td style="color:green; font-weight:bold;text-align:center;">'+freecount+'</td>'
-              + '</tr></table>';
+
+      var output  = '<div class="sync-card-head">'
+                  + '<h2 class="sync-card-title">'+dashEsc(ucWords(map))+'</h2>'
+                  + '<span class="sync-badge sync-badge-accent">'+totalcount+' desk'+(totalcount === 1 ? '' : 's')+'</span>'
+                  + '</div>'
+                  + '<table class="sync-table desk-table"><thead><tr>'
+                  + '<th>Department</th>'
+                  + '<th class="desk-num">Total</th>'
+                  + '<th class="desk-num">In use</th>'
+                  + '<th class="desk-num">Free</th>'
+                  + '</tr></thead><tbody>';
+      if (!rows) {
+        output += '<tr><td colspan="4" class="dash-muted" style="padding:14px 0;">No desks on this map.</td></tr>';
+      } else {
+        output += rows;
+      }
+      output += '</tbody><tfoot><tr>'
+                  + '<td>Summary</td>'
+                  + '<td class="desk-num desk-total">'+totalcount+'</td>'
+                  + '<td class="desk-num desk-used">'+usedcount+'</td>'
+                  + '<td class="desk-num desk-free">'+freecount+'</td>'
+                  + '</tr></tfoot></table>';
 
       var statsoutput = document.getElementById(map);
       statsoutput.innerHTML = output;

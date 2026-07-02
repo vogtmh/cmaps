@@ -791,3 +791,21 @@
 .dash-health-item-desc { color: var(--sy-muted); font-size: 12px; line-height: 1.5; margin: 0 0 8px; }
 .dash-health-item-list { color: var(--sy-muted); font-size: 12px; line-height: 1.5; margin: 0 0 10px 16px; padding: 0; }
 .dash-health-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* ── Desks tab: per-map occupancy cards ──────────────────── */
+.desk-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 18px;
+  align-items: start;
+}
+.desk-card { margin-bottom: 0; }
+.desk-table td, .desk-table th { vertical-align: middle; }
+.desk-table .desk-num { text-align: center; width: 84px; white-space: nowrap; }
+.desk-table .desk-total { color: #6fb6f5; }
+.desk-table .desk-used  { color: #f0a868; }
+.desk-table .desk-free  { color: #5be39a; }
+.desk-table tfoot td {
+  font-weight: 700;
+  border-top: 2px solid var(--sy-border);
+}
