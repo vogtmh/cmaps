@@ -3582,29 +3582,6 @@ $(function() {
     if (e.key === "Escape") { closeChangesModal(); }
   });
 
-  // File upload via Ajax
-  $("#uploadForm").on('submit', function(e){
-    e.preventDefault();
-    $.ajax({
-      type: 'POST',
-      url: 'rest/avatar',
-      data: new FormData(this),
-      contentType: false,
-      cache: false,
-      processData:false,
-      beforeSend: function(){
-        //$('#uploadStatus').html('<img src="images/uploading.gif"/>');
-      },
-      error:function(){
-        //$('#uploadStatus').html('<span style="color:#EA4335;">Avatar upload failed, please try again.<span>');
-      },
-      success: function(data){
-        $('#uploadForm')[0].reset();
-        // The Go backend auto-crops to a square and returns JSON; just refresh the thumbnail.
-        $('#avatarbutton img').attr('src', 'avatarcache/' + data.userid + '.jpg?time=' + Date.now());
-      }
-    });
-  });
   // File type validation
   $("#avatarInput").change(function(){
     var file = this.files && this.files[0];
@@ -3638,7 +3615,6 @@ $(function() {
         //$('#uploadStatus').html('<span style="color:#EA4335;">Deletion failed, please try again.<span>');
       },
       success: function(data){
-        $('#uploadForm')[0].reset();
         //$('#uploadStatus').html('<span style="color:#28A74B;">Avatar has been deleted.<span>');
         $('#avatarbutton img').attr('src', 'images/noavatar.png?time=' + Date.now());
       }

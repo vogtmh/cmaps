@@ -1,8 +1,8 @@
 <!DOCTYPE HTML>
 <!-- ===================================================================
     
-    CompanyMaps 9.0
-    Release date 2026-06-25
+    CompanyMaps 9.1
+    Release date 2026-07-02
     Copyright (c) 2016-2026 by MavoDev
     see https://www.mavodev.de for more details
     
@@ -199,6 +199,40 @@
             <details class="cl-major" open>
               <summary class="cl-summary">Version 9<span class="cl-count">2026</span></summary>
               <div class="cl-group">
+
+            <div class="changelog-entry major">
+              <div class="changelog-head"><span class="changelog-date">2026-07-02</span><span class="changelog-ver">Version 9.1</span></div>
+              <div class="changelog-body">
+                <div class="cl-features">
+                  <div class="cl-feature">
+                    <div class="cl-feature-title">Rewritten editing experience</div>
+                    <p>Editing the map has been rebuilt from the ground up. Adding and editing items now happens in a dedicated edit sidebar instead of a pop-up over the map: pick an item from the palette to drop a live draft, position it exactly where you want and confirm to save. Coordinates are two-way &ndash; drag an item and its X/Y update, or type X/Y to nudge it into place. A new lasso lets you select several desks at once and auto-align whole pods into neat rows, and the map now opens in edit mode right after you sign in.</p>
+                  </div>
+                  <div class="cl-feature">
+                    <div class="cl-feature-title">Dedicated mobile app</div>
+                    <p>Phones now get a purpose-built, touch-first experience at <code>/m/</code> with smooth pinch-to-zoom and panning, cross-location search, live meeting-room status and read-only admin views. It can be added to the home screen and launched like a native app.</p>
+                  </div>
+                  <div class="cl-feature">
+                    <div class="cl-feature-title">Microsoft Entra ID integration</div>
+                    <p>CompanyMaps can now sign users in and sync the directory through Microsoft Entra ID, complete with a simple on/off switch in the admin panel.</p>
+                  </div>
+                  <div class="cl-feature">
+                    <div class="cl-feature-title">Avatar cropping tool</div>
+                    <p>Uploading a profile picture now opens an interactive cropper: pick a square area, rotate in 90&deg; steps and apply. It accepts JPG, PNG, GIF and WebP as well as iPhone HEIC/HEIF photos, converting them for you right in the browser.</p>
+                  </div>
+                </div>
+                <div class="cl-other-title">Other changes</div>
+                <ul>
+                  <li>Robin sync is more robust: a new Robin-only mode clears duplicate Active Directory desks, a Robin&ndash;AD consistency check flags mismatches, and several sync bugs were fixed.</li>
+                  <li>The admin sync panel got a consistent look across all its sub-tabs, a separate cache per source and clearer, consolidated check output.</li>
+                  <li>Reworked the admin dashboard.</li>
+                  <li>Configuration exports now include <code>config.json</code> with the password safely redacted.</li>
+                  <li>Fixed the header menus while in edit mode and cleaned up shared-desk warnings.</li>
+                  <li>Numerous iOS and Android fixes for the mobile view.</li>
+                  <li>Updated the bundled jQuery to 4.0.0 and trimmed unused legacy scripts.</li>
+                </ul>
+              </div>
+            </div>
 
             <div class="changelog-entry major">
               <div class="changelog-head"><span class="changelog-date">2026-06-30</span><span class="changelog-ver">Version 9.0</span></div>
@@ -793,6 +827,8 @@
           <table style="width:70%;text-align:left;margin-left:15%;background-color:rgb(0,0,0,0.5);border-radius:10px;border-spacing:15px;">
             <tr> <th>Name</th> <th style="width:50px"></th> <th>Author and license</th> </tr>
             <tr> <td>Chart.js</td> <td style="width:50px"></td> <td>Chart.js Contributors, MIT license<br/><a href='https://www.chartjs.org'>https://www.chartjs.org</a></td> </tr>
+            <tr> <td>Cropper.js</td> <td style="width:50px"></td> <td>Chen Fengyuan, MIT license<br/><a href='https://fengyuanchen.github.io/cropperjs'>https://fengyuanchen.github.io/cropperjs</a></td> </tr>
+            <tr> <td>heic2any</td> <td style="width:50px"></td> <td>Alex Corvi, MIT license<br/><a href='https://github.com/alexcorvi/heic2any'>https://github.com/alexcorvi/heic2any</a></td> </tr>
             <tr> <td>jQuery</td> <td style="width:50px"></td> <td>JS Foundation, MIT license<br/><a href='https://jquery.com'>https://jquery.com</a></td> </tr>
             <tr> <td>Roboto Font</td> <td style="width:50px"></td> <td>Google, Apache license 2.0<br/><a href='https://github.com/googlefonts/roboto'>https://github.com/googlefonts/roboto</a></td> </tr>
             <tr> <td>Underscore.js</td> <td style="width:50px"></td> <td>Jeremy Ashkenas et al, MIT license<br/><a href='http://underscorejs.org'>http://underscorejs.org</a></td> </tr>

@@ -19,8 +19,8 @@ const avatarSize = 400
 // center-cropped to a square and stored as avatarcache/<userid>.jpg, where userid
 // is the part of the session username after the domain backslash.
 //
-// The legacy interactive crop UI (imgareaselect) is replaced with an automatic
-// centered square crop. EXIF auto-rotation is not applied.
+// Cropping and rotation happen client-side (Cropper.js): the browser uploads a
+// finished square JPEG, so the server-side center-crop is normally a no-op safety net.
 func (app *App) handleRestAvatar(w http.ResponseWriter, r *http.Request) {
 	sess, ok := app.currentSession(r)
 	if !ok {

@@ -299,12 +299,8 @@
       <img src="images/avatar-delete.png" style="width:100%;height:100%;" alt="" onclick="document.getElementById('avatarDelete').click();" onmouseover='this.src="images/avatar-delete_on.png"' onmouseout='this.src="images/avatar-delete.png"' />
     </div>
     <div id="bookingstable" style="position:absolute; left: 20px; bottom: 260px; width:300px; height:auto;background: transparent;font-size:12px;text-align:center;">no bookings found</div>
-    <form id="uploadForm" enctype="multipart/form-data" style="width:300px;height:40px;visibility:hidden">
-      <input type="file" name="images" id="avatarInput" accept="image/jpeg,image/png,image/gif,image/webp,image/heic,image/heif,.heic,.heif" style="display: none;">
-      <input type="button" value="Change avatar" id="browseButton" style="background-color:#0979D8; color:white;width: 200px;height: 32px;border-radius: 10px;border: none;cursor: pointer;"/>
-      <input type="hidden" name="mode" value="upload">
-      <input type="submit" name="submit" id="uploadButton" value="UPLOAD">
-    </form>
+    <!-- Hidden file input; picking a file opens the crop/rotate dialog (see openAvatarCrop). -->
+    <input type="file" name="images" id="avatarInput" accept="image/jpeg,image/png,image/gif,image/webp,image/heic,image/heif,.heic,.heif" style="display: none;">
     <form id="deleteForm" style="width:300px;height:40px;visibility:hidden">
       <input type="hidden" name="mode" value="delete">
       <input type="submit" name="submit" id="avatarDelete" value="Delete avatar" style="background-color:#0979D8; color:white;width: 200px;height: 32px;border-radius: 10px;border: none;cursor: pointer;">
