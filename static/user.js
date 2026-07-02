@@ -3178,6 +3178,121 @@ function closeChangesModal() {
   if (modal) { modal.style.display = 'none'; }
 }
 
+// ---- Avatar crop / rotate dialog (Cropper.js + optional HEIC decode) ----
+var avatarCropper = null;   // active Cropper instance
+var avatarCropURL = null;   // object URL to revoke on close
+var heic2anyLoading = null; // promise so the WASM lib is fetched at most once
+
+// True when the picked file is HEIC/HEIF. Some browsers report an empty MIME
+// type for those, so fall back to the file extension.
+function isHeicFile(file) {
+  var t = (file.type || '').toLowerCase();
+  if (t === 'image/heic' || t === 'image/heif') { return true; }
+  return /\.(heic|heif)$/i.test(file.name || '');
+}
+
+// Lazy-load the vendored heic2any bundle (libheif WASM, ~1.3MB) only when a
+// HEIC/HEIF file is actually chosen. Resolves to window.heic2any.
+function loadHeic2any() {
+  if (window.heic2any) { return Promise.resolve(window.heic2any); }
+  if (heic2anyLoading) { return heic2anyLoading; }
+  heic2anyLoading = new Promise(function (resolve, reject) {
+    var s = document.createElement('script');
+    s.src = 'tools/heic2any.min.js';
+    s.onload = function () { resolve(window.heic2any); };
+    s.onerror = function () { heic2anyLoading = null; reject(new Error('heic2any load failed')); };
+    document.head.appendChild(s);
+  });
+  return heic2anyLoading;
+}
+
+// openAvatarCrop shows the crop modal with a square-locked Cropper for the given
+// file, decoding HEIC to JPEG first when needed.
+function openAvatarCrop(file) {
+  if (!file) { return; }
+  var modal = document.getElementById('avatarCropModal');
+  var img = document.getElementById('avatarCropImg');
+  if (!modal || !img) { return; }
+  var busy = document.getElementById('avatarCropBusy');
+
+  function showWith(blob) {
+    if (busy) { busy.style.display = 'none'; }
+    if (avatarCropURL) { URL.revokeObjectURL(avatarCropURL); }
+    avatarCropURL = URL.createObjectURL(blob);
+    img.src = avatarCropURL;
+    modal.style.display = 'flex';
+    if (avatarCropper) { avatarCropper.destroy(); avatarCropper = null; }
+    avatarCropper = new Cropper(img, {
+      aspectRatio: 1,
+      viewMode: 1,
+      autoCropArea: 1,
+      background: false,
+      responsive: true,
+      checkOrientation: true
+    });
+  }
+
+  if (isHeicFile(file)) {
+    if (busy) { busy.style.display = 'block'; }
+    modal.style.display = 'flex';
+    loadHeic2any().then(function (heic2any) {
+      return heic2any({ blob: file, toType: 'image/jpeg', quality: 0.92 });
+    }).then(function (out) {
+      showWith(Array.isArray(out) ? out[0] : out);
+    }).catch(function () {
+      closeAvatarCrop();
+      alert('Could not read this HEIC image. Please try a JPG or PNG.');
+    });
+  } else {
+    showWith(file);
+  }
+}
+
+function rotateAvatarCrop() {
+  if (avatarCropper) { avatarCropper.rotate(90); }
+}
+
+function closeAvatarCrop() {
+  var modal = document.getElementById('avatarCropModal');
+  if (modal) { modal.style.display = 'none'; }
+  if (avatarCropper) { avatarCropper.destroy(); avatarCropper = null; }
+  if (avatarCropURL) { URL.revokeObjectURL(avatarCropURL); avatarCropURL = null; }
+  var input = document.getElementById('avatarInput');
+  if (input) { input.value = ''; } // allow re-picking the same file
+}
+
+// applyAvatarCrop exports the selected square as a 400x400 JPEG and uploads it to
+// the existing rest/avatar endpoint (mode=upload, field=images).
+function applyAvatarCrop() {
+  if (!avatarCropper) { return; }
+  var canvas = avatarCropper.getCroppedCanvas({
+    width: 400, height: 400,
+    imageSmoothingEnabled: true, imageSmoothingQuality: 'high'
+  });
+  if (!canvas) { return; }
+  canvas.toBlob(function (blob) {
+    if (!blob) { alert('Could not process the image.'); return; }
+    var fd = new FormData();
+    fd.append('mode', 'upload');
+    fd.append('images', blob, 'avatar.jpg');
+    $.ajax({
+      type: 'POST',
+      url: 'rest/avatar',
+      data: fd,
+      contentType: false,
+      cache: false,
+      processData: false,
+      success: function (data) {
+        closeAvatarCrop();
+        $('#avatarbutton img').attr('src', 'avatarcache/' + data.userid + '.jpg?time=' + Date.now());
+      },
+      error: function () {
+        alert('Avatar upload failed, please try again.');
+      }
+    });
+  }, 'image/jpeg', 0.92);
+}
+
 function getPrinterStatus() {
   mapname = map;
   $.ajax({
@@ -3492,21 +3607,20 @@ $(function() {
   });
   // File type validation
   $("#avatarInput").change(function(){
-    var fileLength = this.files.length;
-    var match= ["image/jpeg","image/jpg"];
-    var i;
-    for(i = 0; i < fileLength; i++){
-      var file = this.files[i];
-      var imagefile = file.type;
-      if(!((imagefile==match[0]) || (imagefile==match[1]) )){
-        alert('Please select a valid image file (JPEG/JPG).');
-        $("#avatarInput").val('');
-        return false;
-      }
-      else {
-        document.getElementById('uploadButton').click()
-      }
+    var file = this.files && this.files[0];
+    if (!file) { return; }
+    var t = (file.type || '').toLowerCase();
+    var ok = t === 'image/jpeg' || t === 'image/jpg' || t === 'image/png' ||
+             t === 'image/gif' || t === 'image/webp' ||
+             t === 'image/heic' || t === 'image/heif' || isHeicFile(file);
+    if (!ok) {
+      alert('Please select an image (JPG, PNG, GIF, WEBP or HEIC).');
+      this.value = '';
+      return;
     }
+    // Open the interactive crop/rotate dialog; it uploads a finished 400x400
+    // JPEG via applyAvatarCrop() (the old path auto-uploaded the raw file).
+    openAvatarCrop(file);
   });
   $("#deleteForm").on('submit', function(e){
     e.preventDefault();
@@ -3529,43 +3643,6 @@ $(function() {
         $('#avatarbutton img').attr('src', 'images/noavatar.png?time=' + Date.now());
       }
     });
-  });
-
-  $("#resizeForm").on('submit', function(e){
-    e.preventDefault();
-    var x1 = $('#x1').val();
-    var y1 = $('#y1').val();
-    var x2 = $('#x2').val();
-    var y2 = $('#y2').val();
-    var w = $('#w').val();
-    var h = $('#h').val();
-    if(x1=='' || y1=='' || x2=='' || y2=='' || w=='' || h==''){
-      alert('Please select an area in your image');
-    }
-    else {
-      $.ajax({
-        type: 'POST',
-        url: 'rest/avatar/',
-        data: new FormData(this),
-        contentType: false,
-        cache: false,
-        processData:false,
-        beforeSend: function(){
-          //$('#uploadStatus').html('<img src="images/uploading.gif"/>');
-        },
-        error:function(){
-          //$('#uploadStatus').html('<span style="color:#EA4335;">Deletion failed, please try again.<span>');
-        },
-        success: function(data){
-          console.log('success on creating the thumbnail');
-          $('#resizeForm')[0].reset();
-          $('#avatarbutton').html(data);
-          console.log(data);
-          $( "#image_resize" ).remove();
-        }
-      });
-    }
-    
   });
 
 });

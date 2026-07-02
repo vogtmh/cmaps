@@ -1502,6 +1502,111 @@ pre, code, kbd, samp, tt { font-family: inherit; }
     border-radius:0px 10px 0px 0px;
 }
 
+/* ── Avatar crop / rotate dialog (Cropper.js) ─────────────────── */
+.crop-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 6100;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.6);
+    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(8px);
+    font-family: Roboto, Arial, Helvetica, sans-serif;
+}
+
+.crop-modal-inner {
+    display: flex;
+    flex-direction: column;
+    width: 92vw;
+    max-width: 560px;
+    max-height: 88vh;
+    background: rgba(28, 28, 30, 0.96);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 14px;
+    box-shadow: 0 18px 56px rgba(0, 0, 0, 0.55);
+    color: #fff;
+    overflow: hidden;
+}
+
+.crop-modal-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    padding: 16px 20px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.10);
+}
+
+.crop-modal-title {
+    margin: 0;
+    font-size: 20px;
+    font-weight: 600;
+}
+
+.crop-close {
+    background: transparent;
+    border: none;
+    color: #fff;
+    font-size: 26px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0 4px;
+    opacity: 0.8;
+}
+.crop-close:hover { opacity: 1; }
+
+.crop-modal-body {
+    position: relative;
+    padding: 16px 20px;
+    overflow: auto;
+}
+
+.crop-stage {
+    width: 100%;
+}
+
+/* Constrain the working image so Cropper can size its crop box. */
+.crop-stage img {
+    display: block;
+    max-width: 100%;
+    max-height: 60vh;
+}
+
+.crop-busy {
+    padding: 24px 0;
+    text-align: center;
+    font-size: 15px;
+    color: rgba(255, 255, 255, 0.85);
+}
+
+.crop-modal-foot {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    padding: 14px 20px;
+    border-top: 1px solid rgba(255, 255, 255, 0.10);
+}
+
+.crop-btn {
+    padding: 9px 18px;
+    font-size: 14px;
+    font-weight: 600;
+    color: #fff;
+    background: rgba(255, 255, 255, 0.10);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: 8px;
+    cursor: pointer;
+}
+.crop-btn:hover { background: rgba(255, 255, 255, 0.16); }
+
+.crop-btn-primary {
+    background: #0979d8;
+    border-color: #0979d8;
+}
+.crop-btn-primary:hover { background: #0a86ee; }
+
 /* ── Recent changes modal (changes API) ──────────────────────── */
 .changes-modal {
     position: fixed;
