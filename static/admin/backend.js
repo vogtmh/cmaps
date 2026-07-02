@@ -1918,30 +1918,32 @@ function saveInternalBooking(cb) {
 }
 
 // ── Avatar orientation tool (config tab) ─────────────────────────────────────
-// Scans the avatar cache for images stored with a non-trivial EXIF orientation,
-// shows a before/after preview, and rotates the selected ones on confirmation.
-function scanAvatarOrientation() {
-  var btn = document.getElementById('avatarOrientScanBtn');
+// Cached avatars are plain cropped squares with no reliable orientation metadata,
+// so sideways ones can't be detected automatically. This tool lists every avatar
+// for manual visual review; the admin rotates the wrong ones and saves. Rotations
+// are previewed client-side with a CSS transform and only written on save.
+var _avatarRotations = {}; // userid -> degrees clockwise (0/90/180/270)
+
+function loadAvatars() {
+  var btn = document.getElementById('avatarOrientLoadBtn');
   var status = document.getElementById('avatarOrientStatus');
   var results = document.getElementById('avatarOrientResults');
+  var filter = document.getElementById('avatarOrientFilter');
   if (btn) { btn.disabled = true; }
-  if (status) { status.style.color = ''; status.textContent = 'Scanning\u2026'; }
-  fetch('../rest/avatar-orientation?mode=scan', { credentials: 'same-origin' })
+  if (status) { status.style.color = ''; status.textContent = 'Loading\u2026'; }
+  fetch('../rest/avatar-orientation?mode=list', { credentials: 'same-origin' })
     .then(function (r) { return r.json(); })
     .then(function (d) {
       if (btn) { btn.disabled = false; }
-      if (!d || !d.ok) { throw new Error((d && d.message) || 'scan failed'); }
-      renderAvatarOrient(d.items || []);
+      if (!d || !d.ok) { throw new Error((d && d.message) || 'load failed'); }
+      _avatarRotations = {};
+      renderAvatarReview(d.items || []);
+      updateAvatarPending();
+      if (results) { results.style.display = 'block'; }
+      if (filter) { filter.style.display = 'inline-block'; }
       if (status) {
-        if (d.count === 0) {
-          status.style.color = 'var(--sy-ok)';
-          status.textContent = 'All avatars are upright.';
-          if (results) { results.style.display = 'none'; }
-        } else {
-          status.style.color = 'var(--sy-warn)';
-          status.textContent = d.count + ' avatar(s) need rotation.';
-          if (results) { results.style.display = 'block'; }
-        }
+        status.style.color = 'var(--sy-muted)';
+        status.textContent = (d.count || 0) + ' avatar(s). Rotate the sideways ones, then save.';
       }
     })
     .catch(function (e) {
@@ -1950,8 +1952,8 @@ function scanAvatarOrientation() {
     });
 }
 
-// renderAvatarOrient builds the before/after preview grid for the scan results.
-function renderAvatarOrient(items) {
+// renderAvatarReview builds the review grid: one tile per avatar with rotate arrows.
+function renderAvatarReview(items) {
   var grid = document.getElementById('avatarOrientGrid');
   if (!grid) { return; }
   grid.innerHTML = '';
@@ -1959,88 +1961,106 @@ function renderAvatarOrient(items) {
   items.forEach(function (it) {
     var cell = document.createElement('div');
     cell.className = 'avatar-orient-item';
+    cell.setAttribute('data-userid', it.userid);
 
-    var pair = document.createElement('div');
-    pair.className = 'avatar-orient-pair';
+    var thumb = document.createElement('div');
+    thumb.className = 'avatar-orient-thumb';
+    var img = document.createElement('img');
+    // image-orientation:none makes the <img> show the raw pixels exactly as the
+    // map's CSS background-image does, so what you see here matches the map.
+    img.src = '../avatarcache/' + encodeURIComponent(it.userid) + '.jpg?v=' + bust;
+    img.alt = it.userid;
+    img.loading = 'lazy';
+    thumb.appendChild(img);
 
-    var before = document.createElement('div');
-    before.className = 'avatar-orient-thumb before';
-    var bimg = document.createElement('img');
-    bimg.src = '../avatarcache/' + encodeURIComponent(it.userid) + '.jpg?v=' + bust;
-    bimg.alt = 'current';
-    var bcap = document.createElement('div');
-    bcap.className = 'avatar-orient-caption';
-    bcap.textContent = 'On map';
-    before.appendChild(bimg);
-    before.appendChild(bcap);
-
-    var arrow = document.createElement('div');
-    arrow.className = 'avatar-orient-arrow';
-    arrow.textContent = '\u2192';
-
-    var after = document.createElement('div');
-    after.className = 'avatar-orient-thumb after';
-    var aimg = document.createElement('img');
-    aimg.src = '../rest/avatar-orientation?mode=preview&userid=' + encodeURIComponent(it.userid) + '&v=' + bust;
-    aimg.alt = 'corrected';
-    var acap = document.createElement('div');
-    acap.className = 'avatar-orient-caption';
-    acap.textContent = 'After fix';
-    after.appendChild(aimg);
-    after.appendChild(acap);
-
-    pair.appendChild(before);
-    pair.appendChild(arrow);
-    pair.appendChild(after);
+    var controls = document.createElement('div');
+    controls.className = 'avatar-orient-controls';
+    var ccw = document.createElement('button');
+    ccw.type = 'button';
+    ccw.className = 'sync-btn avatar-orient-rot';
+    ccw.title = 'Rotate left';
+    ccw.textContent = '\u21BA';
+    ccw.onclick = function () { rotateAvatarTile(it.userid, -90); };
+    var cw = document.createElement('button');
+    cw.type = 'button';
+    cw.className = 'sync-btn avatar-orient-rot';
+    cw.title = 'Rotate right';
+    cw.textContent = '\u21BB';
+    cw.onclick = function () { rotateAvatarTile(it.userid, 90); };
+    controls.appendChild(ccw);
+    controls.appendChild(cw);
 
     var uid = document.createElement('div');
     uid.className = 'avatar-orient-userid';
     uid.textContent = it.userid;
+    if (it.hasexif) {
+      var flag = document.createElement('span');
+      flag.className = 'avatar-orient-flag';
+      flag.title = 'Still has an EXIF orientation tag';
+      flag.textContent = ' \u2022 EXIF';
+      uid.appendChild(flag);
+    }
 
-    var lbl = document.createElement('div');
-    lbl.className = 'avatar-orient-label';
-    lbl.textContent = it.label || ('Orientation ' + it.orientation);
-
-    var check = document.createElement('label');
-    var cb = document.createElement('input');
-    cb.type = 'checkbox';
-    cb.className = 'avatar-orient-cb';
-    cb.checked = true;
-    cb.value = it.userid;
-    check.appendChild(cb);
-    check.appendChild(document.createTextNode('Rotate'));
-
-    cell.appendChild(pair);
+    cell.appendChild(thumb);
+    cell.appendChild(controls);
     cell.appendChild(uid);
-    cell.appendChild(lbl);
-    cell.appendChild(check);
     grid.appendChild(cell);
   });
 }
 
-// toggleAvatarOrientAll flips every checkbox between all-selected and none.
-function toggleAvatarOrientAll(btn) {
-  var boxes = document.querySelectorAll('#avatarOrientGrid .avatar-orient-cb');
-  var anyChecked = false;
-  boxes.forEach(function (b) { if (b.checked) { anyChecked = true; } });
-  boxes.forEach(function (b) { b.checked = !anyChecked; });
-  if (btn) { btn.textContent = anyChecked ? 'Select all' : 'Select none'; }
+// rotateAvatarTile updates the pending rotation for one avatar and previews it.
+function rotateAvatarTile(userid, delta) {
+  var cur = _avatarRotations[userid] || 0;
+  var next = (cur + delta + 360) % 360;
+  if (next === 0) { delete _avatarRotations[userid]; }
+  else { _avatarRotations[userid] = next; }
+  var cell = document.querySelector('#avatarOrientGrid .avatar-orient-item[data-userid="' + cssEscapeAttr(userid) + '"]');
+  if (cell) {
+    var img = cell.querySelector('img');
+    if (img) { img.style.transform = next ? ('rotate(' + next + 'deg)') : ''; }
+    if (next) { cell.classList.add('avatar-orient-changed'); }
+    else { cell.classList.remove('avatar-orient-changed'); }
+  }
+  updateAvatarPending();
 }
 
-// applyAvatarOrientation rotates and re-saves the selected avatars after confirm.
-function applyAvatarOrientation() {
-  var boxes = document.querySelectorAll('#avatarOrientGrid .avatar-orient-cb');
-  var ids = [];
-  boxes.forEach(function (b) { if (b.checked) { ids.push(b.value); } });
-  if (ids.length === 0) { alert('Select at least one avatar to rotate.'); return; }
+// cssEscapeAttr escapes a value for use inside an attribute selector.
+function cssEscapeAttr(v) {
+  return String(v).replace(/["\\]/g, '\\$&');
+}
+
+// updateAvatarPending refreshes the pending count + enables/disables save.
+function updateAvatarPending() {
+  var ids = Object.keys(_avatarRotations);
+  var pending = document.getElementById('avatarOrientPending');
+  var apply = document.getElementById('avatarOrientApplyBtn');
+  if (pending) { pending.textContent = ids.length ? (ids.length + ' pending change(s)') : ''; }
+  if (apply) { apply.disabled = ids.length === 0; }
+}
+
+// filterAvatars hides tiles whose userid doesn't contain the query.
+function filterAvatars(q) {
+  q = (q || '').toLowerCase();
+  var cells = document.querySelectorAll('#avatarOrientGrid .avatar-orient-item');
+  cells.forEach(function (c) {
+    var id = (c.getAttribute('data-userid') || '').toLowerCase();
+    c.style.display = (!q || id.indexOf(q) !== -1) ? '' : 'none';
+  });
+}
+
+// saveAvatarRotations writes the pending rotations to disk after confirmation.
+function saveAvatarRotations() {
+  var ids = Object.keys(_avatarRotations);
+  if (ids.length === 0) { return; }
   if (!confirm('Rotate and permanently re-save ' + ids.length + ' avatar(s)? This overwrites the stored images.')) { return; }
+  var pairs = ids.map(function (id) { return id + ':' + _avatarRotations[id]; });
 
   var btn = document.getElementById('avatarOrientApplyBtn');
   var status = document.getElementById('avatarOrientStatus');
   if (btn) { btn.disabled = true; }
-  if (status) { status.style.color = ''; status.textContent = 'Rotating\u2026'; }
+  if (status) { status.style.color = ''; status.textContent = 'Saving\u2026'; }
 
-  var body = 'mode=apply&userids=' + encodeURIComponent(ids.join(','));
+  var body = 'mode=apply&rotations=' + encodeURIComponent(pairs.join(','));
   fetch('../rest/avatar-orientation', {
     method: 'POST',
     credentials: 'same-origin',
@@ -2050,11 +2070,10 @@ function applyAvatarOrientation() {
     if (!r.ok) throw new Error('save failed');
     return r.json();
   }).then(function (d) {
-    if (btn) { btn.disabled = false; }
     if (!d || !d.ok) { throw new Error((d && d.message) || 'save failed'); }
     if (status) { status.style.color = 'var(--sy-ok)'; status.textContent = d.message; }
-    // Re-scan so corrected avatars drop off the list.
-    scanAvatarOrientation();
+    // Reload so the saved rotations show baked-in and pending state resets.
+    loadAvatars();
   }).catch(function (e) {
     if (btn) { btn.disabled = false; }
     if (status) { status.style.color = 'var(--sy-danger)'; status.textContent = 'Failed: ' + e.message; }

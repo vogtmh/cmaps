@@ -152,9 +152,14 @@ func orientationLabel(o int) string {
 }
 
 // handleRestAvatarOrientation powers the admin "Avatar orientation" tool.
-//   - mode=scan:    list cached avatars whose stored EXIF orientation is not 1.
-//   - mode=preview: stream the orientation-corrected JPEG for one userid (no write).
-//   - mode=apply:   bake the correct orientation into the selected files on disk.
+//
+// Most cached avatars are already-cropped squares with no EXIF metadata, so a
+// sideways image cannot be detected automatically. The tool therefore lists every
+// avatar for manual visual review and rotates only the ones the admin picks.
+//   - mode=list:  return every cached avatar userid (plus which still carry an
+//     EXIF orientation tag, shown as a hint) for the review grid.
+//   - mode=apply: rotate the given avatars clockwise by the requested angle and
+//     re-save them. Body param "rotations" = "userid:deg,userid:deg" (deg in 90/180/270).
 //
 // It requires config permission level 2 (same as the other config-tab tools).
 func (app *App) handleRestAvatarOrientation(w http.ResponseWriter, r *http.Request) {
@@ -172,85 +177,55 @@ func (app *App) handleRestAvatarOrientation(w http.ResponseWriter, r *http.Reque
 	dir := app.cfg.dataPath("avatarcache")
 
 	switch mode {
-	case "scan":
+	case "list":
 		entries, err := os.ReadDir(dir)
 		if err != nil {
 			writeJSON(w, map[string]interface{}{"ok": false, "message": err.Error()})
 			return
 		}
 		type item struct {
-			Userid      string `json:"userid"`
-			Orientation int    `json:"orientation"`
-			Label       string `json:"label"`
+			Userid  string `json:"userid"`
+			HasExif bool   `json:"hasexif"`
 		}
 		items := []item{}
 		for _, e := range entries {
 			if e.IsDir() || !strings.HasSuffix(strings.ToLower(e.Name()), ".jpg") {
 				continue
 			}
-			data, err := os.ReadFile(filepath.Join(dir, e.Name()))
-			if err != nil {
-				continue
+			id := strings.TrimSuffix(e.Name(), filepath.Ext(e.Name()))
+			hasExif := false
+			if data, err := os.ReadFile(filepath.Join(dir, e.Name())); err == nil {
+				hasExif = exifOrientation(data) > 1
 			}
-			o := exifOrientation(data)
-			if o <= 1 {
-				continue
-			}
-			items = append(items, item{
-				Userid:      strings.TrimSuffix(e.Name(), filepath.Ext(e.Name())),
-				Orientation: o,
-				Label:       orientationLabel(o),
-			})
+			items = append(items, item{Userid: id, HasExif: hasExif})
 		}
 		sort.Slice(items, func(i, j int) bool { return items[i].Userid < items[j].Userid })
 		writeJSON(w, map[string]interface{}{"ok": true, "count": len(items), "items": items})
-
-	case "preview":
-		userid := safeAvatarID(r.FormValue("userid"))
-		if userid == "" {
-			http.Error(w, "bad userid", http.StatusBadRequest)
-			return
-		}
-		data, err := os.ReadFile(filepath.Join(dir, userid+".jpg"))
-		if err != nil {
-			http.Error(w, "not found", http.StatusNotFound)
-			return
-		}
-		img, _, err := image.Decode(bytes.NewReader(data))
-		if err != nil {
-			http.Error(w, "decode failed", http.StatusInternalServerError)
-			return
-		}
-		img = applyOrientation(img, exifOrientation(data))
-		w.Header().Set("Content-Type", "image/jpeg")
-		w.Header().Set("Cache-Control", "no-store")
-		_ = jpeg.Encode(w, img, &jpeg.Options{Quality: 90})
 
 	case "apply":
 		if r.Method != http.MethodPost {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
-		ids := []string{}
-		for _, raw := range strings.Split(r.FormValue("userids"), ",") {
-			if id := safeAvatarID(raw); id != "" {
-				ids = append(ids, id)
-			}
-		}
-		if len(ids) == 0 {
-			writeJSON(w, map[string]interface{}{"ok": false, "message": "No avatars selected."})
-			return
-		}
 		applied, failed := 0, 0
-		for _, id := range ids {
+		for _, raw := range strings.Split(r.FormValue("rotations"), ",") {
+			raw = strings.TrimSpace(raw)
+			if raw == "" {
+				continue
+			}
+			parts := strings.SplitN(raw, ":", 2)
+			if len(parts) != 2 {
+				continue
+			}
+			id := safeAvatarID(parts[0])
+			deg := parts[1]
+			if id == "" || (deg != "90" && deg != "180" && deg != "270") {
+				continue
+			}
 			path := filepath.Join(dir, id+".jpg")
 			data, err := os.ReadFile(path)
 			if err != nil {
 				failed++
-				continue
-			}
-			o := exifOrientation(data)
-			if o <= 1 {
 				continue
 			}
 			img, _, err := image.Decode(bytes.NewReader(data))
@@ -258,7 +233,14 @@ func (app *App) handleRestAvatarOrientation(w http.ResponseWriter, r *http.Reque
 				failed++
 				continue
 			}
-			img = applyOrientation(img, o)
+			switch deg {
+			case "90":
+				img = rotate90(img)
+			case "180":
+				img = rotate180(img)
+			case "270":
+				img = rotate270(img)
+			}
 			var buf bytes.Buffer
 			if err := jpeg.Encode(&buf, img, &jpeg.Options{Quality: 90}); err != nil {
 				failed++
@@ -270,7 +252,7 @@ func (app *App) handleRestAvatarOrientation(w http.ResponseWriter, r *http.Reque
 			}
 			applied++
 		}
-		_ = app.db.AuditLog("Avatar", sess.Username, "Corrected orientation of "+itoa(applied)+" avatar(s)")
+		_ = app.db.AuditLog("Avatar", sess.Username, "Rotated "+itoa(applied)+" avatar(s)")
 		writeJSON(w, map[string]interface{}{"ok": true, "applied": applied, "failed": failed,
 			"message": itoa(applied) + " avatar(s) rotated" + func() string {
 				if failed > 0 {

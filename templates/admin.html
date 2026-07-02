@@ -265,18 +265,20 @@
         <div class="sync-card-head">
           <h2 class="sync-card-title">Avatar orientation</h2>
         </div>
-        <p class="sync-card-hint">Some avatars uploaded by older versions are stored sideways: they carry an EXIF
-          orientation tag that the map view ignores. Scan the avatar cache for affected images, review the corrected
-          previews, then rotate and re-save the ones you select.</p>
+        <p class="sync-card-hint">Some avatars were uploaded sideways. Because they are stored as plain cropped
+          squares with no reliable orientation metadata, they can't be detected automatically &mdash; load the full
+          list below, visually spot the sideways ones, rotate each with the arrows, then save. Only rotated avatars
+          are re-written.</p>
         <div class="sync-form-actions">
-          <button type="button" class="sync-btn sync-btn-primary" id="avatarOrientScanBtn" onClick="scanAvatarOrientation()">Scan avatars&hellip;</button>
+          <button type="button" class="sync-btn sync-btn-primary" id="avatarOrientLoadBtn" onClick="loadAvatars()">Load avatars&hellip;</button>
+          <input type="text" id="avatarOrientFilter" class="sync-input" placeholder="Filter by user id" style="display:none;max-width:220px;margin-left:10px;" oninput="filterAvatars(this.value)">
           <span id="avatarOrientStatus" class="sync-status-text" style="margin-left:10px;"></span>
         </div>
         <div id="avatarOrientResults" style="display:none;margin-top:14px;">
           <div id="avatarOrientGrid" class="avatar-orient-grid"></div>
           <div class="sync-form-actions" style="margin-top:12px;">
-            <button type="button" class="sync-btn" onClick="toggleAvatarOrientAll(this)">Select none</button>
-            <button type="button" class="sync-btn sync-btn-primary" id="avatarOrientApplyBtn" onClick="applyAvatarOrientation()">Rotate &amp; save selected</button>
+            <span id="avatarOrientPending" class="sync-status-text"></span>
+            <button type="button" class="sync-btn sync-btn-primary" id="avatarOrientApplyBtn" onClick="saveAvatarRotations()" disabled>Save rotations</button>
           </div>
         </div>
       </div>
