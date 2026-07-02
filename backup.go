@@ -33,7 +33,7 @@ type backupGroup struct {
 var backupGroups = []backupGroup{
 	{Key: "maps", Label: "Maps & desks", Buckets: [][]byte{bucketMaps, bucketDesks}},
 	{Key: "users", Label: "Users, roles, teams & departments", Buckets: [][]byte{bucketUsers, bucketRoles, bucketTeams, bucketDepts, bucketVips}},
-	{Key: "ldap", Label: "LDAP directory & sources", Buckets: [][]byte{bucketLdap, bucketDirectory, bucketLdapSrc, bucketChangelog}},
+	{Key: "ldap", Label: "LDAP directory & sources", Buckets: [][]byte{bucketLdap, bucketDirectory, bucketLdapSrc, bucketChangelog, bucketSrcMirror, bucketSrcDir}},
 	{Key: "bookings", Label: "Bookings", Buckets: [][]byte{bucketBookings}},
 	{Key: "settings", Label: "Settings & integrations", Buckets: [][]byte{bucketSettings, bucketMeta, bucketGeoCfg, bucketRobinCfg, bucketRobin, bucketRobinDesk, bucketMeeting, bucketWhitelist}},
 	{Key: "stats", Label: "Statistics & audit log", Buckets: [][]byte{bucketStats, bucketTracking, bucketAudit}},

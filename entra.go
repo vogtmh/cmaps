@@ -432,9 +432,9 @@ func (app *App) RunEntraSync() (int, error) {
 }
 
 // runEntraSync fetches all users from every enabled EntraID source, derives the
-// office-filtered desk-placement mirror for each, and stores the combined result
-// in the EntraID bucket (replacing it wholesale, so disabled/removed sources
-// drop out on the next run).
+// office-filtered desk-placement mirror for each and stores it in that source's
+// own bucket, then rebuilds the combined EntraID mirror from all enabled
+// sources (combine-on-write), so a single-source sync never wipes the others.
 func (app *App) runEntraSync(prog *syncProgress) (int, error) {
 	sources, err := app.db.ListEntraSources()
 	if err != nil {
@@ -455,9 +455,7 @@ func (app *App) runEntraSync(prog *syncProgress) (int, error) {
 		prog.logf("Starting sync of %d EntraID source(s)…", len(sources))
 	}
 
-	avatars := app.avatarFileSet()
 	now := time.Now().Format("2006-01-02 15:04:05")
-	var combined []LdapUser
 
 	for _, src := range sources {
 		if prog != nil {
@@ -470,7 +468,7 @@ func (app *App) runEntraSync(prog *syncProgress) (int, error) {
 				prog.logf("   ✗ %s: %s", src.Description, err.Error())
 				prog.step("")
 			}
-			return len(combined), fmt.Errorf("source %q: %w", src.Description, err)
+			return 0, fmt.Errorf("source %q: %w", src.Description, err)
 		}
 		users, err := client.listUsers()
 		if err != nil {
@@ -478,7 +476,7 @@ func (app *App) runEntraSync(prog *syncProgress) (int, error) {
 				prog.logf("   ✗ %s: %s", src.Description, err.Error())
 				prog.step("")
 			}
-			return len(combined), fmt.Errorf("source %q: graph list users: %w", src.Description, err)
+			return 0, fmt.Errorf("source %q: graph list users: %w", src.Description, err)
 		}
 
 		dir := make([]DirectoryUser, 0, len(users))
@@ -489,10 +487,9 @@ func (app *App) runEntraSync(prog *syncProgress) (int, error) {
 			dir = append(dir, graphUserToDirectory(u))
 		}
 		mirror := deriveMirrorUsers(dir)
-		for i := range mirror {
-			mirror[i].HasAvatar = avatars[strings.ToLower(mirror[i].Userid)]
+		if err := app.db.PutSourceMirror("entra", src.ID, mirror); err != nil {
+			log.Printf("EntraID sync: writing source mirror for %q: %v", src.Description, err)
 		}
-		combined = append(combined, mirror...)
 
 		src.LastSync = now
 		if err := app.db.PutEntraSource(src); err != nil {
@@ -504,33 +501,42 @@ func (app *App) runEntraSync(prog *syncProgress) (int, error) {
 		}
 	}
 
+	count, err := app.rebuildEntraMirror()
+	if err != nil {
+		return count, err
+	}
+	_ = app.db.SetMeta("entraSeeded", "1")
+	_ = app.db.SetEntraSetting("entraLastSync", now)
+	if prog != nil {
+		prog.logf("Done. %d desk placement(s) from %d source(s).", count, len(sources))
+	}
+	return count, nil
+}
+
+// rebuildEntraMirror recombines every enabled EntraID source's per-source mirror
+// into the shared EntraID mirror cache (combine-on-write). EntraID has no
+// change detection, so no changelog announcements are produced.
+func (app *App) rebuildEntraMirror() (int, error) {
+	sources, err := app.db.ListEntraSources()
+	if err != nil {
+		return 0, fmt.Errorf("loading EntraID sources: %w", err)
+	}
+	var combined []LdapUser
+	for _, src := range sources {
+		if src.Disabled {
+			continue
+		}
+		users, _ := app.db.GetSourceMirror("entra", src.ID)
+		combined = append(combined, users...)
+	}
+	avatars := app.avatarFileSet()
+	for i := range combined {
+		combined[i].HasAvatar = avatars[strings.ToLower(combined[i].Userid)]
+	}
 	if err := app.db.ReplaceEntraLdap(combined); err != nil {
 		return len(combined), fmt.Errorf("writing EntraID mirror: %w", err)
 	}
-	_ = app.db.SetEntraSetting("entraLastSync", now)
-	if prog != nil {
-		prog.logf("Done. %d desk placement(s) from %d source(s).", len(combined), len(sources))
-	}
 	return len(combined), nil
-}
-
-// StartEntraSyncScheduler runs RunEntraSync in the background on a fixed
-// interval. Sync is skipped when no EntraID source is enabled.
-func (app *App) StartEntraSyncScheduler(interval time.Duration) {
-	go func() {
-		ticker := time.NewTicker(interval)
-		defer ticker.Stop()
-		for range ticker.C {
-			if !app.entraHasEnabledSource() {
-				continue
-			}
-			if n, err := app.RunEntraSync(); err != nil {
-				log.Printf("scheduled EntraID sync failed: %v", err)
-			} else {
-				log.Printf("scheduled EntraID sync: %d placements mirrored", n)
-			}
-		}
-	}()
 }
 
 // ──────────────────────────────────────────────
@@ -684,6 +690,19 @@ func (app *App) handleRestEntraSyncOne(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "connection is disabled", http.StatusConflict)
 		return
 	}
+	// If the per-source buckets have not been seeded yet (fresh upgrade), fall
+	// back to a full sync so we never publish a mirror built from just one
+	// source (which would drop the others until their next sync).
+	if app.db.GetMeta("entraSeeded") != "1" {
+		count, err := app.RunEntraSync()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		_ = app.db.AuditLog("LDAP", sess.Username, "Manual EntraID sync of source "+strconv.Itoa(id))
+		writeJSON(w, map[string]interface{}{"status": "ok", "count": count})
+		return
+	}
 	client, err := newEntraClient(*src)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -702,11 +721,12 @@ func (app *App) handleRestEntraSyncOne(w http.ResponseWriter, r *http.Request) {
 		dir = append(dir, graphUserToDirectory(u))
 	}
 	mirror := deriveMirrorUsers(dir)
-	avatars := app.avatarFileSet()
-	for i := range mirror {
-		mirror[i].HasAvatar = avatars[strings.ToLower(mirror[i].Userid)]
+	if err := app.db.PutSourceMirror("entra", src.ID, mirror); err != nil {
+		http.Error(w, "writing EntraID mirror: "+err.Error(), http.StatusInternalServerError)
+		return
 	}
-	if err := app.db.ReplaceEntraLdap(mirror); err != nil {
+	count, err := app.rebuildEntraMirror()
+	if err != nil {
 		http.Error(w, "writing EntraID mirror: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -715,5 +735,5 @@ func (app *App) handleRestEntraSyncOne(w http.ResponseWriter, r *http.Request) {
 	_ = app.db.PutEntraSource(*src)
 	_ = app.db.SetEntraSetting("entraLastSync", now)
 	_ = app.db.AuditLog("LDAP", sess.Username, "Manual EntraID sync of source "+strconv.Itoa(id))
-	writeJSON(w, map[string]interface{}{"status": "ok", "count": len(mirror)})
+	writeJSON(w, map[string]interface{}{"status": "ok", "count": count})
 }

@@ -525,7 +525,7 @@
           <tr>
             <th class="sync-td-min">Enabled</th>
             <th>Description</th><th>Server</th><th>Type</th><th>OU</th>
-            <th>Bind user</th><th>Last sync</th>
+            <th>Bind user</th><th>Last sync</th><th>Next sync</th>
             <th class="sync-td-min"></th>
           </tr>
         </thead>
@@ -544,7 +544,7 @@
             </td>
             <td>{{.Description}}</td><td>{{.Server}}</td>
             <td><span class="sync-badge sync-badge-accent">{{.Type}}</span></td>
-            <td>{{.OU}}</td><td>{{.LdapUser}}</td><td>{{.LastSync}}</td>
+            <td>{{.OU}}</td><td>{{.LdapUser}}</td><td>{{.LastSync}}</td><td>{{$.NextLdapSync}}</td>
             <td class="sync-td-min">
               <div style="display:flex; gap:6px; justify-content:flex-end;">
                 <button type="button" class="sync-btn sync-btn-sm" id="ldaptestbtn{{.ID}}" data-desc="{{.Description}}" onClick="testLDAP({{.ID}})">Test</button>
@@ -628,7 +628,7 @@
           <tr>
             <th class="sync-td-min">Enabled</th>
             <th>Description</th><th>Tenant ID</th><th>Client ID</th><th>Auth</th>
-            <th>Last sync</th>
+            <th>Last sync</th><th>Next sync</th>
             <th class="sync-td-min"></th>
           </tr>
         </thead>
@@ -647,7 +647,7 @@
             </td>
             <td>{{.Description}}</td><td>{{.TenantID}}</td><td>{{.ClientID}}</td>
             <td><span class="sync-badge sync-badge-accent">{{if eq .AuthMethod "certificate"}}Certificate{{else}}Secret{{end}}</span></td>
-            <td>{{.LastSync}}</td>
+            <td>{{.LastSync}}</td><td>{{$.NextEntraSync}}</td>
             <td class="sync-td-min">
               <div style="display:flex; gap:6px; justify-content:flex-end;">
                 <button type="button" class="sync-btn sync-btn-sm" id="entratestbtn{{.ID}}" data-desc="{{.Description}}" onClick="testEntra({{.ID}})">Test</button>
@@ -986,6 +986,7 @@
           <div class="sync-summary-item"><span class="sync-summary-num">{{.RobinLastSync.TotalRooms}}</span><span class="sync-summary-lbl">Rooms found</span></div>
           <div class="sync-summary-item"><span class="sync-summary-num" style="color:var(--sy-ok);">{{.RobinLastSync.MatchedRooms}}</span><span class="sync-summary-lbl">Matched a desk</span></div>
           <div class="sync-summary-item"><span class="sync-summary-num" style="font-size:1.05em;">{{.RobinLastSync.Time}}</span><span class="sync-summary-lbl">Last run</span></div>
+          {{if $.NextRobinSync}}<div class="sync-summary-item"><span class="sync-summary-num" style="font-size:1.05em;">{{$.NextRobinSync}}</span><span class="sync-summary-lbl">Next run</span></div>{{end}}
         </div>
         {{if .RobinLastSync.Note}}<p class="sync-card-hint" style="margin-top:10px;">{{.RobinLastSync.Note}}</p>{{end}}
         {{range .RobinLastSync.Locations}}

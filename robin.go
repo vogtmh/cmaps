@@ -268,21 +268,23 @@ func (app *App) robinEnabled() bool {
 }
 
 // StartRobinScheduler refreshes the Robin meeting cache on a fixed interval.
-// No-op while no Robin token is configured.
+// No-op while no Robin token is configured. The next scheduled run time is
+// recorded for the admin Sync tab even when a tick is skipped (disabled).
 func (app *App) StartRobinScheduler(interval time.Duration) {
 	go func() {
+		app.setNextSync(&app.nextRobinSync, time.Now().Add(interval))
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
 		for range ticker.C {
-			if !app.robinEnabled() || app.db.GetRobinSetting("robintoken") == "" {
-				continue
+			if app.robinEnabled() && app.db.GetRobinSetting("robintoken") != "" {
+				// A scheduled run also records the last-sync time and per-room
+				// match results so the admin Sync tab can show what happened.
+				app.RunRobinSyncStructured()
+				// Refresh the live desk-occupancy overlay cache (no-op unless the
+				// overlay is enabled). Kept separate from the meeting/booking data.
+				app.pollRobinDeskOccupancy(nil)
 			}
-			// A scheduled run also records the last-sync time and per-room match
-			// results so the admin Sync tab can show what happened.
-			app.RunRobinSyncStructured()
-			// Refresh the live desk-occupancy overlay cache (no-op unless the
-			// overlay is enabled). Kept separate from the meeting/booking data.
-			app.pollRobinDeskOccupancy(nil)
+			app.setNextSync(&app.nextRobinSync, time.Now().Add(interval))
 		}
 	}()
 }

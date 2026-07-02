@@ -111,14 +111,36 @@ func main() {
 	// desk/changes payloads) are compressed for clients that support it.
 	handler := gzipMiddleware(mux)
 
-	// Background AD mirror refresh (no-op until an AD source is configured).
-	app.StartADSyncScheduler(6 * time.Hour)
+	// Background AD mirror refresh: first run 5 minutes after startup, then
+	// hourly (no-op while no AD source is enabled).
+	app.startPeriodicSync(firstSyncDelay, syncInterval,
+		app.anyLdapSourceEnabled,
+		func() {
+			if n, err := app.RunADSync(); err != nil {
+				log.Printf("scheduled AD sync failed: %v", err)
+			} else {
+				log.Printf("scheduled AD sync: %d placements mirrored", n)
+			}
+		},
+		func(t time.Time) { app.setNextSync(&app.nextLdapSync, t) },
+	)
 
-	// Background EntraID (Microsoft Graph) mirror refresh (no-op until the
-	// EntraID app registration is configured). Same schedule as the AD sync.
-	app.StartEntraSyncScheduler(6 * time.Hour)
+	// Background EntraID (Microsoft Graph) mirror refresh: same cadence as AD
+	// (no-op until an EntraID app registration is enabled).
+	app.startPeriodicSync(firstSyncDelay, syncInterval,
+		app.entraHasEnabledSource,
+		func() {
+			if n, err := app.RunEntraSync(); err != nil {
+				log.Printf("scheduled EntraID sync failed: %v", err)
+			} else {
+				log.Printf("scheduled EntraID sync: %d placements mirrored", n)
+			}
+		},
+		func(t time.Time) { app.setNextSync(&app.nextEntraSync, t) },
+	)
 
-	// Background Robin meeting-room refresh (no-op until Robin is configured).
+	// Background Robin meeting-room + desk-occupancy refresh every 5 minutes
+	// (first run 5 minutes after startup, no-op until Robin is configured).
 	app.StartRobinScheduler(5 * time.Minute)
 
 	// Background Robin location discovery (no-op until token + organisation set).
@@ -128,6 +150,32 @@ func main() {
 	if err := http.ListenAndServe(cfg.ListenAddr, handler); err != nil {
 		log.Fatalf("server: %v", err)
 	}
+}
+
+// Scheduled-sync cadence: the first automatic LDAP/EntraID sync runs shortly
+// after startup, then repeats hourly. Robin keeps its own 5-minute ticker.
+const (
+	firstSyncDelay = 5 * time.Minute
+	syncInterval   = 60 * time.Minute
+)
+
+// startPeriodicSync runs run() first after `first`, then every `interval`. It
+// records the next scheduled fire time via setNext (even while disabled, so the
+// admin Sync tab always shows a next time) and skips the actual run whenever
+// enabled() reports false.
+func (app *App) startPeriodicSync(first, interval time.Duration, enabled func() bool, run func(), setNext func(time.Time)) {
+	go func() {
+		setNext(time.Now().Add(first))
+		timer := time.NewTimer(first)
+		defer timer.Stop()
+		for range timer.C {
+			if enabled() {
+				run()
+			}
+			setNext(time.Now().Add(interval))
+			timer.Reset(interval)
+		}
+	}()
 }
 
 func (app *App) routes(mux *http.ServeMux) {

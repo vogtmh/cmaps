@@ -58,6 +58,28 @@ type App struct {
 	geoProg   syncProgress
 	geoMu     sync.Mutex
 	geoResult GeoSyncResult
+
+	// next*Sync hold the wall-clock time of the next scheduled automatic sync for
+	// each integration, surfaced in the admin Sync tab. In-memory only (they
+	// reset on restart, which is correct since the schedulers re-arm on boot).
+	nextSyncMu    sync.Mutex
+	nextLdapSync  time.Time
+	nextEntraSync time.Time
+	nextRobinSync time.Time
+}
+
+// setNextSync records the next scheduled sync time for one integration.
+func (app *App) setNextSync(dst *time.Time, t time.Time) {
+	app.nextSyncMu.Lock()
+	*dst = t
+	app.nextSyncMu.Unlock()
+}
+
+// getNextSync returns the next scheduled sync time for one integration.
+func (app *App) getNextSync(src *time.Time) time.Time {
+	app.nextSyncMu.Lock()
+	defer app.nextSyncMu.Unlock()
+	return *src
 }
 
 // Session holds the authenticated user's identity, mirroring the PHP $_SESSION

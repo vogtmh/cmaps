@@ -57,6 +57,11 @@ func (app *App) RunADSync() (int, error) {
 // runADSync is the worker behind RunADSync. When prog is non-nil it reports
 // per-source progress and a live log so the admin Sync tab can render a progress
 // bar during a manual sync.
+//
+// Each source is fetched and derived independently and stored in its own
+// per-source bucket, after which the shared combined caches are rebuilt from all
+// enabled sources (combine-on-write). This keeps a single failed/partial source
+// from wiping the others and lets a per-source "Sync now" refresh just that one.
 func (app *App) runADSync(prog *syncProgress) (int, error) {
 	sources, err := app.db.ListLdapSources()
 	if err != nil {
@@ -65,8 +70,8 @@ func (app *App) runADSync(prog *syncProgress) (int, error) {
 	if len(sources) == 0 {
 		return 0, fmt.Errorf("no AD sources configured")
 	}
-	// Skip deactivated sources: their placements are dropped from the mirror on
-	// the next sync because ReplaceLdap rewrites the whole mirror below.
+	// Skip deactivated sources: their placements are dropped from the combined
+	// mirror because rebuildLdapMirror only unions enabled sources below.
 	enabled := sources[:0]
 	for _, s := range sources {
 		if !s.Disabled {
@@ -82,21 +87,7 @@ func (app *App) runADSync(prog *syncProgress) (int, error) {
 		prog.logf("Starting sync of %d source(s)…", len(sources))
 	}
 
-	// Snapshot the existing mirror, keyed by userid, for change detection.
-	oldUsers, _ := app.db.ListLdap()
-	oldByID := make(map[string]LdapUser, len(oldUsers))
-	for _, u := range oldUsers {
-		if _, ok := oldByID[u.Userid]; !ok {
-			oldByID[u.Userid] = u
-		}
-	}
-
 	now := time.Now().In(app.db.loc)
-
-	var combined []LdapUser
-	var allDir []DirectoryUser
-	dirSeen := make(map[string]bool)
-	seen := make(map[string]bool)
 	debug := ADSyncDebug{When: now.Format("2006-01-02 15:04:05")}
 
 	for _, src := range sources {
@@ -110,18 +101,90 @@ func (app *App) runADSync(prog *syncProgress) (int, error) {
 		debug.Sources = append(debug.Sources, dbg)
 		if err != nil {
 			log.Printf("AD sync: source %q: %v", src.Description, err)
-			debug.Total = len(combined)
 			app.setSyncDebug(debug)
 			if prog != nil {
 				prog.logf("   ✗ %s: %s", src.Description, err.Error())
 				prog.step("")
 			}
-			return len(combined), fmt.Errorf("source %q: %w", src.Description, err)
+			return 0, fmt.Errorf("source %q: %w", src.Description, err)
 		}
 		if prog != nil {
 			prog.logf("   connected=%v bound=%v · directory: %d · desk placements: %d",
 				dbg.Connected, dbg.Bound, dbg.EntriesFound, dbg.Mirrored)
 		}
+
+		// Store this source's data in its own bucket (combine-on-write).
+		if err := app.db.PutSourceDir(src.ID, dirUsers); err != nil {
+			log.Printf("AD sync: writing source directory for %q: %v", src.Description, err)
+		}
+		if err := app.db.PutSourceMirror("ldap", src.ID, users); err != nil {
+			log.Printf("AD sync: writing source mirror for %q: %v", src.Description, err)
+		}
+
+		src.LastSync = now.Format("2006-01-02 15:04:05")
+		if err := app.db.PutLdapSource(src); err != nil {
+			log.Printf("AD sync: updating LastSync for %q: %v", src.Description, err)
+		}
+		_ = app.db.AuditLog("LDAP", "System", src.Description+" has been synced.")
+		if prog != nil {
+			prog.step("")
+		}
+	}
+
+	// Recombine all per-source mirrors into the shared caches. The very first
+	// rebuild after a fresh install/upgrade suppresses changelog announcements so
+	// seeding does not flood the changelog with "new employee" entries.
+	announce := app.db.GetMeta("ldapSeeded") == "1"
+	count, err := app.rebuildLdapMirror(announce)
+	if err != nil {
+		return count, err
+	}
+	_ = app.db.SetMeta("ldapSeeded", "1")
+
+	debug.Total = count
+	app.setSyncDebug(debug)
+	if prog != nil {
+		prog.logf("Done. %d desk placement(s) from %d source(s).", count, len(sources))
+	}
+	return count, nil
+}
+
+// rebuildLdapMirror recombines every enabled LDAP source's per-source mirror
+// (and directory snapshot) into the shared ldapmirror + directory caches
+// (combine-on-write). When announce is true it diffs the freshly combined mirror
+// against the current one and records employee/title/name changes in the
+// changelog; the first rebuild after a fresh install/upgrade passes
+// announce=false so seeding existing data produces no announcements.
+func (app *App) rebuildLdapMirror(announce bool) (int, error) {
+	sources, err := app.db.ListLdapSources()
+	if err != nil {
+		return 0, fmt.Errorf("loading AD sources: %w", err)
+	}
+	now := time.Now().In(app.db.loc)
+
+	// Snapshot the existing mirror (keyed by userid) for change detection.
+	var oldByID map[string]LdapUser
+	if announce {
+		oldUsers, _ := app.db.ListLdap()
+		oldByID = make(map[string]LdapUser, len(oldUsers))
+		for _, u := range oldUsers {
+			if _, ok := oldByID[u.Userid]; !ok {
+				oldByID[u.Userid] = u
+			}
+		}
+	}
+
+	var combined []LdapUser
+	var allDir []DirectoryUser
+	dirSeen := make(map[string]bool)
+	seen := make(map[string]bool)
+
+	for _, src := range sources {
+		if src.Disabled {
+			continue
+		}
+		users, _ := app.db.GetSourceMirror("ldap", src.ID)
+		dirUsers, _ := app.db.GetSourceDir(src.ID)
 
 		// Accumulate the full directory snapshot (deduplicated across sources).
 		for _, d := range dirUsers {
@@ -135,7 +198,9 @@ func (app *App) runADSync(prog *syncProgress) (int, error) {
 
 		for _, u := range users {
 			combined = append(combined, u)
-
+			if !announce {
+				continue
+			}
 			// Change detection is per unique user (first placement only).
 			if seen[u.Userid] {
 				continue
@@ -155,20 +220,8 @@ func (app *App) runADSync(prog *syncProgress) (int, error) {
 				app.logChange(now, fullname, u.Userid, "Name", old.Surname, u.Surname)
 			}
 		}
-
-		src.LastSync = now.Format("2006-01-02 15:04:05")
-		if err := app.db.PutLdapSource(src); err != nil {
-			log.Printf("AD sync: updating LastSync for %q: %v", src.Description, err)
-		}
-		_ = app.db.AuditLog("LDAP", "System", src.Description+" has been synced.")
-		if prog != nil {
-			prog.step("")
-		}
 	}
 
-	if err := app.db.ReplaceDirectory(allDir); err != nil {
-		log.Printf("AD sync: writing directory: %v", err)
-	}
 	// Flag which mirrored users have a cached avatar on disk so the client can
 	// point everyone without one at a single shared placeholder instead of
 	// requesting a unique (missing) image per person.
@@ -176,16 +229,15 @@ func (app *App) runADSync(prog *syncProgress) (int, error) {
 	for i := range combined {
 		combined[i].HasAvatar = avatars[strings.ToLower(combined[i].Userid)]
 	}
+
+	if err := app.db.ReplaceDirectory(allDir); err != nil {
+		log.Printf("AD sync: writing directory: %v", err)
+	}
 	if err := app.db.ReplaceLdap(combined); err != nil {
 		return len(combined), fmt.Errorf("writing mirror: %w", err)
 	}
 	// Refresh stored full names for existing admins from the fresh directory.
 	app.refreshAdminNames(allDir)
-	debug.Total = len(combined)
-	app.setSyncDebug(debug)
-	if prog != nil {
-		prog.logf("Done. %d directory user(s), %d desk placement(s) from %d source(s).", len(allDir), len(combined), len(sources))
-	}
 	return len(combined), nil
 }
 
@@ -240,20 +292,6 @@ func (app *App) SyncDebug() ADSyncDebug {
 	app.syncDebugMu.Lock()
 	defer app.syncDebugMu.Unlock()
 	return app.syncDebug
-}
-
-// syncOneSource queries one AD source A-Z and returns the office-filtered mirror
-// placements for that source. It is a thin wrapper that fetches the full
-// directory for the source and then derives the mirror locally, so callers that
-// only need the mirror (e.g. the per-source "Sync now" button) keep working.
-func (app *App) syncOneSource(src LdapSource) ([]LdapUser, SourceDebug, error) {
-	dir, dbg, err := app.fetchSourceDirectory(src)
-	if err != nil {
-		return nil, dbg, err
-	}
-	mirror := deriveMirrorUsers(dir)
-	dbg.Mirrored = len(mirror)
-	return mirror, dbg, nil
 }
 
 // fetchSourceDirectory queries one AD source A-Z and returns EVERY enabled user
@@ -545,32 +583,14 @@ func (app *App) logChange(now time.Time, name, avatar, changeType, oldVal, newVa
 	})
 }
 
-// StartADSyncScheduler runs RunADSync in the background on a fixed interval.
-// Sync is skipped when no AD sources are configured.
-func (app *App) StartADSyncScheduler(interval time.Duration) {
-	go func() {
-		ticker := time.NewTicker(interval)
-		defer ticker.Stop()
-		for range ticker.C {
-			// Skip when there is nothing enabled to sync (no sources, or every
-			// source deactivated) so the scheduler stays quiet instead of logging
-			// a "no enabled AD sources" error every interval.
-			sources, _ := app.db.ListLdapSources()
-			anyEnabled := false
-			for _, s := range sources {
-				if !s.Disabled {
-					anyEnabled = true
-					break
-				}
-			}
-			if !anyEnabled {
-				continue
-			}
-			if n, err := app.RunADSync(); err != nil {
-				log.Printf("scheduled AD sync failed: %v", err)
-			} else {
-				log.Printf("scheduled AD sync: %d placements mirrored", n)
-			}
+// anyLdapSourceEnabled reports whether at least one non-disabled LDAP source is
+// configured (used to decide whether the scheduled AD sync should run).
+func (app *App) anyLdapSourceEnabled() bool {
+	sources, _ := app.db.ListLdapSources()
+	for _, s := range sources {
+		if !s.Disabled {
+			return true
 		}
-	}()
+	}
+	return false
 }

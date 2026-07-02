@@ -133,6 +133,9 @@ type adminData struct {
 	GeoEnabled              bool
 	GeoUsageMonth           string
 	GeoUsageCount           int
+	NextLdapSync            string
+	NextEntraSync           string
+	NextRobinSync           string
 	RobinLastSync           RobinSyncResult
 	RobinHasSync            bool
 	RobinDeskMode           string
@@ -311,6 +314,13 @@ func (app *App) handleAdminPost(w http.ResponseWriter, r *http.Request, sess Ses
 		if id := r.FormValue("deleteEntraID"); id != "" {
 			if n, err := strconv.Atoi(id); err == nil {
 				_ = app.db.DeleteEntraSource(n)
+				_ = app.db.DeleteSourceMirror("entra", n)
+				// Only rebuild the combined mirror once the per-source buckets
+				// have been seeded; before that the combined cache holds preserved
+				// pre-upgrade data that a rebuild from empty sources would wipe.
+				if app.db.GetMeta("entraSeeded") == "1" {
+					_, _ = app.rebuildEntraMirror()
+				}
 				_ = app.db.AuditLog("LDAP", sess.Username, "EntraID connection removed (id "+id+")")
 				return "EntraID connection removed."
 			}
@@ -462,6 +472,14 @@ func (app *App) handleAdminPost(w http.ResponseWriter, r *http.Request, sess Ses
 		if id := r.FormValue("deleteLdapID"); id != "" {
 			if n, err := strconv.Atoi(id); err == nil {
 				_ = app.db.DeleteLdapSource(n)
+				_ = app.db.DeleteSourceMirror("ldap", n)
+				_ = app.db.DeleteSourceDir(n)
+				// Only rebuild the combined mirror once the per-source buckets
+				// have been seeded; before that the combined cache holds preserved
+				// pre-upgrade data that a rebuild from empty sources would wipe.
+				if app.db.GetMeta("ldapSeeded") == "1" {
+					_, _ = app.rebuildLdapMirror(true)
+				}
 				_ = app.db.AuditLog("LDAP", sess.Username, "LDAP sync removed (id "+id+")")
 				return "LDAP source removed."
 			}
@@ -1086,6 +1104,9 @@ func (app *App) buildAdminData(r *http.Request, sess Session, tab, msg string) a
 		d.GeoapifySet = app.db.GetGeoSetting("geoapifyApiKey") != ""
 		d.GeoEnabled = app.geoEnabled()
 		d.GeoUsageMonth, d.GeoUsageCount = app.db.GetGeoUsage()
+		d.NextLdapSync = app.nextSyncLabel(app.getNextSync(&app.nextLdapSync), app.anyLdapSourceEnabled())
+		d.NextEntraSync = app.nextSyncLabel(app.getNextSync(&app.nextEntraSync), app.entraHasEnabledSource())
+		d.NextRobinSync = app.nextSyncLabel(app.getNextSync(&app.nextRobinSync), app.robinEnabled() && app.db.GetRobinSetting("robintoken") != "")
 		// Build the map dropdown: published maps plus any value currently in use
 		// (so every row's selection stays selectable even if it isn't a real map yet).
 		mapSet := map[string]bool{}
@@ -1495,7 +1516,23 @@ func (app *App) handleRestLdap(w http.ResponseWriter, r *http.Request) {
 			srcs, _ := app.db.ListLdapSources()
 			for _, s := range srcs {
 				if s.ID == id {
-					users, dbg, err := app.syncOneSource(s)
+					// If the per-source buckets have not been seeded yet (fresh
+					// upgrade), fall back to a full sync so we never publish a
+					// mirror built from just one source (which would drop the
+					// others until their next sync).
+					if app.db.GetMeta("ldapSeeded") != "1" {
+						count, err := app.RunADSync()
+						if err != nil {
+							http.Error(w, err.Error(), http.StatusInternalServerError)
+							return
+						}
+						_ = app.db.AuditLog("LDAP", sess.Username, "Manual sync of source "+idStr)
+						writeJSON(w, map[string]interface{}{"status": "ok", "count": count})
+						return
+					}
+					dir, dbg, err := app.fetchSourceDirectory(s)
+					users := deriveMirrorUsers(dir)
+					dbg.Mirrored = len(users)
 					app.setSyncDebug(ADSyncDebug{
 						When:    nowTimestamp(),
 						Total:   len(users),
@@ -1505,11 +1542,17 @@ func (app *App) handleRestLdap(w http.ResponseWriter, r *http.Request) {
 						http.Error(w, err.Error(), http.StatusInternalServerError)
 						return
 					}
+					_ = app.db.PutSourceDir(s.ID, dir)
+					_ = app.db.PutSourceMirror("ldap", s.ID, users)
 					s.LastSync = nowTimestamp()
 					_ = app.db.PutLdapSource(s)
-					_ = app.db.ReplaceLdap(users)
+					count, err := app.rebuildLdapMirror(true)
+					if err != nil {
+						http.Error(w, err.Error(), http.StatusInternalServerError)
+						return
+					}
 					_ = app.db.AuditLog("LDAP", sess.Username, "Manual sync of source "+idStr)
-					writeJSON(w, map[string]interface{}{"status": "ok", "count": len(users)})
+					writeJSON(w, map[string]interface{}{"status": "ok", "count": count})
 					return
 				}
 			}
@@ -2347,4 +2390,17 @@ func removeFileIfExists(path string) error {
 // nowTimestamp returns the current local time in the audit/sync format.
 func nowTimestamp() string {
 	return time.Now().Format("2006-01-02 15:04:05")
+}
+
+// nextSyncLabel formats a scheduled next-sync time for the admin Sync tab. When
+// the integration is disabled it returns a paused note; a zero time (scheduler
+// not yet armed) returns an empty string.
+func (app *App) nextSyncLabel(t time.Time, enabled bool) string {
+	if !enabled {
+		return "Paused (disabled)"
+	}
+	if t.IsZero() {
+		return ""
+	}
+	return t.In(app.db.loc).Format("2006-01-02 15:04:05")
 }

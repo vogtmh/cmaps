@@ -42,6 +42,8 @@ var (
 	bucketEntraLdap = []byte("entraidmirror")   // EntraID (Graph) office-filtered mirror, same shape as ldapmirror
 	bucketEntraCfg  = []byte("entraidconfig")   // EntraID app-registration credentials / last-sync (key = name)
 	bucketEntraSrc  = []byte("entraidsources")  // EntraID app registrations, one per connection (key = id)
+	bucketSrcMirror = []byte("sourcemirror")    // per-source desk placements (key = "ldap:<id>"/"entra:<id>" -> JSON []LdapUser)
+	bucketSrcDir    = []byte("sourcedir")       // per-source full directory snapshot (key = "ldap:<id>" -> JSON []DirectoryUser)
 )
 
 var allBuckets = [][]byte{
@@ -49,7 +51,7 @@ var allBuckets = [][]byte{
 	bucketRoles, bucketUsers, bucketChangelog, bucketStats, bucketTracking, bucketVips,
 	bucketDepts, bucketRobin, bucketMeeting, bucketWhitelist, bucketLdapSrc, bucketAudit,
 	bucketMeta, bucketDirectory, bucketRobinCfg, bucketRobinDesk, bucketGeoCfg, bucketItemTypes,
-	bucketEntraLdap, bucketEntraCfg, bucketEntraSrc,
+	bucketEntraLdap, bucketEntraCfg, bucketEntraSrc, bucketSrcMirror, bucketSrcDir,
 }
 
 type DB struct {
@@ -832,6 +834,50 @@ func (db *DB) SetLdapAvatar(userid string, has bool) error {
 		}
 		return nil
 	})
+}
+
+// --- Per-source mirrors (combine-on-write) ---
+//
+// Each sync source (LDAP or EntraID) stores its own derived desk placements
+// (and, for LDAP, its full directory snapshot) under its own key. The shared
+// combined caches (bucketLdap/bucketEntraLdap/bucketDirectory) are then rebuilt
+// by unioning the enabled sources, so a single-source sync never wipes the
+// others. Keys are "ldap:<id>" and "entra:<id>".
+
+func srcKey(kind string, id int) []byte {
+	return []byte(fmt.Sprintf("%s:%d", kind, id))
+}
+
+// PutSourceMirror stores one source's derived desk placements.
+func (db *DB) PutSourceMirror(kind string, id int, users []LdapUser) error {
+	return putJSON(db, bucketSrcMirror, srcKey(kind, id), users)
+}
+
+// GetSourceMirror returns one source's derived desk placements (nil if unset).
+func (db *DB) GetSourceMirror(kind string, id int) ([]LdapUser, error) {
+	users, _, err := getJSON[[]LdapUser](db, bucketSrcMirror, srcKey(kind, id))
+	return users, err
+}
+
+// DeleteSourceMirror removes one source's derived desk placements.
+func (db *DB) DeleteSourceMirror(kind string, id int) error {
+	return deleteKey(db, bucketSrcMirror, srcKey(kind, id))
+}
+
+// PutSourceDir stores one LDAP source's full directory snapshot.
+func (db *DB) PutSourceDir(id int, users []DirectoryUser) error {
+	return putJSON(db, bucketSrcDir, srcKey("ldap", id), users)
+}
+
+// GetSourceDir returns one LDAP source's full directory snapshot (nil if unset).
+func (db *DB) GetSourceDir(id int) ([]DirectoryUser, error) {
+	users, _, err := getJSON[[]DirectoryUser](db, bucketSrcDir, srcKey("ldap", id))
+	return users, err
+}
+
+// DeleteSourceDir removes one LDAP source's full directory snapshot.
+func (db *DB) DeleteSourceDir(id int) error {
+	return deleteKey(db, bucketSrcDir, srcKey("ldap", id))
 }
 
 // --- EntraID mirror (Microsoft Graph, same shape as the LDAP mirror) ---
