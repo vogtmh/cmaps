@@ -617,6 +617,12 @@ function showNameplate (deskid, desktype) {
         var caption = attr.empl;
         var avatar = 'images/hotseat.png';
         var avatarcolor = $('#' + attr.id).css('background-color');
+        // Internal-booking killswitch: mostly empty nameplate (like a blocked
+        // seat) — no "no bookings for today" text, no booking info.
+        if (typeof setting_internalbooking !== 'undefined' && setting_internalbooking == 0) {
+          content = '';
+          break;
+        }
         content = 'no bookings for today';
         var deskbookings = bookingstatus.filter(element => element.desk == attr.dsk);
         if (deskbookings.length > 0) {
