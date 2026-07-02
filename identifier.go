@@ -41,6 +41,27 @@ func mailIdentifier(mail string) string {
 	return avatarSafe(strings.ToLower(strings.TrimSpace(mail)))
 }
 
+// normalizeMail canonicalises an e-mail address for storage: trimmed and strictly
+// lowercased. Mail addresses are case-insensitive for our purposes (matching,
+// identifiers, display), so every directory source (LDAP, EntraID, SAML, Robin)
+// runs its mail values through this before persisting, and it is applied again
+// defensively at the storage layer in case a value slips through another path.
+func normalizeMail(mail string) string {
+	return strings.ToLower(strings.TrimSpace(mail))
+}
+
+// normalizeMails canonicalises a slice of mail addresses (e.g. AD proxyAddresses
+// aliases), dropping any that are empty after trimming.
+func normalizeMails(mails []string) []string {
+	out := make([]string, 0, len(mails))
+	for _, m := range mails {
+		if n := normalizeMail(m); n != "" {
+			out = append(out, n)
+		}
+	}
+	return out
+}
+
 // userIdentifier computes the active identifier for a user from their raw
 // samaccountname and mail address, honouring the configured mode.
 func (app *App) userIdentifier(sam, mail string) string {

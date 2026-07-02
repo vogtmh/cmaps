@@ -781,8 +781,9 @@
             <div class="sync-field sync-field-wide"><label class="sync-label">Client secret</label><input class="sync-input" id="entraFSecret" type="password" name="newEntraSecret" placeholder="Client secret value"></div>
           </div>
           <div class="sync-form-grid" id="entraCertFields" style="display:none;">
-            <div class="sync-field sync-field-wide"><label class="sync-label">Certificate (PEM)</label><textarea class="sync-input" id="entraFCert" name="newEntraCert" rows="4" placeholder="-----BEGIN CERTIFICATE-----"></textarea></div>
-            <div class="sync-field sync-field-wide"><label class="sync-label">Private key (PEM)</label><textarea class="sync-input" id="entraFKey" name="newEntraKey" rows="4" placeholder="-----BEGIN PRIVATE KEY-----"></textarea></div>
+            <div class="sync-field sync-field-wide"><label class="sync-label">Certificate (PEM)</label><textarea class="sync-input" id="entraFCert" name="newEntraCert" rows="8" placeholder="-----BEGIN CERTIFICATE-----"></textarea></div>
+            <div class="sync-field sync-field-wide"><label class="sync-label">Private key (PEM)</label><textarea class="sync-input" id="entraFKey" name="newEntraKey" rows="10" placeholder="-----BEGIN PRIVATE KEY-----"></textarea></div>
+            <div class="sync-field sync-field-wide"><p class="sync-card-hint" style="margin:0;">A certificate and key are generated automatically. Upload the certificate to your Entra app registration (Certificates &amp; secrets) and send it to IT; the private key stays here.</p></div>
           </div>
           <div class="sync-form-actions">
             <button type="submit" class="sync-btn sync-btn-primary" id="entraFormSubmit">Create connection</button>

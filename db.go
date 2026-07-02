@@ -975,6 +975,10 @@ func (db *DB) ReplaceDirectory(users []DirectoryUser) error {
 			if key == "" {
 				continue
 			}
+			// Defensive sanity check: mail addresses are always stored strictly
+			// lowercased regardless of which sync path produced this record.
+			u.Mail = normalizeMail(u.Mail)
+			u.Aliases = normalizeMails(u.Aliases)
 			data, err := json.Marshal(u)
 			if err != nil {
 				return err
@@ -1025,6 +1029,8 @@ func (db *DB) SearchDirectory(query string, limit int) ([]DirectoryUser, error) 
 func (db *DB) ListBookings() ([]Booking, error) { return listJSON[Booking](db, bucketBookings, "") }
 
 func (db *DB) AddBooking(b Booking) error {
+	// Defensive sanity check: mail addresses are always stored strictly lowercased.
+	b.Mail = normalizeMail(b.Mail)
 	return db.bolt.Update(func(tx *bolt.Tx) error {
 		bkt := tx.Bucket(bucketBookings)
 		seq, _ := bkt.NextSequence()
@@ -1079,7 +1085,11 @@ func (db *DB) GetUser(username string) (User, bool, error) {
 	return getJSON[User](db, bucketUsers, []byte(username))
 }
 
-func (db *DB) PutUser(u User) error { return putJSON(db, bucketUsers, []byte(u.Username), u) }
+func (db *DB) PutUser(u User) error {
+	// Defensive sanity check: mail addresses are always stored strictly lowercased.
+	u.Mail = normalizeMail(u.Mail)
+	return putJSON(db, bucketUsers, []byte(u.Username), u)
+}
 
 func (db *DB) DeleteUser(username string) error { return deleteKey(db, bucketUsers, []byte(username)) }
 

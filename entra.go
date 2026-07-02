@@ -6,12 +6,14 @@ import (
 	"crypto/rsa"
 	"crypto/sha1"
 	"crypto/x509"
+	"crypto/x509/pkix"
 	"encoding/base64"
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
 	"io"
 	"log"
+	"math/big"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -316,6 +318,7 @@ func (app *App) graphUserToDirectory(u entraGraphUser) DirectoryUser {
 	if mail == "" {
 		mail = strings.TrimSpace(u.UserPrincipalName)
 	}
+	mail = normalizeMail(mail)
 	title := strings.TrimSpace(u.JobTitle)
 	if title == "" {
 		title = "-"
@@ -737,4 +740,56 @@ func (app *App) handleRestEntraSyncOne(w http.ResponseWriter, r *http.Request) {
 	_ = app.db.SetEntraSetting("entraLastSync", now)
 	_ = app.db.AuditLog("LDAP", sess.Username, "Manual EntraID sync of source "+strconv.Itoa(id))
 	writeJSON(w, map[string]interface{}{"status": "ok", "count": count, "lastSync": now})
+}
+
+// handleRestEntraGenCert generates a fresh self-signed RSA certificate and
+// private key (both PEM-encoded) for use with EntraID certificate auth. The
+// admin uploads the certificate to the app registration and keeps the private
+// key here. Nothing is persisted server-side — the caller fills the form.
+func (app *App) handleRestEntraGenCert(w http.ResponseWriter, r *http.Request) {
+	sess, ok := app.currentSession(r)
+	if !ok || app.permLevel(sess, "ldap") < 1 {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	certPEM, keyPEM, err := generateEntraCert()
+	if err != nil {
+		writeJSON(w, map[string]interface{}{"status": "error", "message": err.Error()})
+		return
+	}
+	writeJSON(w, map[string]interface{}{"status": "ok", "cert": certPEM, "key": keyPEM})
+}
+
+// generateEntraCert creates a 2048-bit RSA key pair and a self-signed X.509
+// certificate valid for ~3 years, returning both as PEM strings.
+func generateEntraCert() (string, string, error) {
+	priv, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		return "", "", fmt.Errorf("generate key: %w", err)
+	}
+	serial, err := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
+	if err != nil {
+		return "", "", fmt.Errorf("generate serial: %w", err)
+	}
+	now := time.Now()
+	tmpl := x509.Certificate{
+		SerialNumber:          serial,
+		Subject:               pkix.Name{CommonName: "CompanyMaps EntraID Sync"},
+		NotBefore:             now.Add(-5 * time.Minute),
+		NotAfter:              now.AddDate(3, 0, 0),
+		KeyUsage:              x509.KeyUsageDigitalSignature,
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
+		BasicConstraintsValid: true,
+	}
+	der, err := x509.CreateCertificate(rand.Reader, &tmpl, &tmpl, &priv.PublicKey, priv)
+	if err != nil {
+		return "", "", fmt.Errorf("create certificate: %w", err)
+	}
+	certPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der})
+	keyDER, err := x509.MarshalPKCS8PrivateKey(priv)
+	if err != nil {
+		return "", "", fmt.Errorf("marshal key: %w", err)
+	}
+	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: keyDER})
+	return string(certPEM), string(keyPEM), nil
 }

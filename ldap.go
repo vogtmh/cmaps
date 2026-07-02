@@ -366,7 +366,7 @@ func (app *App) fetchSourceDirectory(src LdapSource) ([]DirectoryUser, SourceDeb
 			if title == "" {
 				title = "-"
 			}
-			mail := e.GetEqualFoldAttributeValue("mail")
+			mail := normalizeMail(e.GetEqualFoldAttributeValue("mail"))
 			out = append(out, DirectoryUser{
 				Userid:         app.userIdentifier(sam, mail),
 				Samaccountname: sam,

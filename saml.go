@@ -495,7 +495,7 @@ h2{color:#2ecc71;margin:0 0 16px}p{color:#666;margin:0 0 24px}a{color:#0a66c2}</
 	givenname := samlExtractAttr(assertion, cfg.attrGivenName())
 	surname := samlExtractAttr(assertion, cfg.attrSurname())
 	fullname := samlExtractAttr(assertion, cfg.attrFullName())
-	mail := samlExtractAttr(assertion, cfg.attrMail())
+	mail := normalizeMail(samlExtractAttr(assertion, cfg.attrMail()))
 	if fullname == "" {
 		fullname = strings.TrimSpace(givenname + " " + surname)
 	}

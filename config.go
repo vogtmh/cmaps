@@ -53,7 +53,10 @@ const (
 	attrGivenNameDefault  = "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/givenname"
 	attrSurnameDefault    = "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/surname"
 	attrFullNameDefault   = "http://schemas.microsoft.com/identity/claims/displayname"
-	attrMailDefault       = "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name"
+	// Use the dedicated e-mail claim (not the "name" claim, which is the UPN and
+	// may differ from the mailbox on some IdPs). In mail identifier mode this is
+	// the login identity, so it must be an unambiguous e-mail address.
+	attrMailDefault = "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress"
 )
 
 func (s SAMLConfig) attrSamAccount() string {

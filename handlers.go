@@ -77,6 +77,7 @@ func (app *App) registerRESTRoutes(mux *http.ServeMux) {
 	rest("/rest/entra/progress", app.handleRestEntraProgress)
 	rest("/rest/entra/test", app.handleRestEntraTest)
 	rest("/rest/entra/syncone", app.handleRestEntraSyncOne)
+	rest("/rest/entra/gencert", app.handleRestEntraGenCert)
 	rest("/rest/directory/search", app.handleRestDirectorySearch)
 	rest("/rest/directory/match", app.handleRestDirectoryMatch)
 	rest("/rest/identifier/analyze", app.handleRestIdentifierAnalyze)

@@ -1026,6 +1026,7 @@ type robinOccupant struct {
 // can never resolve a name. When no AD match is found the raw email is kept as
 // the display name.
 func (app *App) resolveOccupant(email string, userID int, emailUser map[string]DirectoryUser) robinOccupant {
+	email = normalizeMail(email)
 	occ := robinOccupant{Mail: email, UserID: userID}
 	if email != "" {
 		if u, ok := emailUser[strings.ToLower(email)]; ok {

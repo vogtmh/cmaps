@@ -1420,6 +1420,40 @@ function updateEntraAuthMethod() {
   var isCert = sel && sel.value === 'certificate';
   if (secret) secret.style.display = isCert ? 'none' : '';
   if (cert) cert.style.display = isCert ? '' : 'none';
+  // On a new connection, generate a certificate + key as soon as certificate
+  // auth is picked so admins can hand the cert to IT. Skip in edit mode (an
+  // existing connection already has one) and if the fields are already filled.
+  if (isCert) maybeGenerateEntraCert();
+}
+
+// maybeGenerateEntraCert fetches a freshly generated self-signed certificate and
+// private key and prefills the two textareas, unless we're editing an existing
+// connection or the fields already contain data.
+function maybeGenerateEntraCert() {
+  var editID = document.getElementById('entraFormEditID');
+  if (editID && editID.value) return; // editing an existing connection
+  var certEl = document.getElementById('entraFCert');
+  var keyEl = document.getElementById('entraFKey');
+  if (!certEl || !keyEl) return;
+  if (certEl.value.trim() || keyEl.value.trim()) return; // already filled
+  var prevCert = certEl.placeholder, prevKey = keyEl.placeholder;
+  certEl.placeholder = 'Generating certificate\u2026';
+  keyEl.placeholder = 'Generating key\u2026';
+  $.ajax({
+    url: '../rest/entra/gencert?token=' + token,
+    type: 'GET', dataType: 'JSON',
+    success: function (d) {
+      if (d && d.status === 'ok') {
+        // Only fill if still empty (user may have started typing meanwhile).
+        if (!certEl.value.trim()) certEl.value = d.cert;
+        if (!keyEl.value.trim()) keyEl.value = d.key;
+      }
+    },
+    complete: function () {
+      certEl.placeholder = prevCert;
+      keyEl.placeholder = prevKey;
+    }
+  });
 }
 
 // showEntraCmpTab toggles the LDAP <-> EntraID comparison panels.
