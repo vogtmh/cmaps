@@ -617,7 +617,7 @@ function esc(s) {
 
 function showRobinTest() {
   var body = document.getElementById('robinDebugBody');
-  body.textContent = 'Running meeting sync...';
+  body.textContent = 'Checking Robin credentials\u2026';
   document.getElementById('robinDebugOverlay').style.display = 'block';
   $.ajax({
     url: '../rest/robin/test',
@@ -629,7 +629,7 @@ function showRobinTest() {
       body.textContent = lines.length ? lines.join('\n') : 'No output returned.';
     },
     error: function() {
-      body.textContent = 'Failed to run meeting sync (forbidden or server error).';
+      body.textContent = 'Failed to run the connection test (forbidden or server error).';
     }
   })
 }

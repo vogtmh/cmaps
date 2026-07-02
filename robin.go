@@ -410,6 +410,54 @@ func (app *App) StartRobinLocationScheduler(interval time.Duration) {
 	}()
 }
 
+// robinTestCredentials performs a lightweight, read-only connectivity check that
+// verifies the saved Robin access token (and, if set, the organisation id) are
+// accepted by the Robin API. It makes at most two GET requests and never writes
+// to the meeting cache, the booking feature or the map — unlike a full sync.
+func (app *App) robinTestCredentials() []string {
+	var out []string
+	add := func(format string, args ...interface{}) {
+		out = append(out, fmt.Sprintf(format, args...))
+	}
+
+	if strings.TrimSpace(app.db.GetRobinSetting("robintoken")) == "" {
+		add("No Robin access token configured. Enter a token and save first.")
+		return out
+	}
+
+	// /whoami validates the access token itself, independent of any organisation
+	// id. It is a read-only call and the cheapest way to confirm the key works.
+	var who struct {
+		Data struct {
+			ID    int    `json:"id"`
+			Name  string `json:"name"`
+			Email string `json:"primary_email"`
+		} `json:"data"`
+	}
+	if err := app.robinGet("/whoami", &who); err != nil {
+		add("Access token rejected by Robin: %v", err)
+		return out
+	}
+	if who.Data.Name != "" {
+		add("Access token is valid (authenticated as %s).", who.Data.Name)
+	} else {
+		add("Access token is valid.")
+	}
+
+	org := strings.TrimSpace(app.db.GetRobinSetting("robinOrganisation"))
+	if org == "" {
+		add("No organisation id configured yet — set one to enable syncing.")
+		return out
+	}
+	locs, err := app.robinListLocations()
+	if err != nil {
+		add("Organisation id \"%s\" could not be verified: %v", org, err)
+		return out
+	}
+	add("Organisation id \"%s\" is valid — %d location(s) visible.", org, len(locs))
+	return out
+}
+
 // RunRobinSyncVerbose performs a full Robin meeting sync while collecting a
 // human-readable log of every step. It is used by the admin "Test meeting sync"
 // button so an operator can see exactly what happens (and why nothing shows up).

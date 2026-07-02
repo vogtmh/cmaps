@@ -1819,8 +1819,8 @@ func (app *App) handleRestRobinTest(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, map[string]interface{}{"log": []string{"Robin integration is disabled."}})
 		return
 	}
-	_ = app.db.AuditLog("LDAP", sess.Username, "Robin meeting sync test run")
-	writeJSON(w, map[string]interface{}{"log": app.RunRobinSyncVerbose()})
+	_ = app.db.AuditLog("LDAP", sess.Username, "Robin credentials tested")
+	writeJSON(w, map[string]interface{}{"log": app.robinTestCredentials()})
 }
 
 // handleRestRobinSync starts a Robin meeting sync in the background (if one is
