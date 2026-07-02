@@ -273,6 +273,9 @@ pre, code, kbd, samp, tt { font-family: inherit; }
     flex: 0 0 auto;
     margin-right: 12px;
     background: #444;
+    /* Ignore EXIF orientation so the photo matches the (EXIF-agnostic) deskball
+       and admin review grid; otherwise <img> auto-rotates a tagged avatar. */
+    image-orientation: none;
 }
 
 .searchsidebar_mapicon {
@@ -1157,7 +1160,10 @@ pre, code, kbd, samp, tt { font-family: inherit; }
     height: 196px;
     overflow:hidden; 
     border-radius: 50%;
+    image-orientation: none;
 }
+/* Shared-desk avatars are child <img>s inside the avatar container. */
+.rightnameplate_avatar img, .leftnameplate_avatar img { image-orientation: none; }
 
 .rightnameplate_close {
     position: absolute; 
@@ -1371,6 +1377,7 @@ pre, code, kbd, samp, tt { font-family: inherit; }
     height: 196px;
     overflow:hidden; 
     border-radius: 50%;
+    image-orientation: none;
 }
 
 .leftnameplate_close {

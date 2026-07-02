@@ -172,6 +172,8 @@ body { overflow: hidden; }
 	border-radius: 50%;
 	object-fit: cover;
 	background: rgba(255, 255, 255, 0.1);
+	/* Ignore EXIF orientation so avatars match the desktop/deskball rendering. */
+	image-orientation: none;
 }
 .m_avatar.lg { width: 84px; height: 84px; }
 
