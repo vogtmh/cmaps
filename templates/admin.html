@@ -258,6 +258,29 @@
         </div>
       </div>
       {{end}}
+
+      {{if gt .PermConfig 1}}
+      <!-- Avatar orientation -->
+      <div class="sync-card">
+        <div class="sync-card-head">
+          <h2 class="sync-card-title">Avatar orientation</h2>
+        </div>
+        <p class="sync-card-hint">Some avatars uploaded by older versions are stored sideways: they carry an EXIF
+          orientation tag that the map view ignores. Scan the avatar cache for affected images, review the corrected
+          previews, then rotate and re-save the ones you select.</p>
+        <div class="sync-form-actions">
+          <button type="button" class="sync-btn sync-btn-primary" id="avatarOrientScanBtn" onClick="scanAvatarOrientation()">Scan avatars&hellip;</button>
+          <span id="avatarOrientStatus" class="sync-status-text" style="margin-left:10px;"></span>
+        </div>
+        <div id="avatarOrientResults" style="display:none;margin-top:14px;">
+          <div id="avatarOrientGrid" class="avatar-orient-grid"></div>
+          <div class="sync-form-actions" style="margin-top:12px;">
+            <button type="button" class="sync-btn" onClick="toggleAvatarOrientAll(this)">Select none</button>
+            <button type="button" class="sync-btn sync-btn-primary" id="avatarOrientApplyBtn" onClick="applyAvatarOrientation()">Rotate &amp; save selected</button>
+          </div>
+        </div>
+      </div>
+      {{end}}
       </div>
 
     </div>

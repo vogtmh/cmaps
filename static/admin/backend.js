@@ -1917,6 +1917,150 @@ function saveInternalBooking(cb) {
   });
 }
 
+// ── Avatar orientation tool (config tab) ─────────────────────────────────────
+// Scans the avatar cache for images stored with a non-trivial EXIF orientation,
+// shows a before/after preview, and rotates the selected ones on confirmation.
+function scanAvatarOrientation() {
+  var btn = document.getElementById('avatarOrientScanBtn');
+  var status = document.getElementById('avatarOrientStatus');
+  var results = document.getElementById('avatarOrientResults');
+  if (btn) { btn.disabled = true; }
+  if (status) { status.style.color = ''; status.textContent = 'Scanning\u2026'; }
+  fetch('../rest/avatar-orientation?mode=scan', { credentials: 'same-origin' })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      if (btn) { btn.disabled = false; }
+      if (!d || !d.ok) { throw new Error((d && d.message) || 'scan failed'); }
+      renderAvatarOrient(d.items || []);
+      if (status) {
+        if (d.count === 0) {
+          status.style.color = 'var(--sy-ok)';
+          status.textContent = 'All avatars are upright.';
+          if (results) { results.style.display = 'none'; }
+        } else {
+          status.style.color = 'var(--sy-warn)';
+          status.textContent = d.count + ' avatar(s) need rotation.';
+          if (results) { results.style.display = 'block'; }
+        }
+      }
+    })
+    .catch(function (e) {
+      if (btn) { btn.disabled = false; }
+      if (status) { status.style.color = 'var(--sy-danger)'; status.textContent = 'Failed: ' + e.message; }
+    });
+}
+
+// renderAvatarOrient builds the before/after preview grid for the scan results.
+function renderAvatarOrient(items) {
+  var grid = document.getElementById('avatarOrientGrid');
+  if (!grid) { return; }
+  grid.innerHTML = '';
+  var bust = Date.now();
+  items.forEach(function (it) {
+    var cell = document.createElement('div');
+    cell.className = 'avatar-orient-item';
+
+    var pair = document.createElement('div');
+    pair.className = 'avatar-orient-pair';
+
+    var before = document.createElement('div');
+    before.className = 'avatar-orient-thumb before';
+    var bimg = document.createElement('img');
+    bimg.src = '../avatarcache/' + encodeURIComponent(it.userid) + '.jpg?v=' + bust;
+    bimg.alt = 'current';
+    var bcap = document.createElement('div');
+    bcap.className = 'avatar-orient-caption';
+    bcap.textContent = 'On map';
+    before.appendChild(bimg);
+    before.appendChild(bcap);
+
+    var arrow = document.createElement('div');
+    arrow.className = 'avatar-orient-arrow';
+    arrow.textContent = '\u2192';
+
+    var after = document.createElement('div');
+    after.className = 'avatar-orient-thumb after';
+    var aimg = document.createElement('img');
+    aimg.src = '../rest/avatar-orientation?mode=preview&userid=' + encodeURIComponent(it.userid) + '&v=' + bust;
+    aimg.alt = 'corrected';
+    var acap = document.createElement('div');
+    acap.className = 'avatar-orient-caption';
+    acap.textContent = 'After fix';
+    after.appendChild(aimg);
+    after.appendChild(acap);
+
+    pair.appendChild(before);
+    pair.appendChild(arrow);
+    pair.appendChild(after);
+
+    var uid = document.createElement('div');
+    uid.className = 'avatar-orient-userid';
+    uid.textContent = it.userid;
+
+    var lbl = document.createElement('div');
+    lbl.className = 'avatar-orient-label';
+    lbl.textContent = it.label || ('Orientation ' + it.orientation);
+
+    var check = document.createElement('label');
+    var cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.className = 'avatar-orient-cb';
+    cb.checked = true;
+    cb.value = it.userid;
+    check.appendChild(cb);
+    check.appendChild(document.createTextNode('Rotate'));
+
+    cell.appendChild(pair);
+    cell.appendChild(uid);
+    cell.appendChild(lbl);
+    cell.appendChild(check);
+    grid.appendChild(cell);
+  });
+}
+
+// toggleAvatarOrientAll flips every checkbox between all-selected and none.
+function toggleAvatarOrientAll(btn) {
+  var boxes = document.querySelectorAll('#avatarOrientGrid .avatar-orient-cb');
+  var anyChecked = false;
+  boxes.forEach(function (b) { if (b.checked) { anyChecked = true; } });
+  boxes.forEach(function (b) { b.checked = !anyChecked; });
+  if (btn) { btn.textContent = anyChecked ? 'Select all' : 'Select none'; }
+}
+
+// applyAvatarOrientation rotates and re-saves the selected avatars after confirm.
+function applyAvatarOrientation() {
+  var boxes = document.querySelectorAll('#avatarOrientGrid .avatar-orient-cb');
+  var ids = [];
+  boxes.forEach(function (b) { if (b.checked) { ids.push(b.value); } });
+  if (ids.length === 0) { alert('Select at least one avatar to rotate.'); return; }
+  if (!confirm('Rotate and permanently re-save ' + ids.length + ' avatar(s)? This overwrites the stored images.')) { return; }
+
+  var btn = document.getElementById('avatarOrientApplyBtn');
+  var status = document.getElementById('avatarOrientStatus');
+  if (btn) { btn.disabled = true; }
+  if (status) { status.style.color = ''; status.textContent = 'Rotating\u2026'; }
+
+  var body = 'mode=apply&userids=' + encodeURIComponent(ids.join(','));
+  fetch('../rest/avatar-orientation', {
+    method: 'POST',
+    credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: body
+  }).then(function (r) {
+    if (!r.ok) throw new Error('save failed');
+    return r.json();
+  }).then(function (d) {
+    if (btn) { btn.disabled = false; }
+    if (!d || !d.ok) { throw new Error((d && d.message) || 'save failed'); }
+    if (status) { status.style.color = 'var(--sy-ok)'; status.textContent = d.message; }
+    // Re-scan so corrected avatars drop off the list.
+    scanAvatarOrientation();
+  }).catch(function (e) {
+    if (btn) { btn.disabled = false; }
+    if (status) { status.style.color = 'var(--sy-danger)'; status.textContent = 'Failed: ' + e.message; }
+  });
+}
+
 // ── World map coordinate review dialog (classic -> modern switch) ─────────────
 // Holds the pending enable while the dialog is open.
 var _worldCoordsPending = null; // { cb, rows:[{mapname,address}], imgW, imgH }

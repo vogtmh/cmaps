@@ -809,3 +809,46 @@
   font-weight: 700;
   border-top: 2px solid var(--sy-border);
 }
+
+/* ── Config tab: avatar orientation tool ─────────────────── */
+.avatar-orient-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 14px;
+}
+.avatar-orient-item {
+  border: 1px solid var(--sy-border);
+  border-radius: 8px;
+  background: var(--sy-surface2);
+  padding: 10px;
+  text-align: center;
+}
+.avatar-orient-pair {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  align-items: flex-end;
+}
+.avatar-orient-thumb { text-align: center; }
+.avatar-orient-thumb img {
+  width: 64px;
+  height: 64px;
+  object-fit: cover;
+  border-radius: 6px;
+  background: #1f2124;
+  display: block;
+}
+.avatar-orient-thumb.before img { image-orientation: none; }
+.avatar-orient-caption { font-size: 10px; color: var(--sy-muted); margin-top: 3px; }
+.avatar-orient-arrow { color: var(--sy-muted); align-self: center; font-size: 18px; }
+.avatar-orient-userid { font-size: 12px; margin-top: 8px; word-break: break-all; }
+.avatar-orient-label { font-size: 11px; color: var(--sy-warn); margin-top: 2px; }
+.avatar-orient-item label {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  justify-content: center;
+  margin-top: 8px;
+  cursor: pointer;
+  font-size: 12px;
+}
