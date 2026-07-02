@@ -4,6 +4,13 @@ import (
 	"net/http"
 )
 
+// internalBookingEnabled reports whether the internal desk-booking feature is
+// active. It is a global killswitch that is ENABLED BY DEFAULT: only an explicit
+// "0" disables it, so existing installs (with no setting stored) keep booking on.
+func (app *App) internalBookingEnabled() bool {
+	return app.db.GetSetting("internalbooking") != "0"
+}
+
 // handleRestBooking serves /rest/booking?mode=book|remove|list. User identity is
 // taken from the session, never from the request, matching the PHP behaviour.
 func (app *App) handleRestBooking(w http.ResponseWriter, r *http.Request) {
@@ -48,6 +55,10 @@ func (app *App) handleRestBooking(w http.ResponseWriter, r *http.Request) {
 
 	switch mode {
 	case "book":
+		if !app.internalBookingEnabled() {
+			status, message = "error", "Internal booking is disabled"
+			break
+		}
 		if bookUser != "" && bookDate != "" && bookMap != "" && bookDesk != "" {
 			taken := false
 			for _, b := range bookings {

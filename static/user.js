@@ -517,7 +517,7 @@ return img.height != 0;
 // instead of requesting a unique (missing) image per person.
 function avatarUrl(avtr, hasavatar) {
   if (hasavatar !== true || !avtr) {
-    return 'images/noavatar.png';
+    return 'images/noavatar2.png';
   }
   return 'avatarcache/' + avtr + '.jpg';
 }
@@ -748,7 +748,7 @@ function showNameplate (deskid, desktype) {
         if (desktype && desktype.indexOf('custom_') === 0) {
           var ctNp = (typeof customItemTypes !== 'undefined' && customItemTypes[desktype.slice(7)]) ? customItemTypes[desktype.slice(7)] : null;
           var caption = attr.dsk || (ctNp ? ctNp.label : 'Item');
-          var avatar = (ctNp && ctNp.icon) ? ctNp.icon : 'images/noavatar.png';
+          var avatar = (ctNp && ctNp.icon) ? ctNp.icon : 'images/noavatar2.png';
           var avatarcolor = $('#' + attr.id).css('background-color');
           content = (ctNp && ctNp.description) ? ctNp.description : '';
         }
@@ -779,7 +779,7 @@ function showNameplate (deskid, desktype) {
                         + '<div class="leftnameplate_top" style="background:' + color
                         + '">' + caption + '</div>'
                         + '<div class="leftnameplate_textbox" style="'+boxstyle+'" id="textbox' + attr.id +'">' + content + '</div>'
-                        + '<img src="' + avatar + '" class="leftnameplate_avatar" style="background:' + avatarcolor + '" onerror="this.src=\'images/noavatar.png\'">'
+                        + '<img src="' + avatar + '" class="leftnameplate_avatar" style="background:' + avatarcolor + '" onerror="this.src=\'images/noavatar2.png\'">'
                         + '<div class="leftnameplate_number">' + attr.dsk + '</div>'
                         + robinBadge + '</div>'
                         + '<div id="caption' + attr.id + '" class="caption">' + attr.empl + '</div>'
@@ -795,21 +795,21 @@ function showNameplate (deskid, desktype) {
         switch(avatarArr.length) {
           case 2: 
             outputnameplate += ''
-            + '<img src="avatarcache/'+avatarArr[0]+'.jpg" style="position:absolute; right:98px; top:0px; width:196px; height:196px" onerror="this.src=\'images/noavatar.png\'"/>'
-            + '<img src="avatarcache/'+avatarArr[1]+'.jpg" style="position:absolute; left:98px; top:0px; width:196px; height:196px" onerror="this.src=\'images/noavatar.png\'"/>'
+            + '<img src="avatarcache/'+avatarArr[0]+'.jpg" style="position:absolute; right:98px; top:0px; width:196px; height:196px" onerror="this.src=\'images/noavatar2.png\'"/>'
+            + '<img src="avatarcache/'+avatarArr[1]+'.jpg" style="position:absolute; left:98px; top:0px; width:196px; height:196px" onerror="this.src=\'images/noavatar2.png\'"/>'
             break;
           case 3:
             outputnameplate += ''
-            + '<img src="avatarcache/'+avatarArr[0]+'.jpg" style="position:absolute; right:98px; top:0px; width:196px; height:196px" onerror="this.src=\'images/noavatar.png\'"/>'
-            + '<img src="avatarcache/'+avatarArr[1]+'.jpg" style="position:absolute; right:0px; top:0px; width:98px; height:98px" onerror="this.src=\'images/noavatar.png\'"/>'
-            + '<img src="avatarcache/'+avatarArr[2]+'.jpg" style="position:absolute; right:0px; bottom:0px; width:98px; height:98px" onerror="this.src=\'images/noavatar.png\'"/>'
+            + '<img src="avatarcache/'+avatarArr[0]+'.jpg" style="position:absolute; right:98px; top:0px; width:196px; height:196px" onerror="this.src=\'images/noavatar2.png\'"/>'
+            + '<img src="avatarcache/'+avatarArr[1]+'.jpg" style="position:absolute; right:0px; top:0px; width:98px; height:98px" onerror="this.src=\'images/noavatar2.png\'"/>'
+            + '<img src="avatarcache/'+avatarArr[2]+'.jpg" style="position:absolute; right:0px; bottom:0px; width:98px; height:98px" onerror="this.src=\'images/noavatar2.png\'"/>'
             break;
           case 4:
             outputnameplate += ''
-            + '<img src="avatarcache/'+avatarArr[0]+'.jpg" style="position:absolute; left:0px; top:0px; width:50%; height:50%" onerror="this.src=\'images/noavatar.png\'"/>'
-            + '<img src="avatarcache/'+avatarArr[1]+'.jpg" style="position:absolute; right:0px; top:0px; width:50%; height:50%" onerror="this.src=\'images/noavatar.png\'"/>'
-            + '<img src="avatarcache/'+avatarArr[2]+'.jpg" style="position:absolute; left:0px; bottom:0px; width:50%; height:50%" onerror="this.src=\'images/noavatar.png\'"/>'
-            + '<img src="avatarcache/'+avatarArr[3]+'.jpg" style="position:absolute; right:0px; bottom:0px; width:50%; height:50%" onerror="this.src=\'images/noavatar.png\'"/>'
+            + '<img src="avatarcache/'+avatarArr[0]+'.jpg" style="position:absolute; left:0px; top:0px; width:50%; height:50%" onerror="this.src=\'images/noavatar2.png\'"/>'
+            + '<img src="avatarcache/'+avatarArr[1]+'.jpg" style="position:absolute; right:0px; top:0px; width:50%; height:50%" onerror="this.src=\'images/noavatar2.png\'"/>'
+            + '<img src="avatarcache/'+avatarArr[2]+'.jpg" style="position:absolute; left:0px; bottom:0px; width:50%; height:50%" onerror="this.src=\'images/noavatar2.png\'"/>'
+            + '<img src="avatarcache/'+avatarArr[3]+'.jpg" style="position:absolute; right:0px; bottom:0px; width:50%; height:50%" onerror="this.src=\'images/noavatar2.png\'"/>'
             break;
         }
 
@@ -826,7 +826,7 @@ function showNameplate (deskid, desktype) {
                       + '<div class="rightnameplate_top" style="background:' + color
                       + '">' + caption + '</div>'
                       + '<div class="rightnameplate_textbox" style="'+boxstyle+'" id="textbox' + attr.id +'">' + content + '</div>'
-                      + '<img src="' + avatar + '" class="rightnameplate_avatar" style="background:' + avatarcolor + '" onerror="this.src=\'images/noavatar.png\'">'
+                      + '<img src="' + avatar + '" class="rightnameplate_avatar" style="background:' + avatarcolor + '" onerror="this.src=\'images/noavatar2.png\'">'
                       + '<div class="rightnameplate_number">' + attr.dsk + '</div>'
                       + robinBadge + '</div>'
                       + '<div id="caption' + attr.id + '" class="caption">' + attr.empl + '</div>'
@@ -842,21 +842,21 @@ function showNameplate (deskid, desktype) {
         switch(avatarArr.length) {
           case 2: 
           outputnameplate += ''
-          + '<img src="avatarcache/'+avatarArr[0]+'.jpg" style="position:absolute; right:98px; top:0px; width:196px; height:196px" onerror="this.src=\'images/noavatar.png\'" />'
-          + '<img src="avatarcache/'+avatarArr[1]+'.jpg" style="position:absolute; left:98px; top:0px; width:196px; height:196px" onerror="this.src=\'images/noavatar.png\'" />'
+          + '<img src="avatarcache/'+avatarArr[0]+'.jpg" style="position:absolute; right:98px; top:0px; width:196px; height:196px" onerror="this.src=\'images/noavatar2.png\'" />'
+          + '<img src="avatarcache/'+avatarArr[1]+'.jpg" style="position:absolute; left:98px; top:0px; width:196px; height:196px" onerror="this.src=\'images/noavatar2.png\'" />'
           break;
           case 3:
             outputnameplate += ''
-            + '<img src="avatarcache/'+avatarArr[0]+'.jpg" style="position:absolute; right:98px; top:0px; width:196px; height:196px" onerror="this.src=\'images/noavatar.png\'" />'
-            + '<img src="avatarcache/'+avatarArr[1]+'.jpg" style="position:absolute; right:0px; top:0px; width:98px; height:98px" onerror="this.src=\'images/noavatar.png\'" />'
-            + '<img src="avatarcache/'+avatarArr[2]+'.jpg" style="position:absolute; right:0px; bottom:0px; width:98px; height:98px" onerror="this.src=\'images/noavatar.png\'" />'
+            + '<img src="avatarcache/'+avatarArr[0]+'.jpg" style="position:absolute; right:98px; top:0px; width:196px; height:196px" onerror="this.src=\'images/noavatar2.png\'" />'
+            + '<img src="avatarcache/'+avatarArr[1]+'.jpg" style="position:absolute; right:0px; top:0px; width:98px; height:98px" onerror="this.src=\'images/noavatar2.png\'" />'
+            + '<img src="avatarcache/'+avatarArr[2]+'.jpg" style="position:absolute; right:0px; bottom:0px; width:98px; height:98px" onerror="this.src=\'images/noavatar2.png\'" />'
             break;
           case 4:
             outputnameplate += ''
-            + '<img src="avatarcache/'+avatarArr[0]+'.jpg" style="position:absolute; left:0px; top:0px; width:50%; height:50%" onerror="this.src=\'images/noavatar.png\'" />'
-            + '<img src="avatarcache/'+avatarArr[1]+'.jpg" style="position:absolute; right:0px; top:0px; width:50%; height:50%" onerror="this.src=\'images/noavatar.png\'" />'
-            + '<img src="avatarcache/'+avatarArr[2]+'.jpg" style="position:absolute; left:0px; bottom:0px; width:50%; height:50%" onerror="this.src=\'images/noavatar.png\'" />'
-            + '<img src="avatarcache/'+avatarArr[3]+'.jpg" style="position:absolute; right:0px; bottom:0px; width:50%; height:50%" onerror="this.src=\'images/noavatar.png\'" />'
+            + '<img src="avatarcache/'+avatarArr[0]+'.jpg" style="position:absolute; left:0px; top:0px; width:50%; height:50%" onerror="this.src=\'images/noavatar2.png\'" />'
+            + '<img src="avatarcache/'+avatarArr[1]+'.jpg" style="position:absolute; right:0px; top:0px; width:50%; height:50%" onerror="this.src=\'images/noavatar2.png\'" />'
+            + '<img src="avatarcache/'+avatarArr[2]+'.jpg" style="position:absolute; left:0px; bottom:0px; width:50%; height:50%" onerror="this.src=\'images/noavatar2.png\'" />'
+            + '<img src="avatarcache/'+avatarArr[3]+'.jpg" style="position:absolute; right:0px; bottom:0px; width:50%; height:50%" onerror="this.src=\'images/noavatar2.png\'" />'
             break;
         }              
         outputnameplate += '</div>'
@@ -983,6 +983,7 @@ function toggleDatepicker() {
 function showSticky (deskid, desktype, caption) {
     attr = result_old.desks.find(o => Object.entries(o).find(([k, value]) => k === 'id' && value === deskid) !== undefined);
     if (typeof username !== 'undefined') {usershort = username.replace(domain, "");};
+    var bookingOn = !(typeof setting_internalbooking !== 'undefined' && setting_internalbooking == 0);
     var content = '';
     switch (desktype) {       
       case "restroom":
@@ -1008,7 +1009,12 @@ function showSticky (deskid, desktype, caption) {
         var caption = attr.empl;
         var avatar = 'images/hotseat.png';
         var avatarcolor = $('#' + attr.id).css('background-color');
-        if (typeof username !== 'undefined') {
+        // Internal-booking killswitch: still open the sticky, but with mostly
+        // empty content (like a blocked seat) — no calendar, no booking form.
+        if (!bookingOn) {
+          content = '';
+        }
+        else if (typeof username !== 'undefined') {
           var calendar = updateCalendar(deskid)
           activecalendar = attr.id;
           var calendarform = `
@@ -1179,7 +1185,7 @@ function showSticky (deskid, desktype, caption) {
           var ctSt = (typeof customItemTypes !== 'undefined' && customItemTypes[desktype.slice(7)]) ? customItemTypes[desktype.slice(7)] : null;
           var caption = attr.dsk || (ctSt ? ctSt.label : 'Item');
           var copylink = caption;
-          var avatar = (ctSt && ctSt.icon) ? ctSt.icon : 'images/noavatar.png';
+          var avatar = (ctSt && ctSt.icon) ? ctSt.icon : 'images/noavatar2.png';
           var avatarcolor = $('#' + attr.id).css('background-color');
           content = (ctSt && ctSt.description) ? ctSt.description : '';
         }
@@ -1222,7 +1228,7 @@ function showSticky (deskid, desktype, caption) {
                           + '<div class="leftnameplate_top" id="stickytitle" style="background:' + color
                           + '">' + caption + '</div>'
                           + '<div class="leftnameplate_textbox" style="'+boxstyle+'" id="textbox' + attr.id +'">' + content +'</div>'
-                          + '<img src="' + avatar + '" class="leftnameplate_avatar" id="stickyavatar" style="background:' + avatarcolor + '" onerror="this.src=\'images/noavatar.png\'">'
+                          + '<img src="' + avatar + '" class="leftnameplate_avatar" id="stickyavatar" style="background:' + avatarcolor + '" onerror="this.src=\'images/noavatar2.png\'">'
                           + '<img src="images/close2.png" class="leftnameplate_close" onclick=hideSticky() />'
                           + '<div class="leftnameplate_number">' + attr.dsk + '</div>'
                           + '<div class="nameplate_actions">' + copyBtn + reportBtn + robinBadge + '</div>'
@@ -1237,7 +1243,7 @@ function showSticky (deskid, desktype, caption) {
                           + '<div class="rightnameplate_top" id="stickytitle" style="background:' + color
                           + '">' + caption + '</div>'
                           + '<div class="rightnameplate_textbox" style="'+boxstyle+'" id="textbox' + attr.id +'">' + content +'</div>'
-                          + '<img src="' + avatar + '" class="rightnameplate_avatar" id="stickyavatar" style="background:' + avatarcolor + '" onerror="this.src=\'images/noavatar.png\'">'
+                          + '<img src="' + avatar + '" class="rightnameplate_avatar" id="stickyavatar" style="background:' + avatarcolor + '" onerror="this.src=\'images/noavatar2.png\'">'
                           + '<img src="images/close2.png" class="rightnameplate_close" onclick=hideSticky() />'
                           + '<div class="rightnameplate_number">' + attr.dsk + '</div>'
                           + '<div class="nameplate_actions">' + copyBtn + reportBtn + robinBadge + '</div>'
@@ -2164,7 +2170,7 @@ function buildSidebarLocalRow(r) {
   img.className = 'searchsidebar_avatar';
   if (isPerson) {
     img.src = avatarUrl(r.avtr, r.hasavatar);
-    img.onerror = function () { this.onerror = null; this.src = 'images/noavatar.png'; };
+    img.onerror = function () { this.onerror = null; this.src = 'images/noavatar2.png'; };
   }
   else {
     // Facility/marker: use its own icon, fitted inside the round badge. The
@@ -2986,7 +2992,7 @@ function updateChangeTracker() {
           if (counter.type=='Title') {
             outputstring+='<a href="'+root+'?findme='+encodeURIComponent(counter.fullname)+'">'
                           +'<div class="announceplate">'
-                          +'<div class="announceavatar" style="background-image: url(avatarcache/'+ counter.avatar + '.jpg), url(images/noavatar.png);"></div>'
+                          +'<div class="announceavatar" style="background-image: url(avatarcache/'+ counter.avatar + '.jpg), url(images/noavatar2.png);"></div>'
                           +'<div class="announcetextbox">'
                           +'<div class="announcetext">'
                           +counter.fullname + '<br />' + counter.newvalue + '<br />'
@@ -3000,7 +3006,7 @@ function updateChangeTracker() {
           if (counter.type=='Employee') {
             outputstring+='<a href="'+root+'?findme='+encodeURIComponent(counter.fullname)+'">'
                           +'<div class="announceplate">'
-                          +'<div class="announceavatar" style="background-image: url(avatarcache/'+ counter.avatar + '.jpg), url(images/noavatar.png);"></div>'
+                          +'<div class="announceavatar" style="background-image: url(avatarcache/'+ counter.avatar + '.jpg), url(images/noavatar2.png);"></div>'
                           +'<div class="announcetextbox">'
                           +'<div class="announcetext">'
                           +counter.fullname + '<br />' + counter.newvalue + '<br />'
@@ -3033,7 +3039,7 @@ function buildChangeRow(c) {
 
   var av = document.createElement('div');
   av.className = 'changerow-avatar';
-  av.style.backgroundImage = 'url(avatarcache/' + (c.avatar || '') + '.jpg), url(images/noavatar.png)';
+  av.style.backgroundImage = 'url(avatarcache/' + (c.avatar || '') + '.jpg), url(images/noavatar2.png)';
   a.appendChild(av);
 
   var main = document.createElement('div');
@@ -3293,6 +3299,29 @@ function applyAvatarCrop() {
   }, 'image/jpeg', 0.92);
 }
 
+// Remove the current avatar (after a confirmation). Posts mode=delete directly
+// instead of relying on a hidden submit button, which does not reliably submit
+// a visibility:hidden form.
+function deleteAvatar() {
+  if (!confirm('Remove your profile picture?')) { return; }
+  var fd = new FormData();
+  fd.append('mode', 'delete');
+  $.ajax({
+    type: 'POST',
+    url: 'rest/avatar',
+    data: fd,
+    contentType: false,
+    cache: false,
+    processData: false,
+    success: function () {
+      $('#avatarbutton img').attr('src', 'images/noavatar2.png?time=' + Date.now());
+    },
+    error: function () {
+      alert('Deletion failed, please try again.');
+    }
+  });
+}
+
 function getPrinterStatus() {
   mapname = map;
   $.ajax({
@@ -3372,6 +3401,8 @@ function cancelBooking(date,map,desk) {
 }
 
 function userBookings() {
+  // Internal-booking killswitch: no personal bookings hint when disabled.
+  if (typeof setting_internalbooking !== 'undefined' && setting_internalbooking == 0) { return; }
   usershort = username.replace(domain, "");
   $.ajax({
     type: 'GET',
@@ -3453,34 +3484,42 @@ function layoutPersonalMenu() {
   var row = document.querySelector(".avatarbutton_row");
   if (!menu || !row) { return; }
 
-  var HALF = 40;                 // half of the 80px button width
-  var logoutCenter = 60;         // avatar is at left:20, width 80 -> center 60
+  var logoutCenter = 50;         // avatar is at left:20, width 60 -> center 50
 
   var rowRight = row.offsetLeft + row.offsetWidth;   // right edge of the row
-  // Extend the menu 20px past the row's right edge to mirror the 20px gap on the
-  // left (between the menu edge and the avatar).
-  var menuWidth = Math.max(390, rowRight + 20);
-  menu.style.width = menuWidth + "px";
 
   var admin = document.getElementById("adminpanel_button");
-  var removeCenter;
+  var removeCenter, menuWidth;
   if (admin && admin.offsetParent !== null) {
     // Place "Remove image" on top of the admin-panel button. Convert the admin
-    // button's on-screen centre into the menu's (pre-zoom) local coordinates.
+    // button's on-screen centre into the menu's local (pre-zoom) coordinates.
+    // Reference the .buttons_left container (which carries the --sc zoom) rather
+    // than the menu's own rect, because the menu is still transform-collapsed
+    // (scale 0.2) while closed, which would otherwise skew the conversion.
     var aRect = admin.getBoundingClientRect();
-    var mRect = menu.getBoundingClientRect();
+    var container = menu.closest(".buttons_left") || menu.parentElement;
+    var cRect = container.getBoundingClientRect();
     var zoom = aRect.width / admin.offsetWidth || 1;
-    removeCenter = (aRect.left + aRect.width / 2 - mRect.left) / zoom;
+    removeCenter = (aRect.left + aRect.width / 2 - cRect.left) / zoom;
+    // Size the box so its right edge sits 20px past the remove button (its right
+    // edge is removeCenter + 30 for the 60px button), mirroring the 20px gap
+    // between the left edge and the logout button.
+    menuWidth = Math.max(340, removeCenter + 30 + 20, rowRight + 20);
   } else {
-    // No admin button: mirror the logout button's 20px left gap on the right.
-    removeCenter = menuWidth - 60;
+    // No admin button: size to the username row (20px right gap), then place the
+    // remove button to mirror the logout button's 20px edge gap.
+    menuWidth = Math.max(340, rowRight + 20);
+    removeCenter = menuWidth - 50;
   }
+  menu.style.width = menuWidth + "px";
 
   var uploadCenter = (logoutCenter + removeCenter) / 2;
 
+  // Center each element on the given x using its own rendered width, so the
+  // 60px buttons and the wider text labels both line up on the same axis.
   function place(id, center) {
     var el = document.getElementById(id);
-    if (el) { el.style.left = (center - HALF) + "px"; }
+    if (el) { el.style.left = (center - el.offsetWidth / 2) + "px"; }
   }
   place("pm_logout_label", logoutCenter);
   place("pm_logout_btn", logoutCenter);
@@ -3598,27 +3637,6 @@ $(function() {
     // Open the interactive crop/rotate dialog; it uploads a finished 400x400
     // JPEG via applyAvatarCrop() (the old path auto-uploaded the raw file).
     openAvatarCrop(file);
-  });
-  $("#deleteForm").on('submit', function(e){
-    e.preventDefault();
-    $.ajax({
-      type: 'POST',
-      url: 'rest/avatar',
-      data: new FormData(this),
-      contentType: false,
-      cache: false,
-      processData:false,
-      beforeSend: function(){
-        //$('#uploadStatus').html('<img src="images/uploading.gif"/>');
-      },
-      error:function(){
-        //$('#uploadStatus').html('<span style="color:#EA4335;">Deletion failed, please try again.<span>');
-      },
-      success: function(data){
-        //$('#uploadStatus').html('<span style="color:#28A74B;">Avatar has been deleted.<span>');
-        $('#avatarbutton img').attr('src', 'images/noavatar.png?time=' + Date.now());
-      }
-    });
   });
 
 });

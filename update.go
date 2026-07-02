@@ -83,6 +83,10 @@ func (app *App) handleRestUpdate(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "parameters missing", http.StatusBadRequest)
 			return
 		}
+		if (desktype == "hotseat" || desktype == "booking") && !app.internalBookingEnabled() {
+			http.Error(w, "internal booking is disabled", http.StatusForbidden)
+			return
+		}
 		newID, _ := app.db.NextDeskID(mapName)
 		_ = app.db.PutDesk(Desk{
 			ID: newID, Map: mapName, Desktype: desktype, X: x, Y: y,
@@ -135,6 +139,9 @@ func (app *App) handleRestUpdate(w http.ResponseWriter, r *http.Request) {
 			switch op.Op {
 			case "create":
 				if op.Desknumber == "" || (op.Employee == "" && op.Desktype != "localdesk" && !strings.HasPrefix(op.Desktype, "custom_")) {
+					continue
+				}
+				if (op.Desktype == "hotseat" || op.Desktype == "booking") && !app.internalBookingEnabled() {
 					continue
 				}
 				newID, _ := app.db.NextDeskID(mapName)

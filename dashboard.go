@@ -12,8 +12,21 @@ import (
 	"github.com/shirou/gopsutil/v3/mem"
 )
 
-// appVersion is the CompanyMaps major version, surfaced on the dashboard.
-const appVersion = "9"
+// appVersion is the CompanyMaps version, surfaced on the dashboard. Bump this
+// manually after meaningful changes.
+const appVersion = "9.1"
+
+// buildDate returns the date the running binary was built, derived from the
+// executable's modification time (go build sets it on compile; update.sh's mv
+// preserves it). Returns "unknown" when it can't be determined.
+func buildDate() string {
+	if exe, err := os.Executable(); err == nil {
+		if fi, err := os.Stat(exe); err == nil {
+			return fi.ModTime().Format("2006-01-02")
+		}
+	}
+	return "unknown"
+}
 
 // intgHealthResult is one integration's most recent connectivity-test outcome.
 type intgHealthResult struct {
@@ -204,6 +217,7 @@ func (app *App) dashboardSystem() map[string]interface{} {
 		"os":         runtime.GOOS + " / " + runtime.GOARCH,
 		"goVersion":  runtime.Version(),
 		"appVersion": appVersion,
+		"buildDate":  buildDate(),
 		"uptime":     humanDuration(time.Since(app.startTime)),
 		"numCPU":     runtime.NumCPU(),
 		"goroutines": runtime.NumGoroutine(),

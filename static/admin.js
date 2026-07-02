@@ -983,6 +983,13 @@ function dragElement(elmnt, deskType) {
 
 var EDIT_SIDEBAR_WIDTH = 340;
 
+// internalBookingOn reports whether the internal-booking feature is enabled.
+// The global is set by the index page after admin.js loads, so treat an
+// undefined value as enabled (default-on killswitch).
+function internalBookingOn() {
+  return typeof setting_internalbooking === 'undefined' || setting_internalbooking != 0;
+}
+
 // Catalog of placeable items. `color`/`icon`/`square` mirror the on-map look
 // (see .deskball and the per-type classes in cmaps.css) so each tile previews
 // exactly what will be placed.
@@ -1211,6 +1218,7 @@ function renderEditPalette() {
       var typeSel = document.createElement('select');
       typeSel.id = 'cluster_desktype_sel';
       CLUSTER_DESK_OPTIONS.forEach(function (opt) {
+        if (!internalBookingOn() && (opt.type === 'hotseat' || opt.type === 'booking')) { return; }
         var o = document.createElement('option');
         o.value = opt.type;
         o.textContent = opt.label;
@@ -1229,6 +1237,8 @@ function renderEditPalette() {
     var grid = document.createElement('div');
     grid.className = 'editsidebar_grid';
     sec.items.forEach(function (item) {
+      // Internal-booking killswitch: hide hot seat / bookable desk tiles.
+      if (!internalBookingOn() && (item.type === 'hotseat' || item.type === 'booking')) { return; }
       var tile = document.createElement('div');
       tile.className = 'editsidebar_tile';
       tile.setAttribute('data-type', item.type || ('cluster' + item.count + (item.diagonal ? 'd' : '')));

@@ -174,6 +174,7 @@ type adminData struct {
 	DepartmentsJSON         template.JS
 	BackupGroups            []backupGroup
 	WorldMap                bool
+	InternalBooking         bool
 	GeoapifyConfigured      bool
 }
 
@@ -1086,6 +1087,10 @@ func (app *App) buildAdminData(r *http.Request, sess Session, tab, msg string) a
 			if k == "worldmap" {
 				continue
 			}
+			// Internal booking has its own toggle card, so hide it from the table.
+			if k == "internalbooking" {
+				continue
+			}
 			d.GeneralVars = append(d.GeneralVars, kv{Variable: k, Value: v, Description: settingDescriptions[k]})
 		}
 		sort.Slice(d.GeneralVars, func(i, j int) bool { return d.GeneralVars[i].Variable < d.GeneralVars[j].Variable })
@@ -1093,6 +1098,7 @@ func (app *App) buildAdminData(r *http.Request, sess Session, tab, msg string) a
 		d.LogoHover = app.settingOr("logo_hover", "/static/images/cmaps-hover.png")
 		d.BackupGroups = backupGroups
 		d.WorldMap = app.db.GetSetting("worldmap") == "1"
+		d.InternalBooking = app.internalBookingEnabled()
 		d.CustomTypes, _ = app.db.ListItemTypes()
 		sort.Slice(d.CustomTypes, func(i, j int) bool {
 			return strings.ToLower(d.CustomTypes[i].Label) < strings.ToLower(d.CustomTypes[j].Label)

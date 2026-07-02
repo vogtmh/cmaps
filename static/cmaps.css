@@ -1862,7 +1862,7 @@ pre, code, kbd, samp, tt { font-family: inherit; }
 }
 .buttons_left_anchor {
     position: fixed; left: 10px; z-index: 5;
-    bottom: calc(0px * var(--sc, 1));
+    bottom: calc(10px * var(--sc, 1));
 }
 .buttons_left {
     position: relative; height: 60px; background: transparent;
@@ -1870,7 +1870,7 @@ pre, code, kbd, samp, tt { font-family: inherit; }
 }
 .buttons_right_anchor {
     position: fixed; right: 10px; z-index: 5;
-    bottom: calc(15px * var(--sc, 1));
+    bottom: calc(10px * var(--sc, 1));
 }
 .buttons_right {
     position: relative; width: auto; background: transparent;
@@ -1908,7 +1908,7 @@ pre, code, kbd, samp, tt { font-family: inherit; }
     height:60px;
     border-radius:50%;
     cursor:pointer;
-    background: transparent;
+    background: #000000;
     overflow:hidden;
     z-index:1;
 }
@@ -1949,7 +1949,7 @@ pre, code, kbd, samp, tt { font-family: inherit; }
 
 .avatarbutton_row {
     position:absolute;
-    left:60px;
+    left:57px;
     bottom: 20px;
     display:flex;
     align-items:center;
@@ -3169,13 +3169,25 @@ input[type=submit]:hover, input[type=button]:hover {
 .iconbtn-logout {
     background-image: url("images/logout.png");
 }
-/* Orange variant matching the avatar upload/delete buttons in the user menu
-   (orange #FF8040 base, green #00D700 on hover). */
-.iconbtn-orange {
-    background-color: #FF8040;
+.iconbtn-upload {
+    background-image: url("images/avatar-upload2.png");
 }
-.iconbtn-orange:hover {
-    background-color: #00D700;
+.iconbtn-remove {
+    background-image: url("images/avatar-delete2.png");
+}
+/* Colour variants for the user-menu action buttons: the avatar upload/remove
+   buttons use the app blue, the logout button is red. */
+.iconbtn-blue {
+    background-color: #0979D8;
+}
+.iconbtn-blue:hover {
+    background-color: #0563b0;
+}
+.iconbtn-red {
+    background-color: #EA4335;
+}
+.iconbtn-red:hover {
+    background-color: #c5221f;
 }
 /* Plain (no circle) icon button: just the icon image, dimmed by default and
    fully opaque on hover. */

@@ -61,7 +61,7 @@ func (app *App) handleMobile(w http.ResponseWriter, r *http.Request) {
 	bs := mobileBootstrap{
 		LoggedIn:           ok,
 		AppTitle:           app.appTitle(),
-		AvatarURL:          "/images/noavatar.png",
+		AvatarURL:          "/images/noavatar2.png",
 		Perms:              map[string]int{},
 		SAMLEnabled:        app.cfg.SAML.Enabled,
 		AllowLocalFallback: app.cfg.SAML.AllowLocalPasswordFallback,

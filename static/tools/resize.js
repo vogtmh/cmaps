@@ -31,6 +31,58 @@ function getCookie(cname) {
   return "";
 }
 
+// Small debounce helper (replaces the single _.debounce use from underscore.js).
+function debounce(fn, wait) {
+  var t;
+  return function () {
+    var ctx = this, args = arguments;
+    clearTimeout(t);
+    t = setTimeout(function () { fn.apply(ctx, args); }, wait);
+  };
+}
+
+// Safari (WebKit) only. The chrome (avatar/menu buttons, header, sidebars) is
+// sized with CSS `zoom`. WebKit rasterises a zoomed/composited layer ONCE (at
+// whatever state existed when the layer was first created — often before fonts
+// and the final scale settle) and then samples that cached bitmap for a
+// non-integer scale, so edges render pixelated/soft until something forces a
+// re-raster — the user noticed that a manual zoom change makes them crisp again.
+//
+// A uniform --sc nudge CANNOT fix this reliably: WebKit only re-rasters a layer
+// when its size changes by >=1 device pixel, so a nudge small enough to be
+// invisible on the full-width top bar is sub-pixel on the ~45-60px avatar/
+// settings buttons and gets rounded away — leaving exactly those small icons
+// blurry (the ones in the screenshot). Instead reRenderChrome() forces a fresh
+// raster PER element by promoting each zoomed chrome container to its own
+// compositor layer (translateZ(0)) at the settled scale — and LEAVES it
+// promoted. It must end promoted, not toggle back: demoting merges the element
+// back into the stale parent raster and reintroduces the blur. To make a repeat
+// call (e.g. on resize) actually re-raster, we first clear any prior promotion
+// so re-applying it is a real state change rather than a no-op.
+// Gated to Safari so Chrome/Firefox (which don't have the bug) get no repaint.
+var isSafari = /^((?!chrome|android|crios|fxios|edg).)*safari/i.test(navigator.userAgent);
+var CHROME_LAYERS = '.control_content, .notify_content, .buttons_left, .buttons_right';
+function reRenderChrome() {
+  if (!isSafari) { return; }
+  var els = document.querySelectorAll(CHROME_LAYERS);
+  // Drop any existing promotion so the re-promotion below is a real state change
+  // that forces a fresh raster (re-applying the same value would be a no-op).
+  for (var i = 0; i < els.length; i++) {
+    els[i].style.webkitTransform = '';
+  }
+  // Re-promote a couple of frames later so WebKit paints the un-promoted state
+  // first (a same-frame toggle gets coalesced under load, which made the fix
+  // only intermittent), then leave each element promoted and freshly rasterised
+  // at the settled scale so it stays crisp.
+  requestAnimationFrame(function () {
+    requestAnimationFrame(function () {
+      for (var j = 0; j < els.length; j++) {
+        els[j].style.webkitTransform = 'translateZ(0)';
+      }
+    });
+  });
+}
+
 
 $(function(){
   // Layout lives in cmaps.css, driven by CSS vars published here: `--sc` for the
@@ -41,10 +93,23 @@ $(function(){
   pageWidth = $('#container').width();
   pageHeight = $('#container').height();
   scalePages();
+  // Safari: the initial in-scalePages re-raster sometimes fires before WebKit
+  // has composited the chrome layer, so it has nothing stale to invalidate yet
+  // (the crispness fix was only ~50% reliable on reload). Re-run it at later
+  // settle points — after the window fully loads, after web fonts resolve, and
+  // a short timeout safety net — so at least one pass lands after the raster
+  // exists.
+  if (isSafari) {
+    window.addEventListener('load', function () { reRenderChrome(); });
+    if (document.fonts && document.fonts.ready) {
+      document.fonts.ready.then(function () { reRenderChrome(); });
+    }
+    setTimeout(function () { reRenderChrome(); }, 300);
+  }
   // Relayout hook for the search sidebar.
   window.cmapsRescale = scalePages;
   // Debounce resize handling until the window stops resizing.
-  $(window).resize(_.debounce(function () {
+  $(window).resize(debounce(function () {
   pageWidth = $('#container').width();  
   pageHeight = $('#container').height();  
   scalePages();
@@ -137,5 +202,7 @@ $(function(){
   document.cookie = "autozoom=" + basePage.scale+'; expires=Fri, 31 Dec 9999 23:59:59 GMT; SameSite=Lax';
   document.cookie = "LeftPos=" + newLeftPos+'; expires=Fri, 31 Dec 9999 23:59:59 GMT; SameSite=Lax';
   autozoom = mapScale;
+  // Safari: force the zoomed chrome to re-rasterise crisply at the final scale.
+  reRenderChrome();
   }
 });

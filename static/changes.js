@@ -17,7 +17,7 @@ function updateChangesOverview() {
           if (counter.type=='Title') {
             outputstring+='<a href="'+root+'?findme='+counter.fullname+'">'
                           +'<div class="announceplate" style="float:left">'
-                          +'<div class="announceavatar" style="background-image: url(avatarcache/'+ counter.avatar + '.jpg), url(images/noavatar.png);"></div>'
+                          +'<div class="announceavatar" style="background-image: url(avatarcache/'+ counter.avatar + '.jpg), url(images/noavatar2.png);"></div>'
                           +'<div class="announcetextbox">'
                           +'<div class="announcetext">'
                           +counter.fullname + '<br />' + counter.newvalue + '<br />'
@@ -31,7 +31,7 @@ function updateChangesOverview() {
           if (counter.type=='Employee') {
             outputstring+='<a href="'+root+'?findme='+counter.fullname+'">'
                           +'<div class="announceplate" style="float:left">'
-                          +'<div class="announceavatar" style="background-image: url(avatarcache/'+ counter.avatar + '.jpg), url(images/noavatar.png);"></div>'
+                          +'<div class="announceavatar" style="background-image: url(avatarcache/'+ counter.avatar + '.jpg), url(images/noavatar2.png);"></div>'
                           +'<div class="announcetextbox">'
                           +'<div class="announcetext">'
                           +counter.fullname + '<br />' + counter.newvalue + '<br />'

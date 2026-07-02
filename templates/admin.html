@@ -17,7 +17,6 @@
   <script src="../tools/Chart.min.js?v={{assetver}}"></script>
   <script src="../tools/jquery.js?v={{assetver}}"></script>
   <script src="../tools/resize.js?v={{assetver}}"></script>
-  <script src="../tools/underscore.js?v={{assetver}}"></script>
   <script src="backend.js?v={{assetver}}"></script>
   <script src="../user.js?v={{assetver}}"></script>
   <script>var targetScreenWidth = {{.TargetScreenWidth}};</script>
@@ -193,6 +192,25 @@
           </label>
           <span class="sync-toggle-label">Enable dynamic world map on the overview</span>
           <span id="worldmapStatus" class="sync-status-text" style="margin-left:10px;"></span>
+        </div>
+      </div>
+      {{end}}
+      {{if gt .PermConfig 1}}
+      <!-- Internal booking -->
+      <div class="sync-card">
+        <div class="sync-card-head">
+          <h2 class="sync-card-title">Internal booking</h2>
+        </div>
+        <p class="sync-card-hint">Let users reserve hot seats and bookable desks for a day. Disabling this acts as a
+          killswitch: existing hot seats and bookable desks are preserved, but no new ones can be placed, the booking
+          calendar is hidden and no new bookings can be made.</p>
+        <div class="sync-toggle-row">
+          <label class="sync-toggle">
+            <input type="checkbox" id="internalbookingToggle" {{if .InternalBooking}}checked{{end}} onchange="saveInternalBooking(this)">
+            <span class="sync-toggle-slider"></span>
+          </label>
+          <span class="sync-toggle-label">Enable internal desk booking</span>
+          <span id="internalbookingStatus" class="sync-status-text" style="margin-left:10px;"></span>
         </div>
       </div>
       {{end}}

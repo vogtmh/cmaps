@@ -38,6 +38,7 @@ type indexData struct {
 	PlaceholderMaps    []mapLink
 	IsOverview         bool
 	WorldMap           bool
+	InternalBooking    bool
 	HasMapImage        bool   // detail map: whether the map image file exists
 	GeoapifyConfigured bool   // whether a Geoapify API key is set (enables the geocode button)
 	NomapText          string // optional custom placeholder text for maps without an image
@@ -278,7 +279,7 @@ func (app *App) renderIndex(w http.ResponseWriter, r *http.Request, sess Session
 	}
 
 	// Avatar.
-	avatarURL := "images/noavatar.png"
+	avatarURL := "images/noavatar2.png"
 	if loggedIn {
 		userid := sess.Username
 		if i := strings.LastIndex(userid, "\\"); i >= 0 {
@@ -328,6 +329,7 @@ func (app *App) renderIndex(w http.ResponseWriter, r *http.Request, sess Session
 		PlaceholderMaps:    placeholderMaps,
 		IsOverview:         mapName == "overview",
 		WorldMap:           app.db.GetSetting("worldmap") == "1",
+		InternalBooking:    app.internalBookingEnabled(),
 		HasMapImage:        hasMapImage,
 		GeoapifyConfigured: app.db.GetGeoSetting("geoapifyApiKey") != "",
 		NomapText:          app.db.GetSetting("nomapText"),

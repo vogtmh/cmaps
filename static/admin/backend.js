@@ -288,9 +288,10 @@ function renderDashSystem(sys) {
     + (sys.diskFree ? ' (' + sys.diskFree + ' free)' : ''));
   var kv = [
     ['Hostname', sys.hostname], ['Platform', sys.os],
-    ['Uptime', sys.uptime], ['Go runtime', sys.goVersion],
-    ['CPU cores', sys.numCPU], ['Goroutines', sys.goroutines],
-    ['Heap in use', sys.heapAlloc], ['Server time', sys.serverTime]
+    ['Build date', sys.buildDate], ['Uptime', sys.uptime],
+    ['Go runtime', sys.goVersion], ['CPU cores', sys.numCPU],
+    ['Goroutines', sys.goroutines], ['Heap in use', sys.heapAlloc],
+    ['Server time', sys.serverTime]
   ];
   var kvhtml = '';
   for (var i = 0; i < kv.length; i++) {
@@ -1883,6 +1884,36 @@ function persistWorldMap(cb, value) {
     cb.checked = !cb.checked;
     if (status) { status.style.color = 'var(--sy-danger)'; status.textContent = 'Failed'; }
     throw new Error('save failed');
+  });
+}
+
+// saveInternalBooking persists the internal-booking killswitch and updates the
+// inline status text. Unlike the world map it has no coordinate prerequisites.
+function saveInternalBooking(cb) {
+  var status = document.getElementById('internalbookingStatus');
+  var value = cb.checked ? '1' : '0';
+  cb.disabled = true;
+  if (status) { status.style.color = ''; status.textContent = 'Saving\u2026'; }
+  var body = 'name=internalbooking&value=' + encodeURIComponent(value);
+  fetch('../rest/setting', {
+    method: 'POST',
+    credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: body
+  }).then(function (r) {
+    if (!r.ok) throw new Error('save failed');
+    return r.json();
+  }).then(function () {
+    cb.disabled = false;
+    if (status) {
+      status.style.color = 'var(--sy-ok)';
+      status.textContent = cb.checked ? 'Enabled' : 'Disabled';
+      setTimeout(function () { status.textContent = ''; }, 1500);
+    }
+  }).catch(function () {
+    cb.disabled = false;
+    cb.checked = !cb.checked;
+    if (status) { status.style.color = 'var(--sy-danger)'; status.textContent = 'Failed'; }
   });
 }
 

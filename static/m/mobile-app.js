@@ -76,7 +76,7 @@
 
   function avatarImg(url, cls) {
     return '<img class="m_avatar ' + (cls || '') + '" src="' + esc(url) + '" ' +
-      'onerror="this.onerror=null;this.src=\'/images/noavatar.png\';" alt="">';
+      'onerror="this.onerror=null;this.src=\'/images/noavatar2.png\';" alt="">';
   }
 
   // =========================================================================
@@ -527,7 +527,7 @@
       var v = deskInfo(d);
       name = (v && v.name) || d.empl || d.dsk || 'Desk';
     }
-    var avatarUrl = avtr ? '/avatarcache/' + encodeURIComponent(avtr) + '.jpg' : '/images/noavatar.png';
+    var avatarUrl = avtr ? '/avatarcache/' + encodeURIComponent(avtr) + '.jpg' : '/images/noavatar2.png';
 
     var html = '<div class="m_sheet_head">' + avatarImg(avatarUrl, 'lg') +
       '<div><div class="name">' + esc(name) + '</div>' +
@@ -737,7 +737,7 @@
         } else if (d.avtr) {
           icon = avatarImg('/avatarcache/' + encodeURIComponent(d.avtr) + '.jpg');
         } else if (d.fname || d.lname || d.empl) {
-          icon = avatarImg('/images/noavatar.png');
+          icon = avatarImg('/images/noavatar2.png');
         } else {
           icon = '<span class="m_desk m_resicon ' + type + '"></span>';
         }
@@ -784,7 +784,7 @@
   // Directory-user detail sheet (used by the admin Users section).
   function showPersonDetail(u) {
     var name = (u.givenname + ' ' + u.surname).trim();
-    var av = u.samaccountname ? '/avatarcache/' + encodeURIComponent(u.samaccountname) + '.jpg' : '/images/noavatar.png';
+    var av = u.samaccountname ? '/avatarcache/' + encodeURIComponent(u.samaccountname) + '.jpg' : '/images/noavatar2.png';
     var html = '<div class="m_sheet_head">' + avatarImg(av, 'lg') +
       '<div><div class="name">' + esc(name) + '</div>' +
       (u.title ? '<div class="role">' + esc(u.title) + '</div>' : '') + '</div></div>';

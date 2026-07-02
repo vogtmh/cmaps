@@ -31,7 +31,6 @@
   <script src="user.js?v={{assetver}}"></script>
   <script src="login.js?v={{assetver}}"></script>
   <script src="tools/resize.js?v={{assetver}}"></script>
-  <script src="tools/underscore.js?v={{assetver}}"></script>
 </head>
 
 <body style="min-height:1920px; width:100%; margin:0px; overflow-x:hidden;{{if .Printmode}} background:none;transform-origin:50% 0%;{{end}}">
@@ -235,6 +234,7 @@
     var setting_printmode = {{if .Printmode}}1{{else}}0{{end}};
     var setting_noanimation = {{if .NoAnimation}}1{{else}}0{{end}};
     var setting_worldmap = {{if .WorldMap}}1{{else}}0{{end}};
+    var setting_internalbooking = {{if .InternalBooking}}1{{else}}0{{end}};
     var hasMapImage = {{if .HasMapImage}}1{{else}}0{{end}};
     var setting_geoapify_configured = {{if .GeoapifyConfigured}}1{{else}}0{{end}};
     var region = "{{.Region}}";
@@ -289,22 +289,14 @@
 <div class="buttons_left">
   <div id="personal_menu" style="position:absolute; left: 0px; bottom: 0px; width:390px; height:270px;background-color:#333333; border-radius:40px;">
     <div id="pm_logout_label" style="position:absolute; left: 20px; bottom: 210px; width:80px; height:10px;background: transparent;font-size:12px;text-align:center;">Logout</div>
-    <div id="pm_logout_btn" class="iconbtn-circle iconbtn-logout iconbtn-orange" style="position:absolute; left: 20px; bottom: 120px; width:80px; height:80px;" onClick="logoutUser()"></div>
+    <div id="pm_logout_btn" class="iconbtn-circle iconbtn-logout iconbtn-red" style="position:absolute; left: 20px; bottom: 120px; width:60px; height:60px;" onClick="logoutUser()"></div>
     <div id="pm_upload_label" style="position:absolute; left: 155px; bottom: 210px; width:80px; height:10px;background: transparent;font-size:12px;text-align:center;">Upload image</div>
-    <div id="pm_upload_btn" style="position:absolute; left: 155px; bottom: 120px; width:80px; height:80px;background: transparent;cursor:pointer;">
-      <img src="images/avatar-upload.png" style="width:100%;height:100%;" alt="" onclick="document.getElementById('avatarInput').click();" onmouseover='this.src="images/avatar-upload_on.png"' onmouseout='this.src="images/avatar-upload.png"' />
-    </div>
+    <div id="pm_upload_btn" class="iconbtn-circle iconbtn-upload iconbtn-blue" style="position:absolute; left: 155px; bottom: 120px; width:60px; height:60px;" onclick="document.getElementById('avatarInput').click();"></div>
     <div id="pm_remove_label" style="position:absolute; left: 290px; bottom: 210px; width:80px; height:10px;background: transparent;font-size:12px;text-align:center;">Remove image</div>
-    <div id="pm_remove_btn" style="position:absolute; left: 290px; bottom: 120px; width:80px; height:80px;background: transparent;cursor:pointer;">
-      <img src="images/avatar-delete.png" style="width:100%;height:100%;" alt="" onclick="document.getElementById('avatarDelete').click();" onmouseover='this.src="images/avatar-delete_on.png"' onmouseout='this.src="images/avatar-delete.png"' />
-    </div>
-    <div id="bookingstable" style="position:absolute; left: 20px; bottom: 260px; width:300px; height:auto;background: transparent;font-size:12px;text-align:center;">no bookings found</div>
+    <div id="pm_remove_btn" class="iconbtn-circle iconbtn-remove iconbtn-blue" style="position:absolute; left: 290px; bottom: 120px; width:60px; height:60px;" onclick="deleteAvatar()"></div>
+    {{if .InternalBooking}}<div id="bookingstable" style="position:absolute; left: 20px; bottom: 260px; width:300px; height:auto;background: transparent;font-size:12px;text-align:center;">no bookings found</div>{{end}}
     <!-- Hidden file input; picking a file opens the crop/rotate dialog (see openAvatarCrop). -->
     <input type="file" name="images" id="avatarInput" accept="image/jpeg,image/png,image/gif,image/webp,image/heic,image/heif,.heic,.heif" style="display: none;">
-    <form id="deleteForm" style="width:300px;height:40px;visibility:hidden">
-      <input type="hidden" name="mode" value="delete">
-      <input type="submit" name="submit" id="avatarDelete" value="Delete avatar" style="background-color:#0979D8; color:white;width: 200px;height: 32px;border-radius: 10px;border: none;cursor: pointer;">
-    </form>
   </div>
   <div id="avatarbutton" onclick="togglePersonalMenu()">
     <img src="{{.AvatarURL}}" style="width:60px; height:60px;">
@@ -357,8 +349,8 @@
 
 <!-- Recent changes sidebar + full-screen modal -->
 <script>announceValue = {{.AnnounceCookie}}</script>
-<div id="datepicker_wrap" style="position:fixed;left:0px;bottom:0px;width:100%;display:flex;justify-content:center;align-items:flex-end;z-index:0;pointer-events:none;"><div class="datepicker" id="theDate"></div></div>
-<div id="clock_wrap" style="position:fixed;left:0px;bottom:0px;width:100%;display:flex;justify-content:center;align-items:flex-end;z-index:1;pointer-events:none;"><div class="clock" id="theTime" onclick="toggleDatepicker()"></div></div>
+<div id="datepicker_wrap" style="position:fixed;left:0px;bottom:0px;width:100%;display:flex;justify-content:center;align-items:flex-end;z-index:0;pointer-events:none;">{{if .InternalBooking}}<div class="datepicker" id="theDate"></div>{{end}}</div>
+<div id="clock_wrap" style="position:fixed;left:0px;bottom:0px;width:100%;display:flex;justify-content:center;align-items:flex-end;z-index:1;pointer-events:none;"><div class="clock" id="theTime" {{if .InternalBooking}}onclick="toggleDatepicker()"{{end}}></div></div>
 <div id="announcementbar" class="announcementbar">
   <div class="announcementbar_margin"></div>
   <div id="announcementbar_body" class="announcementbar_body"></div>

@@ -16,7 +16,7 @@ var CORE = [
   '/static/m/mobile.css?v=' + VERSION,
   '/static/m/mobile-app.js?v=' + VERSION,
   '/static/tools/jquery.js',
-  '/images/noavatar.png',
+  '/images/noavatar2.png',
   '/favicons/android-chrome-192x192.png',
   '/favicons/android-chrome-512x512.png'
 ];

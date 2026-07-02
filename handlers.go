@@ -238,7 +238,7 @@ func (app *App) serveAvatar(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	// Missing → point everyone at the same cached placeholder.
-	http.Redirect(w, r, "/static/images/noavatar.png?v="+assetVersion, http.StatusFound)
+	http.Redirect(w, r, "/static/images/noavatar2.png?v="+assetVersion, http.StatusFound)
 }
 
 // handleChanges renders the avatar/LDAP change-overview page (legacy changes.php).
