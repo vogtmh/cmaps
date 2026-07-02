@@ -128,7 +128,9 @@ type adminData struct {
 	RobinMapOptions         []string
 	RobinOrg                string
 	RobinSet                bool
+	RobinEnabled            bool
 	GeoapifySet             bool
+	GeoEnabled              bool
 	GeoUsageMonth           string
 	GeoUsageCount           int
 	RobinLastSync           RobinSyncResult
@@ -146,11 +148,8 @@ type adminData struct {
 	RobinDeskCount          int
 	RobinAdSameDesk         []RobinAdOverlap
 	RobinAdDuplicates       []RobinAdDuplicate
+	EntraSources            []EntraSource
 	EntraSet                bool
-	EntraEnabled            bool
-	EntraTenant             string
-	EntraClient             string
-	EntraAuthMethod         string
 	EntraLastSync           string
 	EntraHasSync            bool
 	EntraCount              int
@@ -309,38 +308,96 @@ func (app *App) handleAdminPost(w http.ResponseWriter, r *http.Request, sess Ses
 			}
 			return "Robin map updated."
 		}
-		if r.FormValue("saveEntraEnabled") != "" {
-			if r.FormValue("entraEnabled") == "1" {
-				_ = app.db.SetEntraSetting("entraEnabled", "1")
-				_ = app.db.AuditLog("LDAP", sess.Username, "EntraID integration enabled")
-			} else {
-				_ = app.db.SetEntraSetting("entraEnabled", "0")
-				_ = app.db.AuditLog("LDAP", sess.Username, "EntraID integration disabled")
+		if id := r.FormValue("deleteEntraID"); id != "" {
+			if n, err := strconv.Atoi(id); err == nil {
+				_ = app.db.DeleteEntraSource(n)
+				_ = app.db.AuditLog("LDAP", sess.Username, "EntraID connection removed (id "+id+")")
+				return "EntraID connection removed."
 			}
-			return "EntraID setting saved."
 		}
-		if r.FormValue("saveEntra") != "" {
-			method := strings.TrimSpace(r.FormValue("entraAuthMethod"))
+		if id := r.FormValue("toggleEntraID"); id != "" {
+			if n, err := strconv.Atoi(id); err == nil {
+				srcs, _ := app.db.ListEntraSources()
+				for _, s := range srcs {
+					if s.ID == n {
+						s.Disabled = r.FormValue("entraEnabled") != "1"
+						_ = app.db.PutEntraSource(s)
+						verb := "enabled"
+						if s.Disabled {
+							verb = "disabled"
+						}
+						_ = app.db.AuditLog("LDAP", sess.Username, "EntraID connection "+verb+" ("+s.Description+")")
+						return "EntraID connection " + verb + "."
+					}
+				}
+			}
+			return ""
+		}
+		if id := r.FormValue("editEntraID"); id != "" {
+			n, err := strconv.Atoi(id)
+			if err != nil {
+				return "Error: invalid EntraID id."
+			}
+			srcs, _ := app.db.ListEntraSources()
+			for _, s := range srcs {
+				if s.ID == n {
+					if v := strings.TrimSpace(r.FormValue("newEntraDescription")); v != "" {
+						s.Description = v
+					}
+					if v := strings.TrimSpace(r.FormValue("newEntraTenant")); v != "" {
+						s.TenantID = v
+					}
+					if v := strings.TrimSpace(r.FormValue("newEntraClient")); v != "" {
+						s.ClientID = v
+					}
+					if v := strings.TrimSpace(r.FormValue("newEntraAuthMethod")); v == "secret" || v == "certificate" {
+						s.AuthMethod = v
+					}
+					// Secrets/cert material are only overwritten when supplied, so
+					// re-saving without re-entering them keeps the stored values.
+					if v := strings.TrimSpace(r.FormValue("newEntraSecret")); v != "" {
+						s.ClientSecret = v
+					}
+					if v := strings.TrimSpace(r.FormValue("newEntraCert")); v != "" {
+						s.CertPEM = v
+					}
+					if v := strings.TrimSpace(r.FormValue("newEntraKey")); v != "" {
+						s.KeyPEM = v
+					}
+					_ = app.db.PutEntraSource(s)
+					_ = app.db.AuditLog("LDAP", sess.Username, "EntraID connection updated ("+s.Description+")")
+					return "EntraID connection updated."
+				}
+			}
+			return "Error: EntraID connection not found."
+		}
+		if r.FormValue("newEntraTenant") != "" || r.FormValue("newEntraClient") != "" {
+			desc := strings.TrimSpace(r.FormValue("newEntraDescription"))
+			tenant := strings.TrimSpace(r.FormValue("newEntraTenant"))
+			client := strings.TrimSpace(r.FormValue("newEntraClient"))
+			method := strings.TrimSpace(r.FormValue("newEntraAuthMethod"))
 			if method != "secret" && method != "certificate" {
 				method = "secret"
 			}
-			_ = app.db.SetEntraSetting("entraTenantID", strings.TrimSpace(r.FormValue("entraTenantID")))
-			_ = app.db.SetEntraSetting("entraClientID", strings.TrimSpace(r.FormValue("entraClientID")))
-			_ = app.db.SetEntraSetting("entraAuthMethod", method)
-			// Secrets/cert material are only overwritten when a new value is
-			// submitted, so re-saving the form without re-entering them keeps the
-			// stored credentials intact.
-			if secret := strings.TrimSpace(r.FormValue("entraClientSecret")); secret != "" {
-				_ = app.db.SetEntraSetting("entraClientSecret", secret)
+			if desc == "" {
+				desc = "EntraID"
 			}
-			if cert := strings.TrimSpace(r.FormValue("entraCertPem")); cert != "" {
-				_ = app.db.SetEntraSetting("entraCertPem", cert)
+			if tenant == "" || client == "" {
+				return "Error: tenant id and client id are required."
 			}
-			if key := strings.TrimSpace(r.FormValue("entraKeyPem")); key != "" {
-				_ = app.db.SetEntraSetting("entraKeyPem", key)
-			}
-			_ = app.db.AuditLog("LDAP", sess.Username, "EntraID credentials updated")
-			return "EntraID settings saved."
+			_ = app.db.PutEntraSource(EntraSource{
+				ID:           app.nextEntraID(),
+				Description:  desc,
+				TenantID:     tenant,
+				ClientID:     client,
+				AuthMethod:   method,
+				ClientSecret: strings.TrimSpace(r.FormValue("newEntraSecret")),
+				CertPEM:      strings.TrimSpace(r.FormValue("newEntraCert")),
+				KeyPEM:       strings.TrimSpace(r.FormValue("newEntraKey")),
+				LastSync:     "never",
+			})
+			_ = app.db.AuditLog("LDAP", sess.Username, "New EntraID connection created ("+desc+")")
+			return "EntraID connection created."
 		}
 		if r.FormValue("saveRobin") != "" {
 			if tok := strings.TrimSpace(r.FormValue("robintoken")); tok != "" {
@@ -408,6 +465,59 @@ func (app *App) handleAdminPost(w http.ResponseWriter, r *http.Request, sess Ses
 				_ = app.db.AuditLog("LDAP", sess.Username, "LDAP sync removed (id "+id+")")
 				return "LDAP source removed."
 			}
+		}
+		if id := r.FormValue("toggleLdapID"); id != "" {
+			if n, err := strconv.Atoi(id); err == nil {
+				srcs, _ := app.db.ListLdapSources()
+				for _, s := range srcs {
+					if s.ID == n {
+						s.Disabled = r.FormValue("ldapEnabled") != "1"
+						_ = app.db.PutLdapSource(s)
+						verb := "enabled"
+						if s.Disabled {
+							verb = "disabled"
+						}
+						_ = app.db.AuditLog("LDAP", sess.Username, "LDAP source "+verb+" ("+s.Description+")")
+						return "LDAP source " + verb + "."
+					}
+				}
+			}
+			return ""
+		}
+		if id := r.FormValue("editLdapID"); id != "" {
+			n, err := strconv.Atoi(id)
+			if err != nil {
+				return "Error: invalid LDAP id."
+			}
+			srcs, _ := app.db.ListLdapSources()
+			for _, s := range srcs {
+				if s.ID == n {
+					if v := strings.TrimSpace(r.FormValue("newLdapDescription")); v != "" {
+						s.Description = v
+					}
+					if v := strings.TrimSpace(r.FormValue("newLdapServer")); v != "" {
+						s.Server = v
+					}
+					if v := strings.TrimSpace(r.FormValue("newLdapType")); v != "" {
+						s.Type = v
+					}
+					if v := strings.TrimSpace(r.FormValue("newLdapOU")); v != "" {
+						s.OU = v
+					}
+					if v := strings.TrimSpace(r.FormValue("newLdapUser")); v != "" {
+						s.LdapUser = v
+					}
+					// Only overwrite the bind password when a new one is supplied,
+					// so re-saving without re-entering it keeps the stored secret.
+					if v := r.FormValue("newLdapPass"); v != "" {
+						s.LdapPass = v
+					}
+					_ = app.db.PutLdapSource(s)
+					_ = app.db.AuditLog("LDAP", sess.Username, "LDAP source updated ("+s.Description+")")
+					return "LDAP source updated."
+				}
+			}
+			return "Error: LDAP source not found."
 		}
 		desc := r.FormValue("newLdapDescription")
 		server := r.FormValue("newLdapServer")
@@ -880,6 +990,17 @@ func (app *App) nextLdapID() int {
 	return max + 1
 }
 
+func (app *App) nextEntraID() int {
+	srcs, _ := app.db.ListEntraSources()
+	max := 0
+	for _, s := range srcs {
+		if s.ID > max {
+			max = s.ID
+		}
+	}
+	return max + 1
+}
+
 // buildAdminData assembles the template payload for the active tab.
 func (app *App) buildAdminData(r *http.Request, sess Session, tab, msg string) adminData {
 	autozoom := cookieInt(r, "autozoom", 1)
@@ -961,7 +1082,9 @@ func (app *App) buildAdminData(r *http.Request, sess Session, tab, msg string) a
 		sort.Slice(d.RobinSpaces, func(i, j int) bool { return d.RobinSpaces[i].Spacename < d.RobinSpaces[j].Spacename })
 		d.RobinOrg = app.db.GetRobinSetting("robinOrganisation")
 		d.RobinSet = app.db.GetRobinSetting("robintoken") != ""
+		d.RobinEnabled = app.robinEnabled()
 		d.GeoapifySet = app.db.GetGeoSetting("geoapifyApiKey") != ""
+		d.GeoEnabled = app.geoEnabled()
 		d.GeoUsageMonth, d.GeoUsageCount = app.db.GetGeoUsage()
 		// Build the map dropdown: published maps plus any value currently in use
 		// (so every row's selection stays selectable even if it isn't a real map yet).
@@ -1111,15 +1234,9 @@ func (app *App) buildAdminData(r *http.Request, sess Session, tab, msg string) a
 			return d.RobinAdDuplicates[i].Name < d.RobinAdDuplicates[j].Name
 		})
 
-		// --- EntraID connection + LDAP <-> EntraID mirror comparison ----------
-		d.EntraTenant = app.db.GetEntraSetting("entraTenantID")
-		d.EntraClient = app.db.GetEntraSetting("entraClientID")
-		d.EntraAuthMethod = app.db.GetEntraSetting("entraAuthMethod")
-		if d.EntraAuthMethod == "" {
-			d.EntraAuthMethod = "secret"
-		}
-		d.EntraSet = app.entraConfigured()
-		d.EntraEnabled = app.entraEnabled()
+		// --- EntraID connections + LDAP <-> EntraID mirror comparison --------
+		d.EntraSources, _ = app.db.ListEntraSources()
+		d.EntraSet = len(d.EntraSources) > 0
 		d.EntraLastSync = app.db.GetEntraSetting("entraLastSync")
 		d.EntraHasSync = d.EntraLastSync != ""
 		entraUsers, _ := app.db.ListEntraLdap()
@@ -1409,6 +1526,41 @@ func (app *App) handleRestLdap(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]interface{}{"status": "ok", "count": count})
 }
 
+// handleRestLdapTest validates a single LDAP source's connectivity and bind
+// credentials without running a sync. It dials the server, binds and reports the
+// outcome. Requires the "ldap" feature at read level.
+func (app *App) handleRestLdapTest(w http.ResponseWriter, r *http.Request) {
+	sess, ok := app.currentSession(r)
+	if !ok || app.permLevel(sess, "ldap") < 1 {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	id, err := strconv.Atoi(r.URL.Query().Get("ldapid"))
+	if err != nil {
+		writeJSON(w, map[string]interface{}{"ok": false, "error": "invalid LDAP id"})
+		return
+	}
+	srcs, _ := app.db.ListLdapSources()
+	for _, s := range srcs {
+		if s.ID != id {
+			continue
+		}
+		conn, err := dialLDAP(s)
+		if err != nil {
+			writeJSON(w, map[string]interface{}{"ok": false, "error": err.Error()})
+			return
+		}
+		defer conn.Close()
+		if err := conn.Bind(s.LdapUser, s.LdapPass); err != nil {
+			writeJSON(w, map[string]interface{}{"ok": false, "error": "bind failed: " + err.Error()})
+			return
+		}
+		writeJSON(w, map[string]interface{}{"ok": true, "message": "Connected and bound successfully."})
+		return
+	}
+	writeJSON(w, map[string]interface{}{"ok": false, "error": "LDAP source not found"})
+}
+
 // handleRestLdapDebug returns diagnostics from the most recent AD sync so the
 // admin panel can show why a sync mirrored few/no users.
 func (app *App) handleRestLdapDebug(w http.ResponseWriter, r *http.Request) {
@@ -1663,6 +1815,10 @@ func (app *App) handleRestRobinTest(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}
+	if !app.robinEnabled() {
+		writeJSON(w, map[string]interface{}{"log": []string{"Robin integration is disabled."}})
+		return
+	}
 	_ = app.db.AuditLog("LDAP", sess.Username, "Robin meeting sync test run")
 	writeJSON(w, map[string]interface{}{"log": app.RunRobinSyncVerbose()})
 }
@@ -1673,6 +1829,10 @@ func (app *App) handleRestRobinSync(w http.ResponseWriter, r *http.Request) {
 	sess, ok := app.currentSession(r)
 	if !ok || app.permLevel(sess, "ldap") < 2 {
 		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	if !app.robinEnabled() {
+		writeJSON(w, map[string]interface{}{"started": false, "message": "Robin integration is disabled."})
 		return
 	}
 	if !app.robinProg.start(0, "Starting…") {
@@ -1721,6 +1881,10 @@ func (app *App) handleRestGeoTest(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}
+	if !app.geoEnabled() {
+		writeJSON(w, map[string]interface{}{"ok": false, "message": "Geocoding integration is disabled."})
+		return
+	}
 	apiKey := app.db.GetGeoSetting("geoapifyApiKey")
 	if strings.TrimSpace(apiKey) == "" {
 		writeJSON(w, map[string]interface{}{"ok": false, "message": "No Geoapify API key configured. Save a key first."})
@@ -1765,6 +1929,10 @@ func (app *App) handleRestGeoSync(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}
+	if !app.geoEnabled() {
+		writeJSON(w, map[string]interface{}{"ok": false, "message": "Geocoding integration is disabled."})
+		return
+	}
 	if strings.TrimSpace(app.db.GetGeoSetting("geoapifyApiKey")) == "" {
 		writeJSON(w, map[string]interface{}{"ok": false, "message": "No Geoapify API key configured. Save a key first."})
 		return
@@ -1806,6 +1974,75 @@ func (app *App) handleRestGeoProgress(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, snap)
 }
 
+// handleRestRobinEnabled switches the Robin integration on or off. Disabling it
+// stops the schedulers and blocks manual syncs/tests while leaving the saved
+// token and options untouched.
+func (app *App) handleRestRobinEnabled(w http.ResponseWriter, r *http.Request) {
+	sess, ok := app.currentSession(r)
+	if !ok || app.permLevel(sess, "ldap") < 2 {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	enabled := r.URL.Query().Get("enabled") == "1" || r.FormValue("enabled") == "1"
+	val := "1"
+	action := "enabled"
+	if !enabled {
+		val = "0"
+		action = "disabled"
+	}
+	_ = app.db.SetRobinSetting("robinEnabled", val)
+	_ = app.db.AuditLog("LDAP", sess.Username, "Robin integration "+action)
+	writeJSON(w, map[string]interface{}{"ok": true, "enabled": enabled})
+}
+
+// handleRestRobinDelete clears the saved Robin token and organisation id so the
+// integration returns to its unconfigured state.
+func (app *App) handleRestRobinDelete(w http.ResponseWriter, r *http.Request) {
+	sess, ok := app.currentSession(r)
+	if !ok || app.permLevel(sess, "ldap") < 2 {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	_ = app.db.SetRobinSetting("robintoken", "")
+	_ = app.db.SetRobinSetting("robinOrganisation", "")
+	_ = app.db.AuditLog("LDAP", sess.Username, "Robin credentials deleted")
+	writeJSON(w, map[string]interface{}{"ok": true})
+}
+
+// handleRestGeoEnabled switches the Geoapify geocoding integration on or off.
+// Disabling it blocks manual geocode syncs/tests while leaving the saved API key
+// untouched.
+func (app *App) handleRestGeoEnabled(w http.ResponseWriter, r *http.Request) {
+	sess, ok := app.currentSession(r)
+	if !ok || app.permLevel(sess, "ldap") < 2 {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	enabled := r.URL.Query().Get("enabled") == "1" || r.FormValue("enabled") == "1"
+	val := "1"
+	action := "enabled"
+	if !enabled {
+		val = "0"
+		action = "disabled"
+	}
+	_ = app.db.SetGeoSetting("geoEnabled", val)
+	_ = app.db.AuditLog("LDAP", sess.Username, "Geocoding integration "+action)
+	writeJSON(w, map[string]interface{}{"ok": true, "enabled": enabled})
+}
+
+// handleRestGeoDelete clears the saved Geoapify API key so the geocoding
+// integration returns to its unconfigured state.
+func (app *App) handleRestGeoDelete(w http.ResponseWriter, r *http.Request) {
+	sess, ok := app.currentSession(r)
+	if !ok || app.permLevel(sess, "ldap") < 2 {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	_ = app.db.SetGeoSetting("geoapifyApiKey", "")
+	_ = app.db.AuditLog("LDAP", sess.Username, "Geoapify API key deleted")
+	writeJSON(w, map[string]interface{}{"ok": true})
+}
+
 // handleRestRobinDeskTest starts the read-only Robin desk-data diagnostic in
 // the background (if one is not already running) so the admin Sync tab can poll
 // for a live progress bar + log. The diagnostic walks every configured location
@@ -1817,6 +2054,10 @@ func (app *App) handleRestRobinDeskTest(w http.ResponseWriter, r *http.Request) 
 	sess, ok := app.currentSession(r)
 	if !ok || app.permLevel(sess, "ldap") < 1 {
 		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	if !app.robinEnabled() {
+		writeJSON(w, map[string]interface{}{"started": false, "message": "Robin integration is disabled."})
 		return
 	}
 	if !app.robinDeskProg.start(0, "Starting…") {

@@ -41,6 +41,7 @@ var (
 	bucketItemTypes = []byte("itemtypes")       // admin-defined custom palette item types (key = id)
 	bucketEntraLdap = []byte("entraidmirror")   // EntraID (Graph) office-filtered mirror, same shape as ldapmirror
 	bucketEntraCfg  = []byte("entraidconfig")   // EntraID app-registration credentials / last-sync (key = name)
+	bucketEntraSrc  = []byte("entraidsources")  // EntraID app registrations, one per connection (key = id)
 )
 
 var allBuckets = [][]byte{
@@ -48,7 +49,7 @@ var allBuckets = [][]byte{
 	bucketRoles, bucketUsers, bucketChangelog, bucketStats, bucketTracking, bucketVips,
 	bucketDepts, bucketRobin, bucketMeeting, bucketWhitelist, bucketLdapSrc, bucketAudit,
 	bucketMeta, bucketDirectory, bucketRobinCfg, bucketRobinDesk, bucketGeoCfg, bucketItemTypes,
-	bucketEntraLdap, bucketEntraCfg,
+	bucketEntraLdap, bucketEntraCfg, bucketEntraSrc,
 }
 
 type DB struct {
@@ -289,6 +290,29 @@ type LdapSource struct {
 	LdapUser    string `json:"LdapUser"`
 	LdapPass    string `json:"LdapPass"`
 	LastSync    string `json:"LastSync"`
+	// Disabled excludes the source from the combined AD sync. Stored as
+	// omitempty so existing sources (which predate this field) default to
+	// enabled, matching "enabled unless the user deactivates it".
+	Disabled bool `json:"disabled,omitempty"`
+}
+
+// EntraSource is one Microsoft Entra ID app registration used as a directory
+// sync source (Microsoft Graph). It mirrors LdapSource's role for AD: several
+// connections can be configured and each is synced into the shared EntraID
+// mirror. Secrets/certificate material are used for syncing only.
+type EntraSource struct {
+	ID           int    `json:"id"`
+	Description  string `json:"description"`
+	TenantID     string `json:"tenant_id"`
+	ClientID     string `json:"client_id"`
+	AuthMethod   string `json:"auth_method"` // secret | certificate
+	ClientSecret string `json:"client_secret,omitempty"`
+	CertPEM      string `json:"cert_pem,omitempty"`
+	KeyPEM       string `json:"key_pem,omitempty"`
+	LastSync     string `json:"last_sync"`
+	// Disabled excludes the source from the combined EntraID sync. omitempty so
+	// pre-existing/migrated sources default to enabled.
+	Disabled bool `json:"disabled,omitempty"`
 }
 
 // AuditEntry mirrors a row of the auditlog table.
@@ -853,6 +877,22 @@ func (db *DB) GetEntraSetting(name string) string {
 
 func (db *DB) SetEntraSetting(name, value string) error {
 	return putJSON(db, bucketEntraCfg, []byte(name), value)
+}
+
+// --- EntraID sources (one row per app registration / connection) ---
+
+func (db *DB) ListEntraSources() ([]EntraSource, error) {
+	srcs, err := listJSON[EntraSource](db, bucketEntraSrc, "")
+	sort.Slice(srcs, func(i, j int) bool { return srcs[i].ID < srcs[j].ID })
+	return srcs, err
+}
+
+func (db *DB) PutEntraSource(s EntraSource) error {
+	return putJSON(db, bucketEntraSrc, []byte(fmt.Sprintf("%d", s.ID)), s)
+}
+
+func (db *DB) DeleteEntraSource(id int) error {
+	return deleteKey(db, bucketEntraSrc, []byte(fmt.Sprintf("%d", id)))
 }
 
 // --- Directory (full AD snapshot) ---

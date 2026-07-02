@@ -65,6 +65,18 @@ func (app *App) runADSync(prog *syncProgress) (int, error) {
 	if len(sources) == 0 {
 		return 0, fmt.Errorf("no AD sources configured")
 	}
+	// Skip deactivated sources: their placements are dropped from the mirror on
+	// the next sync because ReplaceLdap rewrites the whole mirror below.
+	enabled := sources[:0]
+	for _, s := range sources {
+		if !s.Disabled {
+			enabled = append(enabled, s)
+		}
+	}
+	sources = enabled
+	if len(sources) == 0 {
+		return 0, fmt.Errorf("no enabled AD sources configured")
+	}
 	if prog != nil {
 		prog.setTotal(len(sources))
 		prog.logf("Starting sync of %d source(s)…", len(sources))
@@ -477,7 +489,18 @@ func (app *App) StartADSyncScheduler(interval time.Duration) {
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
 		for range ticker.C {
-			if sources, _ := app.db.ListLdapSources(); len(sources) == 0 {
+			// Skip when there is nothing enabled to sync (no sources, or every
+			// source deactivated) so the scheduler stays quiet instead of logging
+			// a "no enabled AD sources" error every interval.
+			sources, _ := app.db.ListLdapSources()
+			anyEnabled := false
+			for _, s := range sources {
+				if !s.Disabled {
+					anyEnabled = true
+					break
+				}
+			}
+			if !anyEnabled {
 				continue
 			}
 			if n, err := app.RunADSync(); err != nil {

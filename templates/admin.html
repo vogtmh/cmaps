@@ -106,7 +106,7 @@
 <div id="content" class="page_content" style="position:absolute; top:{{.ContentTop}}px; left:{{.ContentLeft}}px; width:{{.TargetScreenWidth}}px; zoom:{{.ContentScale}};"> <br />
 
 {{define "admincontent"}}
-{{if .Message}}<div style="margin-left:20px; padding:8px; background:rgba(0,120,0,0.6); border-radius:5px; width:600px;">{{.Message}}</div><br />{{end}}
+{{if and .Message (ne .ActiveTab "ldap")}}<div style="margin-left:20px; padding:8px; background:rgba(0,120,0,0.6); border-radius:5px; width:600px;">{{.Message}}</div><br />{{end}}
 
 {{if eq .ActiveTab "dashboard"}}
   <script>
@@ -498,6 +498,10 @@
     {{if gt .PermLdap 0}}
     <button type="button" class="sync-tab" id="syncnav_geo" onclick="showSyncSub('geo')"><span class="sync-navdot"></span>Geocoding</button>
     {{end}}
+    {{if gt .PermAdminpanel 0}}
+    <button type="button" class="sync-tab" id="syncnav_database" onclick="showSyncSub('database')"><span class="sync-navdot"></span>Database</button>
+    {{end}}
+    {{if .Message}}<span class="sync-msg" id="syncMsg">{{.Message}}</span>{{end}}
   </div>
   <div class="sync-pane">
 
@@ -510,52 +514,76 @@
         <button type="button" class="sync-toggle-btn" id="ldapAddToggle" onclick="toggleCollapse('ldapAddCollapse', this)"><span class="caret">&#9654;</span> Add a connection</button>
         {{end}}
       </div>
+      <p class="sync-card-hint">
+        Sync users from one or more Active Directory / LDAP directories. Each connection
+        binds with the configured service account and mirrors its office/desk placements
+        into the shared store used across the map.
+      </p>
       {{if .LdapSources}}
       <table class="sync-table">
         <thead>
           <tr>
+            <th class="sync-td-min">Enabled</th>
             <th>Description</th><th>Server</th><th>Type</th><th>OU</th>
-            <th>Bind user</th><th>Last sync</th><th class="sync-td-min"></th>{{if gt .PermLdap 1}}<th class="sync-td-min"></th>{{end}}
+            <th>Bind user</th><th>Last sync</th>
+            <th class="sync-td-min"></th>
           </tr>
         </thead>
         <tbody>
         {{range .LdapSources}}
           <tr>
+            <td class="sync-td-min">
+              {{if gt $.PermLdap 1}}
+              <label class="sync-toggle" title="Enable this connection">
+                <input type="checkbox" id="ldapEnabled{{.ID}}" {{if not .Disabled}}checked{{end}} onchange="toggleLdapEnabled({{.ID}}, this)">
+                <span class="sync-toggle-slider"></span>
+              </label>
+              {{else}}
+              {{if .Disabled}}<span class="sync-badge sync-badge-warn">Disabled</span>{{else}}<span class="sync-badge sync-badge-ok">Enabled</span>{{end}}
+              {{end}}
+            </td>
             <td>{{.Description}}</td><td>{{.Server}}</td>
             <td><span class="sync-badge sync-badge-accent">{{.Type}}</span></td>
             <td>{{.OU}}</td><td>{{.LdapUser}}</td><td>{{.LastSync}}</td>
-            <td class="sync-td-min"><button type="button" class="sync-btn sync-btn-sm" id="syncbutton{{.ID}}" onClick="syncLDAP({{.ID}}, username)">Sync now</button></td>
-            {{if gt $.PermLdap 1}}
             <td class="sync-td-min">
-              <form name="DeleteLdap" action="?tab=ldap" method="post" style="margin:0;" onsubmit="return confirm('Delete LDAP connection &quot;{{.Description}}&quot;? Users synced from this source will no longer be refreshed.');">
-                <input type="hidden" name="tab" value="ldap">
-                <input type="hidden" name="deleteLdapID" value="{{.ID}}">
-                <button type="submit" class="sync-btn sync-btn-sm sync-btn-danger">Delete</button>
-              </form>
+              <div style="display:flex; gap:6px; justify-content:flex-end;">
+                <button type="button" class="sync-btn sync-btn-sm" id="ldaptestbtn{{.ID}}" data-desc="{{.Description}}" onClick="testLDAP({{.ID}})">Test</button>
+                <button type="button" class="sync-btn sync-btn-sm" id="syncbutton{{.ID}}" onClick="syncLDAP({{.ID}}, username)"{{if .Disabled}} disabled title="Enable this connection to sync it"{{end}}>Sync now</button>
+                {{if gt $.PermLdap 1}}
+                <button type="button" class="sync-btn sync-btn-sm" data-id="{{.ID}}" data-desc="{{.Description}}" data-server="{{.Server}}" data-type="{{.Type}}" data-ou="{{.OU}}" data-user="{{.LdapUser}}" onclick="editLdapSource(this)">Edit</button>
+                <form name="DeleteLdap" action="?tab=ldap" method="post" style="margin:0;" onsubmit="return confirm('Delete LDAP connection &quot;{{.Description}}&quot;? Users synced from this source will no longer be refreshed.');">
+                  <input type="hidden" name="tab" value="ldap">
+                  <input type="hidden" name="deleteLdapID" value="{{.ID}}">
+                  <button type="submit" class="sync-btn sync-btn-sm sync-btn-danger">Delete</button>
+                </form>
+                {{end}}
+              </div>
             </td>
-            {{end}}
           </tr>
         {{end}}
         </tbody>
       </table>
+      <div id="ldapTestResult" class="sync-status-text" style="margin-top:8px;"></div>
       {{else}}
       <div class="sync-empty">No LDAP connections configured yet.</div>
       {{end}}
 
       {{if gt .PermLdap 1}}
       <div class="sync-collapse" id="ldapAddCollapse">
-        <form name="AddLdap" action="?tab=ldap" method="post">
+        <form name="AddLdap" id="ldapForm" action="?tab=ldap" method="post">
           <input type="hidden" name="tab" value="ldap">
+          <input type="hidden" name="editLdapID" id="ldapFormEditID" value="">
           <div class="sync-form-grid">
-            <div class="sync-field"><label class="sync-label">Description</label><input class="sync-input" type="text" name="newLdapDescription" placeholder="e.g. Corporate AD"></div>
-            <div class="sync-field"><label class="sync-label">Server</label><input class="sync-input" type="text" name="newLdapServer" placeholder="dc01.example.com"></div>
-            <div class="sync-field"><label class="sync-label">Type</label><select class="sync-select" name="newLdapType"><option value="LDAPS">LDAPS</option><option value="LDAP">LDAP</option></select></div>
-            <div class="sync-field sync-field-wide"><label class="sync-label">OU (search base)</label><input class="sync-input" type="text" name="newLdapOU" placeholder="OU=Users,DC=example,DC=com"></div>
-            <div class="sync-field"><label class="sync-label">Bind user</label><input class="sync-input" type="text" name="newLdapUser" placeholder="Bind user"></div>
-            <div class="sync-field"><label class="sync-label">Password</label><input class="sync-input" type="password" name="newLdapPass" placeholder="Password"></div>
+            <div class="sync-field"><label class="sync-label">Description</label><input class="sync-input" id="ldapFDescription" type="text" name="newLdapDescription" placeholder="e.g. Corporate AD"></div>
+            <div class="sync-field"><label class="sync-label">Server</label><input class="sync-input" id="ldapFServer" type="text" name="newLdapServer" placeholder="dc01.example.com"></div>
+            <div class="sync-field"><label class="sync-label">Type</label><select class="sync-select" id="ldapFType" name="newLdapType"><option value="LDAPS">LDAPS</option><option value="LDAP">LDAP</option></select></div>
+            <div class="sync-field sync-field-wide"><label class="sync-label">OU (search base)</label><input class="sync-input" id="ldapFOU" type="text" name="newLdapOU" placeholder="OU=Users,DC=example,DC=com"></div>
+            <div class="sync-field"><label class="sync-label">Bind user</label><input class="sync-input" id="ldapFUser" type="text" name="newLdapUser" placeholder="Bind user"></div>
+            <div class="sync-field"><label class="sync-label">Password</label><input class="sync-input" id="ldapFPass" type="password" name="newLdapPass" placeholder="Password"></div>
           </div>
           <div class="sync-form-actions">
-            <button type="submit" class="sync-btn sync-btn-primary">Create connection</button>
+            <button type="submit" class="sync-btn sync-btn-primary" id="ldapFormSubmit">Create connection</button>
+            <button type="button" class="sync-btn" id="ldapFormCancel" onclick="cancelEditLdap()" style="display:none;">Cancel</button>
           </div>
         </form>
       </div>
@@ -583,81 +611,112 @@
   <div id="syncsub_entra" class="syncsub" style="display:none;">
     <div class="sync-card">
       <div class="sync-card-head">
-        <h2 class="sync-card-title">EntraID connection</h2>
-        <div style="display:flex; gap:10px; align-items:center;">
-          {{if not .EntraSet}}<span class="sync-badge sync-badge-warn">Not configured</span>
-          {{else if .EntraEnabled}}<span class="sync-badge sync-badge-ok">Enabled</span>
-          {{else}}<span class="sync-badge sync-badge-warn">Disabled</span>{{end}}
-          {{if gt .PermLdap 1}}
-          <button type="button" class="sync-toggle-btn" id="entraCfgToggle" onclick="toggleCollapse('entraCfgCollapse', this)"><span class="caret">&#9654;</span> Configure</button>
-          {{if .EntraSet}}
-          <button type="button" class="sync-btn" id="entraTestBtn" onClick="testEntra()">Test connection</button>
-          <button type="button" class="sync-btn sync-btn-primary" id="entraSyncBtn" onClick="startEntraSync()">Run sync now</button>
-          {{end}}
-          {{end}}
-        </div>
+        <h2 class="sync-card-title">Connections</h2>
+        {{if gt .PermLdap 1}}
+        <button type="button" class="sync-toggle-btn" id="entraAddToggle" onclick="toggleCollapse('entraAddCollapse', this)"><span class="caret">&#9654;</span> Add a connection</button>
+        {{end}}
       </div>
       <p class="sync-card-hint">
-        Sync users from Microsoft Entra ID via an app registration (Microsoft Graph). The
-        same office/desk placements as LDAP are mirrored into a separate store so the two
-        directories can be compared side by side.
+        Sync users from Microsoft Entra ID via one or more app registrations (Microsoft
+        Graph). The same office/desk placements as LDAP are mirrored into a separate store
+        so the two directories can be compared side by side.
         {{if .EntraHasSync}}Last sync {{.EntraLastSync}} &middot; {{.EntraCount}} placement(s).{{end}}
       </p>
-
-      {{if gt .PermLdap 1}}
-      <div class="sync-toggle-row">
-        <label class="sync-toggle">
-          <input type="checkbox" id="entraEnabledToggle" {{if .EntraEnabled}}checked{{end}} onchange="saveEntraEnabled(this)">
-          <span class="sync-toggle-slider"></span>
-        </label>
-        <span class="sync-toggle-label">Enable EntraID synchronization</span>
-        <span id="entraEnabledStatus" class="sync-status-text" style="margin-left:10px;"></span>
-      </div>
+      {{if .EntraSources}}
+      <table class="sync-table">
+        <thead>
+          <tr>
+            <th class="sync-td-min">Enabled</th>
+            <th>Description</th><th>Tenant ID</th><th>Client ID</th><th>Auth</th>
+            <th>Last sync</th>
+            <th class="sync-td-min"></th>
+          </tr>
+        </thead>
+        <tbody>
+        {{range .EntraSources}}
+          <tr>
+            <td class="sync-td-min">
+              {{if gt $.PermLdap 1}}
+              <label class="sync-toggle" title="Enable this connection">
+                <input type="checkbox" id="entraEnabled{{.ID}}" {{if not .Disabled}}checked{{end}} onchange="toggleEntraEnabled({{.ID}}, this)">
+                <span class="sync-toggle-slider"></span>
+              </label>
+              {{else}}
+              {{if .Disabled}}<span class="sync-badge sync-badge-warn">Disabled</span>{{else}}<span class="sync-badge sync-badge-ok">Enabled</span>{{end}}
+              {{end}}
+            </td>
+            <td>{{.Description}}</td><td>{{.TenantID}}</td><td>{{.ClientID}}</td>
+            <td><span class="sync-badge sync-badge-accent">{{if eq .AuthMethod "certificate"}}Certificate{{else}}Secret{{end}}</span></td>
+            <td>{{.LastSync}}</td>
+            <td class="sync-td-min">
+              <div style="display:flex; gap:6px; justify-content:flex-end;">
+                <button type="button" class="sync-btn sync-btn-sm" id="entratestbtn{{.ID}}" data-desc="{{.Description}}" onClick="testEntra({{.ID}})">Test</button>
+                <button type="button" class="sync-btn sync-btn-sm" id="entrasyncbtn{{.ID}}" onClick="syncEntra({{.ID}})"{{if .Disabled}} disabled title="Enable this connection to sync it"{{end}}>Sync now</button>
+                {{if gt $.PermLdap 1}}
+                <button type="button" class="sync-btn sync-btn-sm" data-id="{{.ID}}" data-desc="{{.Description}}" data-tenant="{{.TenantID}}" data-client="{{.ClientID}}" data-method="{{.AuthMethod}}" onclick="editEntraSource(this)">Edit</button>
+                <form name="DeleteEntra" action="?tab=ldap" method="post" style="margin:0;" onsubmit="return confirm('Delete EntraID connection &quot;{{.Description}}&quot;? Users synced from this source will no longer be refreshed.');">
+                  <input type="hidden" name="tab" value="ldap">
+                  <input type="hidden" name="deleteEntraID" value="{{.ID}}">
+                  <button type="submit" class="sync-btn sync-btn-sm sync-btn-danger">Delete</button>
+                </form>
+                {{end}}
+              </div>
+            </td>
+          </tr>
+        {{end}}
+        </tbody>
+      </table>
+      <div id="entraTestResult" class="sync-status-text" style="margin-top:8px;"></div>
+      {{else}}
+      <div class="sync-empty">No EntraID connections configured yet.</div>
       {{end}}
 
       {{if gt .PermLdap 1}}
-      <div class="sync-collapse" id="entraCfgCollapse">
-        <form name="SaveEntra" action="?tab=ldap&partial=1" method="post" onsubmit="return saveEntra(event);">
+      <div class="sync-collapse" id="entraAddCollapse">
+        <form name="AddEntra" id="entraForm" action="?tab=ldap" method="post">
           <input type="hidden" name="tab" value="ldap">
-          <input type="hidden" name="saveEntra" value="1">
+          <input type="hidden" name="editEntraID" id="entraFormEditID" value="">
           <div class="sync-form-grid">
-            <div class="sync-field"><label class="sync-label">Directory (tenant) ID</label><input class="sync-input" type="text" name="entraTenantID" value="{{.EntraTenant}}" placeholder="00000000-0000-0000-0000-000000000000"></div>
-            <div class="sync-field"><label class="sync-label">Application (client) ID</label><input class="sync-input" type="text" name="entraClientID" value="{{.EntraClient}}" placeholder="00000000-0000-0000-0000-000000000000"></div>
+            <div class="sync-field"><label class="sync-label">Description</label><input class="sync-input" id="entraFDescription" type="text" name="newEntraDescription" placeholder="e.g. EntraID"></div>
+            <div class="sync-field"><label class="sync-label">Directory (tenant) ID</label><input class="sync-input" id="entraFTenant" type="text" name="newEntraTenant" placeholder="00000000-0000-0000-0000-000000000000"></div>
+            <div class="sync-field"><label class="sync-label">Application (client) ID</label><input class="sync-input" id="entraFClient" type="text" name="newEntraClient" placeholder="00000000-0000-0000-0000-000000000000"></div>
             <div class="sync-field"><label class="sync-label">Authentication</label>
-              <select class="sync-select" id="entraAuthMethod" name="entraAuthMethod" onchange="updateEntraAuthMethod()">
-                <option value="secret"{{if eq .EntraAuthMethod "secret"}} selected{{end}}>Client secret</option>
-                <option value="certificate"{{if eq .EntraAuthMethod "certificate"}} selected{{end}}>Certificate</option>
+              <select class="sync-select" id="entraFAuthMethod" name="newEntraAuthMethod" onchange="updateEntraAuthMethod()">
+                <option value="secret">Client secret</option>
+                <option value="certificate">Certificate</option>
               </select>
             </div>
           </div>
           <div class="sync-form-grid" id="entraSecretFields">
-            <div class="sync-field sync-field-wide"><label class="sync-label">Client secret</label><input class="sync-input" type="password" name="entraClientSecret" placeholder="{{if .EntraSet}}(unchanged){{else}}Client secret value{{end}}"></div>
+            <div class="sync-field sync-field-wide"><label class="sync-label">Client secret</label><input class="sync-input" id="entraFSecret" type="password" name="newEntraSecret" placeholder="Client secret value"></div>
           </div>
           <div class="sync-form-grid" id="entraCertFields" style="display:none;">
-            <div class="sync-field sync-field-wide"><label class="sync-label">Certificate (PEM)</label><textarea class="sync-input" name="entraCertPem" rows="4" placeholder="-----BEGIN CERTIFICATE-----&#10;{{if .EntraSet}}(unchanged){{end}}"></textarea></div>
-            <div class="sync-field sync-field-wide"><label class="sync-label">Private key (PEM)</label><textarea class="sync-input" name="entraKeyPem" rows="4" placeholder="-----BEGIN PRIVATE KEY-----&#10;{{if .EntraSet}}(unchanged){{end}}"></textarea></div>
+            <div class="sync-field sync-field-wide"><label class="sync-label">Certificate (PEM)</label><textarea class="sync-input" id="entraFCert" name="newEntraCert" rows="4" placeholder="-----BEGIN CERTIFICATE-----"></textarea></div>
+            <div class="sync-field sync-field-wide"><label class="sync-label">Private key (PEM)</label><textarea class="sync-input" id="entraFKey" name="newEntraKey" rows="4" placeholder="-----BEGIN PRIVATE KEY-----"></textarea></div>
           </div>
           <div class="sync-form-actions">
-            <button type="submit" class="sync-btn sync-btn-primary">Save settings</button>
-            <span id="entraSaveStatus" class="sync-card-hint" style="margin-left:10px;"></span>
+            <button type="submit" class="sync-btn sync-btn-primary" id="entraFormSubmit">Create connection</button>
+            <button type="button" class="sync-btn" id="entraFormCancel" onclick="cancelEditEntra()" style="display:none;">Cancel</button>
           </div>
         </form>
       </div>
       {{end}}
+    </div>
 
-      <div id="entraTestResult" class="sync-status-text" style="margin-top:10px;"></div>
-
-      {{if gt .PermLdap 1}}
-      <div class="sync-form-actions" style="margin-top:8px;">
-        <button type="button" class="sync-btn" id="entraReloadBtn" style="display:none;">View updated results</button>
+    {{if gt .PermLdap 1}}
+    <div class="sync-card">
+      <div class="sync-card-head"><h2 class="sync-card-title">Run a sync</h2></div>
+      <p class="sync-card-hint">Synchronise all enabled EntraID connections now. Progress and a detailed log appear below.</p>
+      <div class="sync-form-actions">
+        <button type="button" class="sync-btn sync-btn-primary" id="entraSyncBtn" onClick="startEntraSync()">Run sync now</button>
       </div>
       <div class="sync-progress" id="entraProgress">
-        <div class="sync-progress-head"><span id="entraProgStage">Working…</span><span id="entraProgCount"></span></div>
+        <div class="sync-progress-head"><span id="entraProgStage">Working&hellip;</span><span id="entraProgCount"></span></div>
         <div class="sync-progress-track"><div class="sync-progress-fill" id="entraProgFill"></div></div>
       </div>
       <pre class="sync-log" id="entraLog" style="display:none;"></pre>
-      {{end}}
     </div>
+    {{end}}
 
     <div class="sync-card">
       <div class="sync-card-head"><h2 class="sync-card-title">LDAP &harr; EntraID comparison</h2></div>
@@ -718,95 +777,142 @@
 
   {{if gt .PermAdminpanel 0}}
   <div id="syncsub_saml" class="syncsub" style="display:none;">
-    <div id="samlStatusBar" class="sync-statusbar"></div>
 
-    <div class="sync-card">
-      <div class="sync-toggle-row">
-        <label class="sync-toggle"><input type="checkbox" id="saml_enabled"><span class="sync-toggle-slider"></span></label>
-        <span class="sync-toggle-label">Enable SAML single sign-on</span>
+    <!-- Placeholder shown when nothing is configured yet -->
+    <div class="sync-card" id="samlPlaceholder" style="display:none;">
+      <div class="sync-card-head">
+        <h2 class="sync-card-title">SAML single sign-on</h2>
       </div>
-      <div class="sync-toggle-row">
-        <label class="sync-toggle"><input type="checkbox" id="saml_allow_local"><span class="sync-toggle-slider"></span></label>
-        <span class="sync-toggle-label">Allow local username / password fallback</span>
+      <p class="sync-card-hint">
+        Let users sign in with your identity provider (Entra ID / Azure AD) via SAML 2.0.
+        No configuration exists yet.
+      </p>
+      <div class="sync-empty" style="display:flex; flex-direction:column; align-items:center; gap:14px;">
+        <span>No SAML single sign-on configured.</span>
+        <button type="button" class="sync-btn sync-btn-primary" onClick="samlStartCreate()">Set up SAML SSO</button>
       </div>
     </div>
 
-    <div class="sync-steps">
-      <div class="sync-step primary">
-        <div class="sync-step-head">
-          <span class="sync-step-num">1</span>
-          <h2 class="sync-step-title">Generate SP information for IT</h2>
+    <!-- Summary card shown when a configuration exists and we are not editing -->
+    <div class="sync-card" id="samlSummaryCard" style="display:none;">
+      <div class="sync-card-head">
+        <h2 class="sync-card-title">SAML single sign-on</h2>
+        <div style="display:flex; gap:8px; align-items:center;">
+          <label class="sync-toggle" title="Enable or disable SAML single sign-on"><input type="checkbox" id="saml_sum_toggle" onChange="toggleSamlEnabled(this)"><span class="sync-toggle-slider"></span></label>
+          <span class="sync-toggle-label" id="saml_sum_toggle_label" style="margin-right:6px;">Disabled</span>
+          <button type="button" class="sync-btn sync-btn-sm" onClick="samlTest()">Test</button>
+          <button type="button" class="sync-btn sync-btn-sm" onClick="samlStartEdit()">Edit</button>
+          <button type="button" class="sync-btn sync-btn-sm sync-btn-danger" onClick="samlDelete()">Delete</button>
         </div>
-        <p class="sync-step-desc">Provide these Service Provider values to whoever configures the application registration in Entra ID / your IdP.</p>
-        <div class="sync-step-body">
-          <div class="sync-sp-row"><span class="sync-sp-label">Entity ID</span><span class="sync-sp-value" id="sp_entity_id">-</span></div>
-          <div class="sync-sp-row"><span class="sync-sp-label">Reply URL (ACS)</span><span class="sync-sp-value" id="sp_acs_url">-</span></div>
-          <div class="sync-sp-row"><span class="sync-sp-label">Metadata URL</span><span class="sync-sp-value" id="sp_metadata_url">-</span></div>
-          <div class="sync-sp-row"><span class="sync-sp-label">Login URL</span><span class="sync-sp-value" id="sp_login_url">-</span></div>
+      </div>
+      <table class="sync-table">
+        <tbody>
+          <tr><th class="sync-td-min">SAML sign-on</th><td id="saml_sum_enabled">-</td></tr>
+          <tr><th class="sync-td-min">Local login fallback</th><td id="saml_sum_local">-</td></tr>
+          <tr><th class="sync-td-min">Tenant ID</th><td id="saml_sum_tenant">-</td></tr>
+          <tr><th class="sync-td-min">IdP Entity ID</th><td id="saml_sum_entity">-</td></tr>
+          <tr><th class="sync-td-min">Login URL</th><td id="saml_sum_login">-</td></tr>
+          <tr><th class="sync-td-min">Certificate</th><td id="saml_sum_cert">-</td></tr>
+        </tbody>
+      </table>
+      <div class="sync-form-actions" style="margin-top:8px;">
+        <button type="button" class="sync-btn" onClick="showSamlDebug()">Show last test result</button>
+      </div>
+    </div>
+
+    <!-- Create / edit setup, hidden until Set up / Edit is pressed -->
+    <div id="samlSetup" style="display:none;">
+      <div class="sync-card">
+        <div class="sync-card-head">
+          <h2 class="sync-card-title">Configure SAML SSO</h2>
+          <div style="display:flex; gap:8px; align-items:center;">
+            <span id="saml_save_status" class="sync-status-text"></span>
+            <button type="button" class="sync-btn sync-btn-primary" onClick="saveSamlSettings()">Save SAML settings</button>
+            <button type="button" class="sync-btn" onClick="samlCancelEdit()">Cancel</button>
+          </div>
+        </div>
+        <div class="sync-toggle-row">
+          <label class="sync-toggle"><input type="checkbox" id="saml_enabled"><span class="sync-toggle-slider"></span></label>
+          <span class="sync-toggle-label">Enable SAML single sign-on</span>
+        </div>
+        <div class="sync-toggle-row">
+          <label class="sync-toggle"><input type="checkbox" id="saml_allow_local"><span class="sync-toggle-slider"></span></label>
+          <span class="sync-toggle-label">Allow local username / password fallback</span>
         </div>
       </div>
 
-      <div class="sync-step">
-        <div class="sync-step-head">
-          <span class="sync-step-num">2</span>
-          <h2 class="sync-step-title">Enter Entra ID configuration</h2>
+      <div class="sync-steps">
+        <div class="sync-step primary">
+          <div class="sync-step-head">
+            <span class="sync-step-num">1</span>
+            <h2 class="sync-step-title">Generate SP information for IT</h2>
+          </div>
+          <p class="sync-step-desc">Provide these Service Provider values to whoever configures the application registration in Entra ID / your IdP.</p>
+          <div class="sync-step-body">
+            <div class="sync-sp-row"><span class="sync-sp-label">Entity ID</span><span class="sync-sp-value" id="sp_entity_id">-</span></div>
+            <div class="sync-sp-row"><span class="sync-sp-label">Reply URL (ACS)</span><span class="sync-sp-value" id="sp_acs_url">-</span></div>
+            <div class="sync-sp-row"><span class="sync-sp-label">Metadata URL</span><span class="sync-sp-value" id="sp_metadata_url">-</span></div>
+            <div class="sync-sp-row"><span class="sync-sp-label">Login URL</span><span class="sync-sp-value" id="sp_login_url">-</span></div>
+          </div>
         </div>
-        <p class="sync-step-desc">Paste the Entra ID &ldquo;App Federation Metadata Url&rdquo; to auto-fill the login URL, certificate, entity ID and tenant &mdash; or fill the fields manually.</p>
-        <div class="sync-step-body">
-          <div class="sync-import-row">
-            <input class="sync-input" type="text" id="saml_metadata_import_url" placeholder="https://login.microsoftonline.com/<tenant>/federationmetadata/2007-06/federationmetadata.xml?appid=...">
-            <button type="button" class="sync-btn sync-btn-primary" onClick="importSamlMetadata()">Import</button>
-          </div>
-          <div id="saml_import_status" class="sync-status-text" style="margin-bottom:12px;"></div>
 
-          <div class="sync-form-grid">
-            <div class="sync-field"><label class="sync-label">Tenant ID</label><input class="sync-input" type="text" id="saml_tenant"></div>
-            <div class="sync-field"><label class="sync-label">IdP Entity ID</label><input class="sync-input" type="text" id="saml_entity" placeholder="https://sts.windows.net/<tenant>/"></div>
-            <div class="sync-field sync-field-wide"><label class="sync-label">Login URL (SSO)</label><input class="sync-input" type="text" id="saml_login" placeholder="https://login.microsoftonline.com/<tenant>/saml2"></div>
-            <div class="sync-field sync-field-wide"><label class="sync-label">X.509 certificate</label><textarea class="sync-textarea" id="saml_cert" placeholder="Base64 certificate (no PEM headers)"></textarea></div>
+        <div class="sync-step">
+          <div class="sync-step-head">
+            <span class="sync-step-num">2</span>
+            <h2 class="sync-step-title">Enter Entra ID configuration</h2>
           </div>
-
-          <details class="sync-details">
-            <summary>Advanced: SP overrides &amp; attribute mapping</summary>
-            <div style="margin-top:14px;">
-              <div class="sync-card-hint" style="margin:0 0 8px;">Leave SP overrides blank to use the legacy SimpleSAMLphp paths.</div>
-              <div class="sync-form-grid">
-                <div class="sync-field sync-field-wide"><label class="sync-label">App Entity ID</label><input class="sync-input" type="text" id="saml_app_entity"></div>
-                <div class="sync-field sync-field-wide"><label class="sync-label">App Reply URL</label><input class="sync-input" type="text" id="saml_app_reply"></div>
-                <div class="sync-field sync-field-wide"><label class="sync-label">App Logout URL</label><input class="sync-input" type="text" id="saml_app_logout"></div>
-                <div class="sync-field sync-field-wide"><label class="sync-label">NameID format</label><input class="sync-input" type="text" id="saml_nameid" placeholder="urn:oasis:names:tc:SAML:2.0:nameid-format:persistent"></div>
-              </div>
-              <div class="sync-card-hint" style="margin:14px 0 8px;">Leave attribute / claim overrides blank to use the Azure AD defaults.</div>
-              <div class="sync-form-grid">
-                <div class="sync-field"><label class="sync-label">SamAccountName</label><input class="sync-input" type="text" id="saml_attr_sam"></div>
-                <div class="sync-field"><label class="sync-label">Given name</label><input class="sync-input" type="text" id="saml_attr_given"></div>
-                <div class="sync-field"><label class="sync-label">Surname</label><input class="sync-input" type="text" id="saml_attr_sn"></div>
-                <div class="sync-field"><label class="sync-label">Full name</label><input class="sync-input" type="text" id="saml_attr_full"></div>
-                <div class="sync-field"><label class="sync-label">Mail</label><input class="sync-input" type="text" id="saml_attr_mail"></div>
-              </div>
+          <p class="sync-step-desc">Paste the Entra ID &ldquo;App Federation Metadata Url&rdquo; to auto-fill the login URL, certificate, entity ID and tenant &mdash; or fill the fields manually.</p>
+          <div class="sync-step-body">
+            <div class="sync-import-row">
+              <input class="sync-input" type="text" id="saml_metadata_import_url" placeholder="https://login.microsoftonline.com/<tenant>/federationmetadata/2007-06/federationmetadata.xml?appid=...">
+              <button type="button" class="sync-btn sync-btn-primary" onClick="importSamlMetadata()">Import</button>
             </div>
-          </details>
-        </div>
-      </div>
+            <div id="saml_import_status" class="sync-status-text" style="margin-bottom:12px;"></div>
 
-      <div class="sync-step">
-        <div class="sync-step-head">
-          <span class="sync-step-num">3</span>
-          <h2 class="sync-step-title">Run a live Entra ID test</h2>
+            <div class="sync-form-grid">
+              <div class="sync-field"><label class="sync-label">Tenant ID</label><input class="sync-input" type="text" id="saml_tenant"></div>
+              <div class="sync-field"><label class="sync-label">IdP Entity ID</label><input class="sync-input" type="text" id="saml_entity" placeholder="https://sts.windows.net/<tenant>/"></div>
+              <div class="sync-field sync-field-wide"><label class="sync-label">Login URL (SSO)</label><input class="sync-input" type="text" id="saml_login" placeholder="https://login.microsoftonline.com/<tenant>/saml2"></div>
+              <div class="sync-field sync-field-wide"><label class="sync-label">X.509 certificate</label><textarea class="sync-textarea" id="saml_cert" placeholder="Base64 certificate (no PEM headers)"></textarea></div>
+            </div>
+
+            <details class="sync-details">
+              <summary>Advanced: SP overrides &amp; attribute mapping</summary>
+              <div style="margin-top:14px;">
+                <div class="sync-card-hint" style="margin:0 0 8px;">Leave SP overrides blank to use the legacy SimpleSAMLphp paths.</div>
+                <div class="sync-form-grid">
+                  <div class="sync-field sync-field-wide"><label class="sync-label">App Entity ID</label><input class="sync-input" type="text" id="saml_app_entity"></div>
+                  <div class="sync-field sync-field-wide"><label class="sync-label">App Reply URL</label><input class="sync-input" type="text" id="saml_app_reply"></div>
+                  <div class="sync-field sync-field-wide"><label class="sync-label">App Logout URL</label><input class="sync-input" type="text" id="saml_app_logout"></div>
+                  <div class="sync-field sync-field-wide"><label class="sync-label">NameID format</label><input class="sync-input" type="text" id="saml_nameid" placeholder="urn:oasis:names:tc:SAML:2.0:nameid-format:persistent"></div>
+                </div>
+                <div class="sync-card-hint" style="margin:14px 0 8px;">Leave attribute / claim overrides blank to use the Azure AD defaults.</div>
+                <div class="sync-form-grid">
+                  <div class="sync-field"><label class="sync-label">SamAccountName</label><input class="sync-input" type="text" id="saml_attr_sam"></div>
+                  <div class="sync-field"><label class="sync-label">Given name</label><input class="sync-input" type="text" id="saml_attr_given"></div>
+                  <div class="sync-field"><label class="sync-label">Surname</label><input class="sync-input" type="text" id="saml_attr_sn"></div>
+                  <div class="sync-field"><label class="sync-label">Full name</label><input class="sync-input" type="text" id="saml_attr_full"></div>
+                  <div class="sync-field"><label class="sync-label">Mail</label><input class="sync-input" type="text" id="saml_attr_mail"></div>
+                </div>
+              </div>
+            </details>
+          </div>
         </div>
-        <p class="sync-step-desc">Save your settings first, then run a live test to confirm the round-trip works before enabling SAML for everyone.</p>
-        <div class="sync-step-body">
-          <div class="sync-form-actions" style="margin-top:0;">
-            <button type="button" class="sync-btn sync-btn-primary" onClick="window.open('../auth/saml/login?debug=1','_blank')">Run live test</button>
-            <button type="button" class="sync-btn" onClick="showSamlDebug()">Show last test result</button>
+
+        <div class="sync-step">
+          <div class="sync-step-head">
+            <span class="sync-step-num">3</span>
+            <h2 class="sync-step-title">Test the configuration</h2>
+          </div>
+          <p class="sync-step-desc">Save your settings first, then run a pre-flight check that validates the certificate, request generation and IdP reachability &mdash; no separate browser window needed.</p>
+          <div class="sync-step-body">
+            <div class="sync-form-actions" style="margin-top:0;">
+              <button type="button" class="sync-btn sync-btn-primary" onClick="samlTest()">Test configuration</button>
+              <button type="button" class="sync-btn" onClick="showSamlDebug()">Show last test result</button>
+            </div>
           </div>
         </div>
       </div>
-    </div>
-
-    <div class="sync-form-actions">
-      <button type="button" class="sync-btn sync-btn-primary" onClick="saveSamlSettings()">Save SAML settings</button>
-      <span id="saml_save_status" class="sync-status-text"></span>
     </div>
 
     <div id="samlDebugOverlay" class="sync-modal">
@@ -828,10 +934,16 @@
       <div class="sync-card-head">
         <h2 class="sync-card-title">Last sync</h2>
         <div style="display:flex; gap:10px; align-items:center;">
+          {{if gt .PermLdap 1}}
+          <label class="sync-toggle" title="Enable or disable the Robin integration"><input type="checkbox" id="robinEnabledToggle" onChange="toggleRobinEnabled(this)"{{if .RobinEnabled}} checked{{end}}><span class="sync-toggle-slider"></span></label>
+          <span class="sync-toggle-label" id="robinEnabledLabel" style="margin-right:6px;">{{if .RobinEnabled}}Enabled{{else}}Disabled{{end}}</span>
+          {{end}}
           {{if .RobinSet}}<span class="sync-badge sync-badge-ok">Token configured</span>{{else}}<span class="sync-badge sync-badge-warn">No token</span>{{end}}
           {{if gt .PermLdap 1}}
           <button type="button" class="sync-toggle-btn" onclick="toggleCollapse('robinCredCollapse', this)"><span class="caret">&#9654;</span> Configure</button>
-          <button type="button" class="sync-btn sync-btn-primary" id="robinSyncBtn" onClick="startRobinSync()">Run sync now</button>
+          <button type="button" class="sync-btn" id="robinTestBtn" onClick="showRobinTest()"{{if not .RobinEnabled}} disabled title="Robin integration is disabled"{{end}}>Test</button>
+          <button type="button" class="sync-btn sync-btn-primary" id="robinSyncBtn" onClick="startRobinSync()"{{if not .RobinEnabled}} disabled title="Robin integration is disabled"{{end}}>Run sync now</button>
+          {{if .RobinSet}}<button type="button" class="sync-btn sync-btn-danger" onClick="deleteRobinConfig()">Delete</button>{{end}}
           {{end}}
         </div>
       </div>
@@ -1137,6 +1249,16 @@
       <pre class="sync-log" id="robinDeskLog" style="display:none;"></pre>
     </div>
     {{end}}
+
+    <div id="robinDebugOverlay" class="sync-modal">
+      <div class="sync-modal-box">
+        <div class="sync-modal-head">
+          <h2>Robin meeting sync test</h2>
+          <button type="button" class="sync-btn sync-btn-sm" onClick="document.getElementById('robinDebugOverlay').style.display='none'">Close</button>
+        </div>
+        <pre id="robinDebugBody" class="sync-modal-body"></pre>
+      </div>
+    </div>
   </div>
   {{end}}
 
@@ -1147,13 +1269,18 @@
       <div class="sync-card-head">
         <h2 class="sync-card-title">Geoapify geocoding</h2>
         <div style="display:flex; gap:10px; align-items:center;">
+          {{if gt .PermLdap 1}}
+          <label class="sync-toggle" title="Enable or disable the geocoding integration"><input type="checkbox" id="geoEnabledToggle" onChange="toggleGeoEnabled(this)"{{if .GeoEnabled}} checked{{end}}><span class="sync-toggle-slider"></span></label>
+          <span class="sync-toggle-label" id="geoEnabledLabel" style="margin-right:6px;">{{if .GeoEnabled}}Enabled{{else}}Disabled{{end}}</span>
+          {{end}}
           {{if .GeoapifySet}}<span class="sync-badge sync-badge-ok">API key configured</span>{{else}}<span class="sync-badge sync-badge-warn">No API key</span>{{end}}
           {{if gt .PermLdap 1}}
           <button type="button" class="sync-toggle-btn" onclick="toggleCollapse('geoCredCollapse', this)"><span class="caret">&#9654;</span> Configure</button>
           {{end}}
-          <button type="button" class="sync-toggle-btn" onclick="toggleCollapse('geoTestCollapse', this)"><span class="caret">&#9654;</span> Test key</button>
+          <button type="button" class="sync-toggle-btn" onclick="toggleCollapse('geoTestCollapse', this)"><span class="caret">&#9654;</span> Test</button>
           {{if gt .PermLdap 1}}
-          <button type="button" class="sync-btn sync-btn-primary" id="geoSyncBtn" onClick="runGeoapifySync()">Sync all locations now</button>
+          <button type="button" class="sync-btn sync-btn-primary" id="geoSyncBtn" onClick="runGeoapifySync()"{{if not .GeoEnabled}} disabled title="Geocoding integration is disabled"{{end}}>Sync all locations now</button>
+          {{if .GeoapifySet}}<button type="button" class="sync-btn sync-btn-danger" onClick="deleteGeoConfig()">Delete</button>{{end}}
           {{end}}
         </div>
       </div>
@@ -1209,6 +1336,44 @@
   </div>
   {{end}}
 
+  {{if gt .PermAdminpanel 0}}
+  <div id="syncsub_database" class="syncsub" style="display:none;">
+    <div class="sync-card">
+      <div class="sync-card-head">
+        <h2 class="sync-card-title">Database browser</h2>
+        <span class="sync-badge sync-badge-accent">Read-only</span>
+      </div>
+      <p class="sync-card-hint">Inspect the raw BoltDB store. This view is strictly read-only &mdash; nothing here
+        writes to the database. Sensitive values (password hashes, salts, bind passwords, API tokens) are redacted.</p>
+      <div class="sync-form-grid" style="align-items:flex-end;">
+        <div class="sync-field">
+          <label class="sync-label">Bucket</label>
+          <select class="sync-select" id="dbBucketSelect" onchange="dbSelectBucket()"></select>
+        </div>
+        <div class="sync-field sync-field-wide">
+          <label class="sync-label">Search (key or value)</label>
+          <input class="sync-input" type="text" id="dbSearchInput" placeholder="Filter entries&hellip;"
+            onkeydown="if(event.key==='Enter'){event.preventDefault();dbLoadEntries(true);}">
+        </div>
+        <div class="sync-field sync-field-min">
+          <label class="sync-label">&nbsp;</label>
+          <button type="button" class="sync-btn sync-btn-primary" onclick="dbLoadEntries(true)">Search</button>
+        </div>
+      </div>
+      <div id="dbBrowseStatus" class="sync-status-text" style="margin:8px 0;"></div>
+      <table class="sync-table" id="dbBrowseTable" style="display:none;">
+        <thead><tr><th class="sync-td-min">Key</th><th>Value</th></tr></thead>
+        <tbody id="dbBrowseBody"></tbody>
+      </table>
+      <div id="dbBrowsePager" class="sync-form-actions" style="display:none; align-items:center; gap:12px;">
+        <button type="button" class="sync-btn sync-btn-sm" id="dbPrevBtn" onclick="dbPage(-1)">&larr; Prev</button>
+        <span class="sync-status-text" id="dbPageInfo"></span>
+        <button type="button" class="sync-btn sync-btn-sm" id="dbNextBtn" onclick="dbPage(1)">Next &rarr;</button>
+      </div>
+    </div>
+  </div>
+  {{end}}
+
     </div>
   </div>
   <script>
@@ -1216,6 +1381,7 @@
     if (typeof showRobinResultTab === 'function') { showRobinResultTab('rooms'); }
     if (typeof updateEntraAuthMethod === 'function') { updateEntraAuthMethod(); }
     if (typeof showEntraCmpTab === 'function') { showEntraCmpTab('diff'); }
+    (function(){ var m = document.getElementById('syncMsg'); if (m) { setTimeout(function(){ m.style.opacity = '0'; setTimeout(function(){ m.style.display = 'none'; }, 400); }, 2000); } })();
   </script>
   {{if gt .PermAdminpanel 0}}<script>loadSamlSettings();</script>{{end}}
 

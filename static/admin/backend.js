@@ -358,8 +358,103 @@ function syncLDAP(ldap_id, adminuser) {
   })
 }
 
+// testLDAP validates a single connection's server + bind credentials without
+// running a sync. The outcome is shown in the shared result line under the table.
+function testLDAP(id) {
+  var btn = document.getElementById('ldaptestbtn' + id);
+  var out = document.getElementById('ldapTestResult');
+  var desc = btn ? (btn.getAttribute('data-desc') || '') : '';
+  if (btn) { btn.disabled = true; }
+  if (out) { out.style.color = ''; out.textContent = 'Testing ' + (desc || 'connection') + '\u2026'; }
+  $.ajax({
+    url: '../rest/ldap/test?token=' + token + '&ldapid=' + encodeURIComponent(id),
+    async: true, type: 'get', dataType: 'JSON',
+    success: function(d) {
+      if (out) {
+        if (d && d.ok) {
+          out.style.color = 'var(--sy-ok)';
+          out.textContent = (desc ? desc + ': ' : '') + (d.message || 'Connection successful.');
+        } else {
+          out.style.color = 'var(--sy-danger)';
+          out.textContent = (desc ? desc + ': ' : '') + 'Failed: ' + ((d && d.error) || 'unknown error');
+        }
+      }
+    },
+    error: function() {
+      if (out) { out.style.color = 'var(--sy-danger)'; out.textContent = 'Request failed (forbidden or server error).'; }
+    },
+    complete: function() { if (btn) btn.disabled = false; }
+  });
+}
+
+// toggleLdapEnabled activates/deactivates a connection in place (no full reload)
+// and shows/hides its "Sync now" button to match.
+function toggleLdapEnabled(id, cb) {
+  var on = !!(cb && cb.checked);
+  if (cb) cb.disabled = true;
+  var body = 'toggleLdapID=' + encodeURIComponent(id) + '&ldapEnabled=' + (on ? '1' : '0');
+  fetch('?tab=ldap&partial=1', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    credentials: 'same-origin',
+    body: body
+  }).then(function() {
+    if (cb) cb.disabled = false;
+    var syncBtn = document.getElementById('syncbutton' + id);
+    if (syncBtn) {
+      syncBtn.disabled = !on;
+      syncBtn.title = on ? '' : 'Enable this connection to sync it';
+    }
+  }).catch(function() {
+    if (cb) { cb.disabled = false; cb.checked = !on; }
+  });
+}
+
+// editLdapSource pre-fills the add/edit form from a row's data attributes and
+// switches it into edit mode (the password is left blank to keep the stored one).
+function editLdapSource(btn) {
+  var d = btn.dataset;
+  var set = function(elid, val) { var el = document.getElementById(elid); if (el) el.value = val || ''; };
+  set('ldapFormEditID', d.id);
+  set('ldapFDescription', d.desc);
+  set('ldapFServer', d.server);
+  set('ldapFOU', d.ou);
+  set('ldapFUser', d.user);
+  var typeSel = document.getElementById('ldapFType');
+  if (typeSel) typeSel.value = (String(d.type || '').toUpperCase() === 'LDAP') ? 'LDAP' : 'LDAPS';
+  var pass = document.getElementById('ldapFPass');
+  if (pass) { pass.value = ''; pass.placeholder = 'Leave blank to keep current password'; }
+  var submit = document.getElementById('ldapFormSubmit');
+  if (submit) submit.textContent = 'Save changes';
+  var cancel = document.getElementById('ldapFormCancel');
+  if (cancel) cancel.style.display = '';
+  var collapse = document.getElementById('ldapAddCollapse');
+  if (collapse && !collapse.classList.contains('open')) {
+    toggleCollapse('ldapAddCollapse', document.getElementById('ldapAddToggle'));
+  }
+  if (collapse && collapse.scrollIntoView) collapse.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+// cancelEditLdap resets the add/edit form back to "add a connection" mode.
+function cancelEditLdap() {
+  var form = document.getElementById('ldapForm');
+  if (form) form.reset();
+  var editId = document.getElementById('ldapFormEditID');
+  if (editId) editId.value = '';
+  var pass = document.getElementById('ldapFPass');
+  if (pass) pass.placeholder = 'Password';
+  var submit = document.getElementById('ldapFormSubmit');
+  if (submit) submit.textContent = 'Create connection';
+  var cancel = document.getElementById('ldapFormCancel');
+  if (cancel) cancel.style.display = 'none';
+  var collapse = document.getElementById('ldapAddCollapse');
+  if (collapse && collapse.classList.contains('open')) {
+    toggleCollapse('ldapAddCollapse', document.getElementById('ldapAddToggle'));
+  }
+}
+
 function showSyncSub(name) {
-  var subs = ['ldap', 'entra', 'saml', 'robin', 'geo'];
+  var subs = ['ldap', 'entra', 'saml', 'robin', 'geo', 'database'];
   // Fall back to the first available subsection if the requested one is not
   // rendered (e.g. the user lacks the matching permission).
   if (!document.getElementById('syncsub_' + name)) {
@@ -374,6 +469,8 @@ function showSyncSub(name) {
     if (content) content.style.display = (s === name) ? 'block' : 'none';
     if (nav) nav.classList.toggle('active', s === name);
   });
+  // Lazily load the database browser bucket list the first time it is shown.
+  if (name === 'database') { dbInit(); }
   // Persist the active subtab in the URL so a full page reload restores it.
   if (name) {
     try {
@@ -384,6 +481,115 @@ function showSyncSub(name) {
       }
     } catch (e) { /* history API unavailable: ignore */ }
   }
+}
+
+// ---- Read-only database browser (Sync > Database subtab) ----
+var dbState = { loaded: false, offset: 0, limit: 50, total: 0 };
+
+function dbEscape(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function dbPretty(val) {
+  try { return JSON.stringify(JSON.parse(val), null, 2); }
+  catch (e) { return val; }
+}
+
+// dbInit loads the bucket list once, the first time the tab is opened.
+function dbInit() {
+  if (dbState.loaded) { return; }
+  dbState.loaded = true;
+  var sel = document.getElementById('dbBucketSelect');
+  var status = document.getElementById('dbBrowseStatus');
+  if (status) { status.textContent = 'Loading buckets\u2026'; }
+  $.ajax({
+    url: '../rest/db/buckets?token=' + token,
+    async: true, type: 'get', dataType: 'JSON',
+    success: function(d) {
+      var buckets = (d && d.buckets) || [];
+      var html = '<option value="">Select a bucket\u2026</option>';
+      buckets.forEach(function(b) {
+        html += '<option value="' + dbEscape(b.name) + '">' + dbEscape(b.name) + ' (' + b.count + ')</option>';
+      });
+      sel.innerHTML = html;
+      if (status) { status.textContent = buckets.length + ' bucket(s). Choose one to browse.'; }
+    },
+    error: function() {
+      dbState.loaded = false;
+      if (status) { status.textContent = 'Failed to load buckets.'; }
+    }
+  });
+}
+
+function dbSelectBucket() {
+  dbState.offset = 0;
+  dbLoadEntries(true);
+}
+
+function dbPage(dir) {
+  var next = dbState.offset + dir * dbState.limit;
+  if (next < 0) { next = 0; }
+  if (next >= dbState.total) { return; }
+  dbState.offset = next;
+  dbLoadEntries(false);
+}
+
+function dbLoadEntries(reset) {
+  var sel = document.getElementById('dbBucketSelect');
+  var bucket = sel ? sel.value : '';
+  var status = document.getElementById('dbBrowseStatus');
+  var table = document.getElementById('dbBrowseTable');
+  var pager = document.getElementById('dbBrowsePager');
+  if (!bucket) {
+    if (table) { table.style.display = 'none'; }
+    if (pager) { pager.style.display = 'none'; }
+    if (status) { status.textContent = 'Select a bucket to browse.'; }
+    return;
+  }
+  if (reset) { dbState.offset = 0; }
+  var search = (document.getElementById('dbSearchInput') || {}).value || '';
+  if (status) { status.textContent = 'Loading\u2026'; }
+  $.ajax({
+    url: '../rest/db/entries?token=' + token +
+      '&bucket=' + encodeURIComponent(bucket) +
+      '&search=' + encodeURIComponent(search) +
+      '&offset=' + dbState.offset + '&limit=' + dbState.limit,
+    async: true, type: 'get', dataType: 'JSON',
+    success: function(d) {
+      dbState.total = (d && d.total) || 0;
+      var entries = (d && d.entries) || [];
+      var body = document.getElementById('dbBrowseBody');
+      if (!entries.length) {
+        body.innerHTML = '<tr><td colspan="2" class="sync-empty">No matching entries.</td></tr>';
+      } else {
+        var rows = '';
+        entries.forEach(function(e) {
+          rows += '<tr><td class="sync-td-min"><code>' + dbEscape(e.key) + '</code></td>' +
+            '<td><pre style="margin:0; white-space:pre-wrap; word-break:break-word; max-height:300px; overflow:auto;">' +
+            dbEscape(dbPretty(e.value)) + '</pre></td></tr>';
+        });
+        body.innerHTML = rows;
+      }
+      if (table) { table.style.display = ''; }
+      var from = dbState.total ? dbState.offset + 1 : 0;
+      var to = Math.min(dbState.offset + dbState.limit, dbState.total);
+      if (status) { status.textContent = 'Showing ' + from + '\u2013' + to + ' of ' + dbState.total; }
+      if (pager) {
+        pager.style.display = dbState.total > dbState.limit ? 'flex' : 'none';
+        var prev = document.getElementById('dbPrevBtn');
+        var next = document.getElementById('dbNextBtn');
+        var info = document.getElementById('dbPageInfo');
+        if (prev) { prev.disabled = dbState.offset <= 0; }
+        if (next) { next.disabled = dbState.offset + dbState.limit >= dbState.total; }
+        if (info) { info.textContent = from + '\u2013' + to + ' / ' + dbState.total; }
+      }
+    },
+    error: function() {
+      if (status) { status.textContent = 'Failed to load entries.'; }
+    }
+  });
 }
 
 function showLdapDebug() {
@@ -478,6 +684,10 @@ function renderLdapDebug(d) {
 
 // --- SAML settings tab ---
 
+var samlEditing = false;
+var samlConfigured = false;
+var samlCurrent = null;
+
 function loadSamlSettings() {
   // SP info (entity ID, ACS URL, metadata/login URLs).
   $.ajax({
@@ -508,18 +718,121 @@ function loadSamlSettings() {
       $('#saml_attr_sn').val(c.attribute_surname || '');
       $('#saml_attr_full').val(c.attribute_fullname || '');
       $('#saml_attr_mail').val(c.attribute_mail || '');
-    }
-  });
-  // Status badge.
-  $.ajax({
-    url: '../rest/saml/status', type: 'get', dataType: 'JSON',
-    success: function(st) {
-      var cls = st.enabled ? (st.configured ? 'sync-badge-ok' : 'sync-badge-warn') : 'sync-badge-off';
-      var text = st.enabled ? (st.configured ? 'SAML enabled and configured' : 'SAML enabled but incomplete (missing Login URL or certificate)') : 'SAML disabled';
-      $('#samlStatusBar').html('<span class="sync-badge '+cls+'" style="font-size:13px;padding:5px 12px;">'+esc(text)+'</span>');
+
+      // "Anything configured" drives whether we show the summary or placeholder.
+      samlCurrent = c;
+      samlConfigured = !!(c.entra_login_url || c.entra_x509_certificate || c.entra_entity_id || c.entra_tenant_id);
+      document.getElementById('saml_sum_toggle').checked = !!c.enabled;
+      $('#saml_sum_toggle_label').text(c.enabled ? 'Enabled' : 'Disabled');
+      $('#saml_sum_enabled').text(c.enabled ? 'Enabled' : 'Disabled');
+      $('#saml_sum_local').text(c.allow_local_password_fallback ? 'Allowed' : 'Not allowed');
+      $('#saml_sum_tenant').text(c.entra_tenant_id || '-');
+      $('#saml_sum_entity').text(c.entra_entity_id || '-');
+      $('#saml_sum_login').text(c.entra_login_url || '-');
+      $('#saml_sum_cert').text(c.entra_x509_certificate ? 'Configured' : 'Not set');
+
+      if (!samlEditing) renderSamlView();
     }
   });
 }
+
+// renderSamlView shows the summary card when a config exists, otherwise the
+// create placeholder, and always hides the setup form.
+function renderSamlView() {
+  var setup = document.getElementById('samlSetup');
+  var summary = document.getElementById('samlSummaryCard');
+  var placeholder = document.getElementById('samlPlaceholder');
+  if (setup) setup.style.display = 'none';
+  if (samlConfigured) {
+    if (summary) summary.style.display = '';
+    if (placeholder) placeholder.style.display = 'none';
+  } else {
+    if (summary) summary.style.display = 'none';
+    if (placeholder) placeholder.style.display = '';
+  }
+}
+
+// samlStartCreate / samlStartEdit reveal the 3-step setup form.
+function samlStartCreate() { showSamlSetup(); }
+function samlStartEdit() { showSamlSetup(); }
+function showSamlSetup() {
+  samlEditing = true;
+  var summary = document.getElementById('samlSummaryCard');
+  var placeholder = document.getElementById('samlPlaceholder');
+  var setup = document.getElementById('samlSetup');
+  if (summary) summary.style.display = 'none';
+  if (placeholder) placeholder.style.display = 'none';
+  if (setup) setup.style.display = '';
+  $('#saml_save_status').text('');
+}
+
+// samlCancelEdit discards unsaved edits and returns to the summary/placeholder.
+function samlCancelEdit() {
+  samlEditing = false;
+  loadSamlSettings();
+}
+
+// toggleSamlEnabled flips the enabled flag straight from the summary card,
+// persisting the rest of the current configuration unchanged.
+function toggleSamlEnabled(cb) {
+  if (!samlCurrent) return;
+  var payload = $.extend({}, samlCurrent, { enabled: cb.checked });
+  $('#saml_sum_toggle_label').text(cb.checked ? 'Enabled' : 'Disabled');
+  $.ajax({
+    url: '../rest/saml/settings', type: 'PUT',
+    contentType: 'application/json', data: JSON.stringify(payload), dataType: 'JSON',
+    success: function() { loadSamlSettings(); },
+    error: function() {
+      cb.checked = !cb.checked;
+      $('#saml_sum_toggle_label').text(cb.checked ? 'Enabled' : 'Disabled');
+      alert('Failed to update SAML status.');
+    }
+  });
+}
+
+// samlTest runs a server-side pre-flight validation of the configuration and
+// shows the results inline (no new browser window / IdP round-trip needed).
+function samlTest() {
+  var body = document.getElementById('samlDebugBody');
+  var overlay = document.getElementById('samlDebugOverlay');
+  if (body) body.innerHTML = 'Testing\u2026';
+  if (overlay) overlay.style.display = 'block';
+  $.ajax({
+    url: '../rest/saml/validate', type: 'get', dataType: 'JSON',
+    success: function(res) {
+      if (!body) return;
+      var cls = { ok: 'status-icon-ok', warn: 'status-icon-warn', fail: 'status-icon-fail' };
+      var html = '<div style="display:flex; align-items:center; gap:10px; font-weight:700; margin-bottom:12px;">' +
+        '<span class="status-icon ' + (res.ok ? 'status-icon-ok' : 'status-icon-fail') + '"></span>' +
+        (res.ok ? 'Configuration looks valid' : 'Configuration has problems') + '</div>';
+      (res.checks || []).forEach(function(c) {
+        html += '<div style="display:flex; gap:10px; padding:6px 0; border-top:1px solid rgba(255,255,255,0.08);">' +
+          '<span class="status-icon ' + (cls[c.status] || '') + '" style="margin-top:2px;"></span>' +
+          '<span><strong>' + esc(c.name) + '</strong><br><span style="color:#aaa;">' + esc(c.detail) + '</span></span>' +
+          '</div>';
+      });
+      body.innerHTML = html;
+    },
+    error: function() {
+      if (body) body.textContent = 'Validation request failed (forbidden or server error).';
+    }
+  });
+}
+
+// samlDelete clears the SAML configuration (keeps local login as a fallback so
+// nobody gets locked out).
+function samlDelete() {
+  if (!confirm('Delete the SAML configuration? Single sign-on will be turned off.')) return;
+  $.ajax({
+    url: '../rest/saml/settings', type: 'PUT',
+    contentType: 'application/json',
+    data: JSON.stringify({ enabled: false, allow_local_password_fallback: true }),
+    dataType: 'JSON',
+    success: function() { samlEditing = false; loadSamlSettings(); },
+    error: function() { alert('Failed to delete SAML configuration.'); }
+  });
+}
+
 
 function saveSamlSettings() {
   var payload = {
@@ -545,6 +858,7 @@ function saveSamlSettings() {
     contentType: 'application/json', data: JSON.stringify(payload), dataType: 'JSON',
     success: function() {
       $('#saml_save_status').css('color', '#2ecc71').text('Saved.');
+      samlEditing = false;
       loadSamlSettings();
     },
     error: function() {
@@ -682,6 +996,62 @@ function startRobinSync() {
   });
 }
 
+// toggleRobinEnabled switches the whole Robin integration on/off. The saved
+// token and options are kept; disabling only stops syncing and map overlays.
+function toggleRobinEnabled(cb) {
+  var enabled = cb.checked;
+  $('#robinEnabledLabel').text(enabled ? 'Enabled' : 'Disabled');
+  var btn = document.getElementById('robinSyncBtn');
+  if (btn) { btn.disabled = !enabled; btn.title = enabled ? '' : 'Robin integration is disabled'; }
+  $.ajax({
+    url: '../rest/robin/enabled?enabled=' + (enabled ? '1' : '0'), type: 'POST', dataType: 'JSON',
+    error: function () {
+      cb.checked = !enabled;
+      $('#robinEnabledLabel').text(cb.checked ? 'Enabled' : 'Disabled');
+      if (btn) { btn.disabled = !cb.checked; btn.title = cb.checked ? '' : 'Robin integration is disabled'; }
+      alert('Failed to update Robin status.');
+    }
+  });
+}
+
+// toggleGeoEnabled switches the geocoding integration on/off. The saved API key
+// is kept; disabling only blocks manual geocode syncs/tests.
+function toggleGeoEnabled(cb) {
+  var enabled = cb.checked;
+  $('#geoEnabledLabel').text(enabled ? 'Enabled' : 'Disabled');
+  var btn = document.getElementById('geoSyncBtn');
+  if (btn) { btn.disabled = !enabled; btn.title = enabled ? '' : 'Geocoding integration is disabled'; }
+  $.ajax({
+    url: '../rest/geo/enabled?enabled=' + (enabled ? '1' : '0'), type: 'POST', dataType: 'JSON',
+    error: function () {
+      cb.checked = !enabled;
+      $('#geoEnabledLabel').text(cb.checked ? 'Enabled' : 'Disabled');
+      if (btn) { btn.disabled = !cb.checked; btn.title = cb.checked ? '' : 'Geocoding integration is disabled'; }
+      alert('Failed to update geocoding status.');
+    }
+  });
+}
+
+// deleteRobinConfig clears the saved Robin token and organisation id.
+function deleteRobinConfig() {
+  if (!confirm('Delete the Robin access token and organisation id? This cannot be undone.')) return;
+  $.ajax({
+    url: '../rest/robin/delete', type: 'POST', dataType: 'JSON',
+    success: function () { window.location.reload(); },
+    error: function () { alert('Failed to delete Robin configuration.'); }
+  });
+}
+
+// deleteGeoConfig clears the saved Geoapify API key.
+function deleteGeoConfig() {
+  if (!confirm('Delete the Geoapify API key? This cannot be undone.')) return;
+  $.ajax({
+    url: '../rest/geo/delete', type: 'POST', dataType: 'JSON',
+    success: function () { window.location.reload(); },
+    error: function () { alert('Failed to delete geocoding configuration.'); }
+  });
+}
+
 // pollRobinSync drives the Robin sync progress bar, then auto-refreshes the
 // Sync tab so the rooms/desk-reservation results below reflect the latest data
 // (no manual "view updated results" step).
@@ -737,23 +1107,25 @@ function startEntraSync() {
   startSync('entra', '../rest/entra/sync', '../rest/entra/progress', 'entra');
 }
 
-// testEntra validates the stored credentials against Microsoft Graph without
-// running a full sync.
-function testEntra() {
+// testEntra validates one EntraID connection's credentials against Microsoft
+// Graph without running a full sync.
+function testEntra(id) {
   var out = document.getElementById('entraTestResult');
-  var btn = document.getElementById('entraTestBtn');
-  if (out) { out.textContent = 'Testing\u2026'; out.style.color = ''; }
+  var btn = document.getElementById('entratestbtn' + id);
+  var desc = btn ? (btn.getAttribute('data-desc') || '') : '';
+  if (out) { out.textContent = 'Testing ' + desc + '\u2026'; out.style.color = ''; }
   if (btn) btn.disabled = true;
   $.ajax({
-    url: '../rest/entra/test', type: 'GET', dataType: 'JSON',
+    url: '../rest/entra/test?token=' + token + '&entraid=' + encodeURIComponent(id),
+    type: 'GET', dataType: 'JSON',
     success: function (d) {
       if (!out) return;
       if (d && d.ok) {
         out.style.color = 'var(--sy-ok)';
-        out.textContent = d.message || 'Connection successful.';
+        out.textContent = desc + ': ' + (d.message || 'Connection successful.');
       } else {
         out.style.color = 'var(--sy-danger)';
-        out.textContent = 'Failed: ' + ((d && d.message) || 'unknown error');
+        out.textContent = desc + ': ' + ((d && d.message) || 'unknown error');
       }
     },
     error: function () {
@@ -763,31 +1135,40 @@ function testEntra() {
   });
 }
 
-// saveEntra posts the credentials form without a full page reload, then
-// refreshes the Sync tab so the "Configured" badge and comparison update.
-function saveEntra(ev) {
-  if (ev && ev.preventDefault) ev.preventDefault();
-  var form = ev && ev.target ? ev.target : document.forms['SaveEntra'];
-  var statusEl = document.getElementById('entraSaveStatus');
-  if (statusEl) statusEl.textContent = 'Saving\u2026';
+// syncEntra synchronously syncs a single EntraID connection (the per-connection
+// "Sync now" button), mirroring syncLDAP.
+function syncEntra(id) {
+  var btn = document.getElementById('entrasyncbtn' + id);
+  var out = document.getElementById('entraTestResult');
+  var desc = btn ? (btn.getAttribute('data-desc') || '') : '';
+  if (btn) { btn.disabled = true; btn.textContent = 'Syncing\u2026'; }
+  if (out) { out.style.color = ''; out.textContent = 'Syncing\u2026'; }
   $.ajax({
-    url: '?tab=ldap&partial=1', type: 'POST', data: new FormData(form),
-    processData: false, contentType: false,
-    complete: function () {
-      if (statusEl) statusEl.textContent = 'Saved.';
-      loadAdminTab('ldap', 'entra', false);
+    url: '../rest/entra/syncone?token=' + token + '&entraid=' + encodeURIComponent(id),
+    type: 'GET', dataType: 'JSON',
+    success: function (result) {
+      if (btn) { btn.disabled = false; btn.textContent = 'Sync now'; }
+      if (out) {
+        out.style.color = 'var(--sy-ok)';
+        out.textContent = 'Synced ' + (result && result.count != null ? result.count + ' placement(s).' : 'successfully.');
+      }
+    },
+    error: function (xhr) {
+      if (btn) { btn.disabled = false; btn.textContent = 'Sync now'; }
+      if (out) {
+        out.style.color = 'var(--sy-danger)';
+        out.textContent = 'Sync failed: ' + ((xhr && xhr.responseText) || 'server error');
+      }
     }
   });
-  return false;
 }
 
-// saveEntraEnabled flips the EntraID integration on/off and reloads the sub-tab
-// so the badge and available actions reflect the new state.
-function saveEntraEnabled(cb) {
-  var statusEl = document.getElementById('entraEnabledStatus');
-  if (statusEl) { statusEl.style.color = ''; statusEl.textContent = 'Saving\u2026'; }
+// toggleEntraEnabled flips one EntraID connection on/off in place (no sub-tab
+// reload). The scheduler and manual sync skip disabled connections.
+function toggleEntraEnabled(id, cb) {
   if (cb) cb.disabled = true;
-  var body = 'saveEntraEnabled=1&entraEnabled=' + (cb && cb.checked ? '1' : '0');
+  var on = !!(cb && cb.checked);
+  var body = 'toggleEntraID=' + encodeURIComponent(id) + '&entraEnabled=' + (on ? '1' : '0');
   fetch('?tab=ldap&partial=1', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -795,17 +1176,73 @@ function saveEntraEnabled(cb) {
     body: body
   }).then(function () {
     if (cb) cb.disabled = false;
-    loadAdminTab('ldap', 'entra', false);
+    // Keep the per-connection "Sync now" button in step with the toggle: a
+    // disabled connection cannot be synced.
+    var syncBtn = document.getElementById('entrasyncbtn' + id);
+    if (syncBtn) {
+      syncBtn.disabled = !on;
+      syncBtn.title = on ? '' : 'Enable this connection to sync it';
+    }
   }).catch(function () {
-    if (cb) cb.disabled = false;
-    if (statusEl) { statusEl.style.color = '#e06666'; statusEl.textContent = 'Save failed.'; }
+    if (cb) { cb.disabled = false; cb.checked = !on; }
   });
+}
+
+// editEntraSource loads a connection's details into the add/edit form so it can
+// be updated. Secrets are never sent back to the browser, so the credential
+// fields stay blank ("leave blank to keep current").
+function editEntraSource(btn) {
+  var id = btn.getAttribute('data-id');
+  var method = btn.getAttribute('data-method') || 'secret';
+  document.getElementById('entraFormEditID').value = id;
+  document.getElementById('entraFDescription').value = btn.getAttribute('data-desc') || '';
+  document.getElementById('entraFTenant').value = btn.getAttribute('data-tenant') || '';
+  document.getElementById('entraFClient').value = btn.getAttribute('data-client') || '';
+  var sel = document.getElementById('entraFAuthMethod');
+  if (sel) sel.value = (method === 'certificate') ? 'certificate' : 'secret';
+  updateEntraAuthMethod();
+  var secret = document.getElementById('entraFSecret');
+  if (secret) { secret.value = ''; secret.placeholder = 'Leave blank to keep current secret'; }
+  var cert = document.getElementById('entraFCert');
+  if (cert) { cert.value = ''; cert.placeholder = 'Leave blank to keep current certificate'; }
+  var key = document.getElementById('entraFKey');
+  if (key) { key.value = ''; key.placeholder = 'Leave blank to keep current key'; }
+  document.getElementById('entraFormSubmit').textContent = 'Save changes';
+  var cancel = document.getElementById('entraFormCancel');
+  if (cancel) cancel.style.display = 'inline-flex';
+  var collapse = document.getElementById('entraAddCollapse');
+  if (collapse && !collapse.classList.contains('open')) {
+    toggleCollapse('entraAddCollapse', document.getElementById('entraAddToggle'));
+  }
+  var form = document.getElementById('entraForm');
+  if (form) form.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+// cancelEditEntra resets the add/edit form back to "create" mode.
+function cancelEditEntra() {
+  var form = document.getElementById('entraForm');
+  if (form) form.reset();
+  document.getElementById('entraFormEditID').value = '';
+  var secret = document.getElementById('entraFSecret');
+  if (secret) secret.placeholder = 'Client secret value';
+  var cert = document.getElementById('entraFCert');
+  if (cert) cert.placeholder = '-----BEGIN CERTIFICATE-----';
+  var key = document.getElementById('entraFKey');
+  if (key) key.placeholder = '-----BEGIN PRIVATE KEY-----';
+  document.getElementById('entraFormSubmit').textContent = 'Create connection';
+  var cancel = document.getElementById('entraFormCancel');
+  if (cancel) cancel.style.display = 'none';
+  updateEntraAuthMethod();
+  var collapse = document.getElementById('entraAddCollapse');
+  if (collapse && collapse.classList.contains('open')) {
+    toggleCollapse('entraAddCollapse', document.getElementById('entraAddToggle'));
+  }
 }
 
 // updateEntraAuthMethod toggles the secret vs certificate credential fields
 // based on the selected authentication method.
 function updateEntraAuthMethod() {
-  var sel = document.getElementById('entraAuthMethod');
+  var sel = document.getElementById('entraFAuthMethod');
   var secret = document.getElementById('entraSecretFields');
   var cert = document.getElementById('entraCertFields');
   var isCert = sel && sel.value === 'certificate';

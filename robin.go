@@ -260,6 +260,13 @@ func clampTitle(title, fallback string) string {
 	return title
 }
 
+// robinEnabled reports whether the Robin integration is switched on. It
+// defaults to enabled so existing installs keep working after an upgrade; the
+// admin toggle only stores the value "0" to disable it.
+func (app *App) robinEnabled() bool {
+	return app.db.GetRobinSetting("robinEnabled") != "0"
+}
+
 // StartRobinScheduler refreshes the Robin meeting cache on a fixed interval.
 // No-op while no Robin token is configured.
 func (app *App) StartRobinScheduler(interval time.Duration) {
@@ -267,7 +274,7 @@ func (app *App) StartRobinScheduler(interval time.Duration) {
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
 		for range ticker.C {
-			if app.db.GetRobinSetting("robintoken") == "" {
+			if !app.robinEnabled() || app.db.GetRobinSetting("robintoken") == "" {
 				continue
 			}
 			// A scheduled run also records the last-sync time and per-room match
@@ -383,7 +390,7 @@ func (app *App) StartRobinLocationScheduler(interval time.Duration) {
 	go func() {
 		// Initial run shortly after startup (give the app time to settle).
 		time.Sleep(30 * time.Second)
-		if app.db.GetRobinSetting("robintoken") != "" && strings.TrimSpace(app.db.GetRobinSetting("robinOrganisation")) != "" {
+		if app.robinEnabled() && app.db.GetRobinSetting("robintoken") != "" && strings.TrimSpace(app.db.GetRobinSetting("robinOrganisation")) != "" {
 			if summary, err := app.reconcileRobinLocations(); err != nil {
 				log.Printf("robin location discovery: %v", err)
 			} else {
@@ -393,7 +400,7 @@ func (app *App) StartRobinLocationScheduler(interval time.Duration) {
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
 		for range ticker.C {
-			if app.db.GetRobinSetting("robintoken") == "" || strings.TrimSpace(app.db.GetRobinSetting("robinOrganisation")) == "" {
+			if !app.robinEnabled() || app.db.GetRobinSetting("robintoken") == "" || strings.TrimSpace(app.db.GetRobinSetting("robinOrganisation")) == "" {
 				continue
 			}
 			if _, err := app.reconcileRobinLocations(); err != nil {

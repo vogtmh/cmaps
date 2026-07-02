@@ -104,6 +104,9 @@ func main() {
 	mux := http.NewServeMux()
 	app.routes(mux)
 
+	// Migrate the legacy single EntraID connection into the multi-source model.
+	app.migrateEntraConfig()
+
 	// Wrap the whole mux with gzip so text-based responses (HTML, JS, CSS, JSON
 	// desk/changes payloads) are compressed for clients that support it.
 	handler := gzipMiddleware(mux)
@@ -189,6 +192,7 @@ func (app *App) registerSAMLRoutes(mux *http.ServeMux) {
 	// Admin-only SAML configuration REST endpoints.
 	mux.HandleFunc("/rest/saml/status", app.handleSAMLStatus)
 	mux.HandleFunc("/rest/saml/settings", app.requirePerm("adminpanel", 2, app.handleSAMLSettings))
+	mux.HandleFunc("/rest/saml/validate", app.requirePerm("adminpanel", 2, app.handleSAMLValidate))
 	mux.HandleFunc("/rest/saml/spinfo", app.requirePerm("adminpanel", 2, app.handleSAMLSPInfo))
 	mux.HandleFunc("/rest/saml/debug", app.requirePerm("adminpanel", 2, app.handleSAMLDebugLast))
 	mux.HandleFunc("/rest/saml/import-metadata", app.requirePerm("adminpanel", 2, app.handleSAMLImportMetadata))

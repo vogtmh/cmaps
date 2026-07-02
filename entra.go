@@ -14,6 +14,7 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -337,52 +338,91 @@ func graphUserToDirectory(u entraGraphUser) DirectoryUser {
 	}
 }
 
-// entraConfigured reports whether the EntraID connection has the minimum
-// settings needed to attempt a sync.
-func (app *App) entraConfigured() bool {
-	tenant := strings.TrimSpace(app.db.GetEntraSetting("entraTenantID"))
-	client := strings.TrimSpace(app.db.GetEntraSetting("entraClientID"))
-	if tenant == "" || client == "" {
+// entraHasEnabledSource reports whether at least one enabled EntraID source is
+// configured, so the scheduler and sync endpoint can skip cleanly otherwise.
+func (app *App) entraHasEnabledSource() bool {
+	srcs, _ := app.db.ListEntraSources()
+	for _, s := range srcs {
+		if !s.Disabled {
+			return true
+		}
+	}
+	return false
+}
+
+// entraSourceConfigured reports whether a source has the minimum credentials to
+// attempt a sync.
+func entraSourceConfigured(s EntraSource) bool {
+	if strings.TrimSpace(s.TenantID) == "" || strings.TrimSpace(s.ClientID) == "" {
 		return false
 	}
-	switch app.db.GetEntraSetting("entraAuthMethod") {
+	switch s.AuthMethod {
 	case "certificate":
-		return strings.TrimSpace(app.db.GetEntraSetting("entraCertPem")) != "" &&
-			strings.TrimSpace(app.db.GetEntraSetting("entraKeyPem")) != ""
+		return strings.TrimSpace(s.CertPEM) != "" && strings.TrimSpace(s.KeyPEM) != ""
 	default: // secret
-		return strings.TrimSpace(app.db.GetEntraSetting("entraClientSecret")) != ""
+		return strings.TrimSpace(s.ClientSecret) != ""
 	}
 }
 
-// entraEnabled reports whether the EntraID integration is switched on. It
-// defaults to enabled so that existing configured connections keep working;
-// the admin can explicitly disable it (stored as "0").
-func (app *App) entraEnabled() bool {
-	return app.db.GetEntraSetting("entraEnabled") != "0"
-}
-
-// newEntraClientFromSettings builds a Graph client from the stored settings.
-func (app *App) newEntraClientFromSettings() (*entraClient, error) {
-	tenant := strings.TrimSpace(app.db.GetEntraSetting("entraTenantID"))
-	client := strings.TrimSpace(app.db.GetEntraSetting("entraClientID"))
+// newEntraClient builds a Graph client for a single EntraID source.
+func newEntraClient(s EntraSource) (*entraClient, error) {
+	tenant := strings.TrimSpace(s.TenantID)
+	client := strings.TrimSpace(s.ClientID)
 	if tenant == "" || client == "" {
 		return nil, fmt.Errorf("EntraID tenant and client id are required")
 	}
-	method := app.db.GetEntraSetting("entraAuthMethod")
-	switch method {
+	switch s.AuthMethod {
 	case "certificate":
-		cert := strings.TrimSpace(app.db.GetEntraSetting("entraCertPem"))
-		key := strings.TrimSpace(app.db.GetEntraSetting("entraKeyPem"))
+		cert := strings.TrimSpace(s.CertPEM)
+		key := strings.TrimSpace(s.KeyPEM)
 		if cert == "" || key == "" {
 			return nil, fmt.Errorf("EntraID certificate and private key are required for certificate auth")
 		}
 		return newEntraCertClient(tenant, client, cert, key), nil
 	default: // secret
-		secret := strings.TrimSpace(app.db.GetEntraSetting("entraClientSecret"))
+		secret := strings.TrimSpace(s.ClientSecret)
 		if secret == "" {
 			return nil, fmt.Errorf("EntraID client secret is required for secret auth")
 		}
 		return newEntraSecretClient(tenant, client, secret), nil
+	}
+}
+
+// migrateEntraConfig converts the legacy single-connection EntraID configuration
+// (stored as individual settings) into one EntraSource record the first time the
+// new multi-connection model runs, so existing setups keep working. Legacy
+// settings are left in place; they are simply no longer the source of truth.
+func (app *App) migrateEntraConfig() {
+	if srcs, _ := app.db.ListEntraSources(); len(srcs) > 0 {
+		return
+	}
+	tenant := strings.TrimSpace(app.db.GetEntraSetting("entraTenantID"))
+	client := strings.TrimSpace(app.db.GetEntraSetting("entraClientID"))
+	if tenant == "" || client == "" {
+		return // nothing configured to migrate
+	}
+	method := app.db.GetEntraSetting("entraAuthMethod")
+	if method != "certificate" {
+		method = "secret"
+	}
+	lastSync := app.db.GetEntraSetting("entraLastSync")
+	if lastSync == "" {
+		lastSync = "never"
+	}
+	src := EntraSource{
+		ID:           1,
+		Description:  "EntraID",
+		TenantID:     tenant,
+		ClientID:     client,
+		AuthMethod:   method,
+		ClientSecret: app.db.GetEntraSetting("entraClientSecret"),
+		CertPEM:      app.db.GetEntraSetting("entraCertPem"),
+		KeyPEM:       app.db.GetEntraSetting("entraKeyPem"),
+		LastSync:     lastSync,
+		Disabled:     app.db.GetEntraSetting("entraEnabled") == "0",
+	}
+	if err := app.db.PutEntraSource(src); err != nil {
+		log.Printf("EntraID config migration failed: %v", err)
 	}
 }
 
@@ -391,62 +431,97 @@ func (app *App) RunEntraSync() (int, error) {
 	return app.runEntraSync(nil)
 }
 
-// runEntraSync fetches all users from Microsoft Graph, derives the
-// office-filtered desk-placement mirror, and stores it in the EntraID bucket.
+// runEntraSync fetches all users from every enabled EntraID source, derives the
+// office-filtered desk-placement mirror for each, and stores the combined result
+// in the EntraID bucket (replacing it wholesale, so disabled/removed sources
+// drop out on the next run).
 func (app *App) runEntraSync(prog *syncProgress) (int, error) {
-	if prog != nil {
-		prog.logf("Connecting to Microsoft Graph…")
-	}
-	client, err := app.newEntraClientFromSettings()
+	sources, err := app.db.ListEntraSources()
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("loading EntraID sources: %w", err)
 	}
-	if prog != nil {
-		prog.logf("Fetching users…")
-	}
-	users, err := client.listUsers()
-	if err != nil {
-		return 0, fmt.Errorf("graph list users: %w", err)
-	}
-	if prog != nil {
-		prog.logf("Fetched %d user(s). Deriving desk placements…", len(users))
-	}
-
-	dir := make([]DirectoryUser, 0, len(users))
-	for _, u := range users {
-		if !u.AccountEnabled {
-			continue
+	enabled := sources[:0]
+	for _, s := range sources {
+		if !s.Disabled {
+			enabled = append(enabled, s)
 		}
-		dir = append(dir, graphUserToDirectory(u))
 	}
-
-	mirror := deriveMirrorUsers(dir)
-
-	// Flag which mirrored users have a cached avatar on disk, mirroring the LDAP
-	// sync so the client can point users without one at a shared placeholder.
-	avatars := app.avatarFileSet()
-	for i := range mirror {
-		mirror[i].HasAvatar = avatars[strings.ToLower(mirror[i].Userid)]
+	sources = enabled
+	if len(sources) == 0 {
+		return 0, fmt.Errorf("no enabled EntraID sources configured")
 	}
-
-	if err := app.db.ReplaceEntraLdap(mirror); err != nil {
-		return len(mirror), fmt.Errorf("writing EntraID mirror: %w", err)
-	}
-	_ = app.db.SetEntraSetting("entraLastSync", time.Now().Format("2006-01-02 15:04:05"))
 	if prog != nil {
-		prog.logf("Done. %d directory user(s), %d desk placement(s).", len(dir), len(mirror))
+		prog.setTotal(len(sources))
+		prog.logf("Starting sync of %d EntraID source(s)…", len(sources))
 	}
-	return len(mirror), nil
+
+	avatars := app.avatarFileSet()
+	now := time.Now().Format("2006-01-02 15:04:05")
+	var combined []LdapUser
+
+	for _, src := range sources {
+		if prog != nil {
+			prog.setStage("Syncing " + src.Description)
+			prog.logf("→ %s: connecting to Microsoft Graph…", src.Description)
+		}
+		client, err := newEntraClient(src)
+		if err != nil {
+			if prog != nil {
+				prog.logf("   ✗ %s: %s", src.Description, err.Error())
+				prog.step("")
+			}
+			return len(combined), fmt.Errorf("source %q: %w", src.Description, err)
+		}
+		users, err := client.listUsers()
+		if err != nil {
+			if prog != nil {
+				prog.logf("   ✗ %s: %s", src.Description, err.Error())
+				prog.step("")
+			}
+			return len(combined), fmt.Errorf("source %q: graph list users: %w", src.Description, err)
+		}
+
+		dir := make([]DirectoryUser, 0, len(users))
+		for _, u := range users {
+			if !u.AccountEnabled {
+				continue
+			}
+			dir = append(dir, graphUserToDirectory(u))
+		}
+		mirror := deriveMirrorUsers(dir)
+		for i := range mirror {
+			mirror[i].HasAvatar = avatars[strings.ToLower(mirror[i].Userid)]
+		}
+		combined = append(combined, mirror...)
+
+		src.LastSync = now
+		if err := app.db.PutEntraSource(src); err != nil {
+			log.Printf("EntraID sync: updating LastSync for %q: %v", src.Description, err)
+		}
+		if prog != nil {
+			prog.logf("   %d user(s), %d desk placement(s).", len(dir), len(mirror))
+			prog.step("")
+		}
+	}
+
+	if err := app.db.ReplaceEntraLdap(combined); err != nil {
+		return len(combined), fmt.Errorf("writing EntraID mirror: %w", err)
+	}
+	_ = app.db.SetEntraSetting("entraLastSync", now)
+	if prog != nil {
+		prog.logf("Done. %d desk placement(s) from %d source(s).", len(combined), len(sources))
+	}
+	return len(combined), nil
 }
 
 // StartEntraSyncScheduler runs RunEntraSync in the background on a fixed
-// interval. Sync is skipped when the EntraID connection is not configured.
+// interval. Sync is skipped when no EntraID source is enabled.
 func (app *App) StartEntraSyncScheduler(interval time.Duration) {
 	go func() {
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
 		for range ticker.C {
-			if !app.entraEnabled() || !app.entraConfigured() {
+			if !app.entraHasEnabledSource() {
 				continue
 			}
 			if n, err := app.RunEntraSync(); err != nil {
@@ -468,6 +543,10 @@ func (app *App) handleRestEntraSync(w http.ResponseWriter, r *http.Request) {
 	sess, ok := app.currentSession(r)
 	if !ok || app.permLevel(sess, "ldap") < 2 {
 		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	if !app.entraHasEnabledSource() {
+		writeJSON(w, map[string]interface{}{"started": false, "error": "No enabled EntraID connection."})
 		return
 	}
 	if !app.entraProg.start(0, "Starting…") {
@@ -501,15 +580,32 @@ func (app *App) handleRestEntraProgress(w http.ResponseWriter, r *http.Request) 
 	writeJSON(w, app.entraProg.snapshot())
 }
 
-// handleRestEntraTest validates the stored EntraID credentials by acquiring a
+// handleRestEntraTest validates one EntraID source's credentials by acquiring a
 // token and making a minimal Microsoft Graph call, without running a full sync.
 func (app *App) handleRestEntraTest(w http.ResponseWriter, r *http.Request) {
 	sess, ok := app.currentSession(r)
-	if !ok || app.permLevel(sess, "ldap") < 2 {
+	if !ok || app.permLevel(sess, "ldap") < 1 {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}
-	client, err := app.newEntraClientFromSettings()
+	id, err := strconv.Atoi(r.URL.Query().Get("entraid"))
+	if err != nil {
+		writeJSON(w, map[string]interface{}{"ok": false, "message": "invalid EntraID id"})
+		return
+	}
+	srcs, _ := app.db.ListEntraSources()
+	var src *EntraSource
+	for i := range srcs {
+		if srcs[i].ID == id {
+			src = &srcs[i]
+			break
+		}
+	}
+	if src == nil {
+		writeJSON(w, map[string]interface{}{"ok": false, "message": "EntraID source not found"})
+		return
+	}
+	client, err := newEntraClient(*src)
 	if err != nil {
 		writeJSON(w, map[string]interface{}{"ok": false, "message": err.Error()})
 		return
@@ -527,4 +623,68 @@ func (app *App) handleRestEntraTest(w http.ResponseWriter, r *http.Request) {
 		msg = fmt.Sprintf("Connection successful \u2014 %d user(s) visible in the tenant.", page.Count)
 	}
 	writeJSON(w, map[string]interface{}{"ok": true, "message": msg})
+}
+
+// handleRestEntraSyncOne synchronously syncs a single EntraID connection (the
+// per-connection "Sync now" button), mirroring the LDAP per-source sync: the
+// EntraID mirror is replaced with just this source's users.
+func (app *App) handleRestEntraSyncOne(w http.ResponseWriter, r *http.Request) {
+	sess, ok := app.currentSession(r)
+	if !ok || app.permLevel(sess, "ldap") < 1 {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	id, err := strconv.Atoi(r.URL.Query().Get("entraid"))
+	if err != nil {
+		http.Error(w, "invalid EntraID id", http.StatusBadRequest)
+		return
+	}
+	srcs, _ := app.db.ListEntraSources()
+	var src *EntraSource
+	for i := range srcs {
+		if srcs[i].ID == id {
+			src = &srcs[i]
+			break
+		}
+	}
+	if src == nil {
+		http.Error(w, "EntraID source not found", http.StatusNotFound)
+		return
+	}
+	if src.Disabled {
+		http.Error(w, "connection is disabled", http.StatusConflict)
+		return
+	}
+	client, err := newEntraClient(*src)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	users, err := client.listUsers()
+	if err != nil {
+		http.Error(w, "graph list users: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	dir := make([]DirectoryUser, 0, len(users))
+	for _, u := range users {
+		if !u.AccountEnabled {
+			continue
+		}
+		dir = append(dir, graphUserToDirectory(u))
+	}
+	mirror := deriveMirrorUsers(dir)
+	avatars := app.avatarFileSet()
+	for i := range mirror {
+		mirror[i].HasAvatar = avatars[strings.ToLower(mirror[i].Userid)]
+	}
+	if err := app.db.ReplaceEntraLdap(mirror); err != nil {
+		http.Error(w, "writing EntraID mirror: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	now := time.Now().Format("2006-01-02 15:04:05")
+	src.LastSync = now
+	_ = app.db.PutEntraSource(*src)
+	_ = app.db.SetEntraSetting("entraLastSync", now)
+	_ = app.db.AuditLog("LDAP", sess.Username, "Manual EntraID sync of source "+strconv.Itoa(id))
+	writeJSON(w, map[string]interface{}{"status": "ok", "count": len(mirror)})
 }

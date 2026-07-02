@@ -536,6 +536,103 @@ func (app *App) handleSAMLStatus(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// handleSAMLValidate runs a server-side pre-flight check of the SAML
+// configuration so the admin can verify it without the interactive IdP
+// round-trip (no new browser window). It validates the certificate, confirms an
+// AuthnRequest can be generated, and probes the IdP login endpoint reachability.
+func (app *App) handleSAMLValidate(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	cfg := app.cfg.SAML
+
+	type check struct {
+		Name   string `json:"name"`
+		Status string `json:"status"` // ok | warn | fail
+		Detail string `json:"detail"`
+	}
+	var checks []check
+	add := func(name, status, detail string) {
+		checks = append(checks, check{Name: name, Status: status, Detail: detail})
+	}
+
+	// SAML enabled?
+	if cfg.Enabled {
+		add("SAML enabled", "ok", "Single sign-on is switched on.")
+	} else {
+		add("SAML enabled", "warn", "SAML is currently disabled; users cannot sign in with it yet.")
+	}
+
+	// IdP entity ID.
+	if strings.TrimSpace(cfg.EntraEntityID) != "" {
+		add("IdP Entity ID", "ok", cfg.EntraEntityID)
+	} else {
+		add("IdP Entity ID", "warn", "No IdP entity ID set.")
+	}
+
+	// Login URL present + parseable.
+	loginURL := strings.TrimSpace(cfg.EntraLoginURL)
+	var parsedLogin *url.URL
+	if loginURL == "" {
+		add("Login URL", "fail", "No SSO login URL configured.")
+	} else if u, err := url.Parse(loginURL); err != nil || u.Scheme == "" || u.Host == "" {
+		add("Login URL", "fail", "Login URL is not a valid absolute URL.")
+	} else {
+		parsedLogin = u
+		add("Login URL", "ok", loginURL)
+	}
+
+	// Certificate parses + expiry.
+	if strings.TrimSpace(cfg.EntraX509Certificate) == "" {
+		add("X.509 certificate", "fail", "No signing certificate configured.")
+	} else if cert, err := samlParseCertBase64(cfg.EntraX509Certificate); err != nil {
+		add("X.509 certificate", "fail", "Certificate could not be parsed: "+err.Error())
+	} else {
+		now := time.Now()
+		detail := "Subject: " + cert.Subject.CommonName + " · expires " + cert.NotAfter.Format("2006-01-02")
+		switch {
+		case now.After(cert.NotAfter):
+			add("X.509 certificate", "fail", "Certificate expired on "+cert.NotAfter.Format("2006-01-02")+".")
+		case now.Before(cert.NotBefore):
+			add("X.509 certificate", "warn", "Certificate is not valid until "+cert.NotBefore.Format("2006-01-02")+".")
+		case now.Add(30 * 24 * time.Hour).After(cert.NotAfter):
+			add("X.509 certificate", "warn", "Certificate expires soon — "+detail)
+		default:
+			add("X.509 certificate", "ok", detail)
+		}
+	}
+
+	// AuthnRequest generation.
+	if parsedLogin != nil {
+		entityID := app.samlEntityID(r)
+		acsURL := app.samlACSURL(r)
+		reqXML := buildSAMLAuthnRequest(samlGenerateID(), time.Now().UTC().Format(time.RFC3339), entityID, loginURL, acsURL, cfg.NameIDFormat)
+		if _, err := samlDeflateAndEncode([]byte(reqXML)); err != nil {
+			add("AuthnRequest", "fail", "Failed to build the SAML request: "+err.Error())
+		} else {
+			add("AuthnRequest", "ok", "A valid SAML authentication request can be generated.")
+		}
+
+		// Reachability probe of the IdP login endpoint (any HTTP response counts
+		// as reachable; we do not follow the SSO flow here).
+		client := &http.Client{Timeout: 8 * time.Second}
+		resp, err := client.Get(loginURL)
+		if err != nil {
+			add("IdP reachable", "warn", "Could not reach the login URL: "+err.Error())
+		} else {
+			resp.Body.Close()
+			add("IdP reachable", "ok", fmt.Sprintf("Login endpoint responded (HTTP %d).", resp.StatusCode))
+		}
+	}
+
+	ok := true
+	for _, c := range checks {
+		if c.Status == "fail" {
+			ok = false
+			break
+		}
+	}
+	json.NewEncoder(w).Encode(map[string]interface{}{"ok": ok, "checks": checks})
+}
+
 func (app *App) handleSAMLSettings(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	switch r.Method {

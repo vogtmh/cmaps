@@ -38,6 +38,7 @@
   padding: 0 24px;
 }
 .sync-wrap *, .sync-wrap *::before, .sync-wrap *::after { box-sizing: border-box; }
+.sync-wrap pre, .sync-wrap code, .sync-wrap kbd, .sync-wrap samp, .sync-wrap tt { font-family: inherit; }
 
 /* ── Big tab buttons (top nav) ───────────────────────────── */
 .sync-tabs {
@@ -45,6 +46,18 @@
   gap: 10px;
   margin-bottom: 22px;
   flex-wrap: wrap;
+  align-items: center;
+}
+.sync-msg {
+  display: inline-flex;
+  align-items: center;
+  padding: 10px 16px;
+  border-radius: 8px;
+  font-weight: 700;
+  font-size: 14px;
+  color: #fff;
+  background: rgba(0, 120, 0, 0.6);
+  transition: opacity 0.4s;
 }
 .sync-tab {
   display: inline-flex;
@@ -62,7 +75,8 @@
   user-select: none;
 }
 .sync-tab:hover { background: var(--sy-surface2); }
-.sync-tab.active { background: var(--sy-accent); border-color: var(--sy-accent); color: #fff; }
+.sync-tab.active { background: #035aad; border-color: #035aad; color: #fff; }
+.sync-tab.active:hover { background: #0d79d8; border-color: #0d79d8; }
 .sync-tab .sync-navdot { width: 9px; height: 9px; border-radius: 50%; background: var(--sy-muted); flex-shrink: 0; }
 .sync-tab.active .sync-navdot { background: #fff; }
 
@@ -156,6 +170,9 @@
   font-family: inherit;
 }
 .sync-btn:hover { background: #3f4248; }
+.sync-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.sync-btn:disabled:hover { background: var(--sy-surface2); }
+.sync-btn-primary:disabled:hover { background: var(--sy-accent); }
 .sync-btn-primary { background: var(--sy-accent); border-color: var(--sy-accent); color: #fff; }
 .sync-btn-primary:hover { background: var(--sy-accent-d); }
 .sync-btn-danger { background: transparent; border-color: rgba(231,76,60,0.5); color: #f08070; }
@@ -191,7 +208,7 @@
 }
 .sync-input::placeholder, .sync-textarea::placeholder { color: #777; }
 .sync-input:focus, .sync-select:focus, .sync-textarea:focus { border-color: var(--sy-accent); }
-.sync-textarea { resize: vertical; min-height: 110px; font-family: monospace; font-size: 12px; }
+.sync-textarea { resize: vertical; min-height: 110px; font-family: inherit; font-size: 12px; }
 .sync-textarea.sync-textarea-text { font-family: inherit; font-size: 13px; }
 .sync-select { cursor: pointer; }
 .sync-select option { background: var(--sy-surface); color: var(--sy-fg); }
@@ -302,6 +319,35 @@
   mask-image: url(../images/hide.png);
 }
 
+/* ── Status result icon (ok/warn/error, tinted via mask) ─── */
+.status-icon {
+  display: inline-block;
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-size: contain;
+  mask-size: contain;
+}
+.status-icon-ok {
+  background-color: #2ecc71;
+  -webkit-mask-image: url(../images/status-ok.png);
+  mask-image: url(../images/status-ok.png);
+}
+.status-icon-warn {
+  background-color: #e67e22;
+  -webkit-mask-image: url(../images/status-warning.png);
+  mask-image: url(../images/status-warning.png);
+}
+.status-icon-fail {
+  background-color: #e74c3c;
+  -webkit-mask-image: url(../images/status-error.png);
+  mask-image: url(../images/status-error.png);
+}
+
 /* ── Map availability icon (image present/missing, tinted via mask) ── */
 .map-file {
   display: inline-block;
@@ -398,7 +444,7 @@
   margin-bottom: 14px;
 }
 .sync-modal-head h2 { margin: 0; font-size: 1.1em; }
-.sync-modal-body { font-family: monospace; font-size: 13px; white-space: pre-wrap; word-break: break-word; }
+.sync-modal-body { font-family: inherit; font-size: 13px; white-space: pre-wrap; word-break: break-word; }
 .sync-modal-content { font-family: inherit; font-size: 14px; }
 
 /* Center the backup export/import overlays on screen. */
@@ -451,7 +497,7 @@
 .sync-sp-row { display: flex; align-items: center; gap: 10px; padding: 7px 0; border-bottom: 1px solid var(--sy-border); }
 .sync-sp-row:last-child { border-bottom: none; }
 .sync-sp-label { flex: 0 0 180px; color: var(--sy-muted); font-size: 0.85em; }
-.sync-sp-value { flex: 1; font-family: monospace; font-size: 12px; color: var(--sy-fg); word-break: break-all; }
+.sync-sp-value { flex: 1; font-family: inherit; font-size: 12px; color: var(--sy-fg); word-break: break-all; }
 
 .sync-details { margin-top: 12px; border-top: 1px solid var(--sy-border); padding-top: 12px; }
 .sync-details > summary { cursor: pointer; font-weight: 600; font-size: 0.9em; color: var(--sy-accent); list-style: none; }
@@ -484,7 +530,7 @@
   border: 1px solid var(--sy-border);
   border-radius: 8px;
   padding: 12px 14px;
-  font-family: monospace;
+  font-family: inherit;
   font-size: 12px;
   line-height: 1.6;
   color: #d6d6d6;

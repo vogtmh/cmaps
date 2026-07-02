@@ -99,7 +99,7 @@ func (app *App) buildMapDesks(mapName, date, search string, vips []VIP, bookings
 	// this map; free desks are therefore never affected.
 	robinMode := app.db.GetRobinSetting("robinDeskMode")
 	robinStatus := map[string]RobinDeskStatus{}
-	if robinMode == "all" || robinMode == "unused" || robinMode == "allclear" {
+	if app.robinEnabled() && (robinMode == "all" || robinMode == "unused" || robinMode == "allclear") {
 		sts, _ := app.db.ListRobinDeskStatus(mapName)
 		for _, s := range sts {
 			robinStatus[strings.ToLower(strings.TrimSpace(s.Desknumber))] = s

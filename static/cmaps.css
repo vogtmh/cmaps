@@ -12,6 +12,8 @@
          url('fonts/roboto-v30-latin-regular.svg#Roboto') format('svg'); /* Legacy iOS */
 }
 
+pre, code, kbd, samp, tt { font-family: inherit; }
+
 .rotated { 
     -webkit-transform: rotate(90deg);
     -moz-transform: rotate(90deg);

@@ -21,6 +21,13 @@ import (
 
 const geoapifyEndpoint = "https://api.geoapify.com/v1/geocode/search"
 
+// geoEnabled reports whether the Geoapify geocoding integration is switched on.
+// It defaults to enabled so existing installs keep working after an upgrade; the
+// admin toggle only stores the value "0" to disable it.
+func (app *App) geoEnabled() bool {
+	return app.db.GetGeoSetting("geoEnabled") != "0"
+}
+
 // geoapifyResponse is the subset of the Geoapify GeoJSON response we consume.
 type geoapifyResponse struct {
 	Features []struct {
