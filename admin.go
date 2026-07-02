@@ -1527,7 +1527,7 @@ func (app *App) handleRestLdap(w http.ResponseWriter, r *http.Request) {
 							return
 						}
 						_ = app.db.AuditLog("LDAP", sess.Username, "Manual sync of source "+idStr)
-						writeJSON(w, map[string]interface{}{"status": "ok", "count": count})
+						writeJSON(w, map[string]interface{}{"status": "ok", "count": count, "lastSync": nowTimestamp()})
 						return
 					}
 					dir, dbg, err := app.fetchSourceDirectory(s)
@@ -1552,7 +1552,7 @@ func (app *App) handleRestLdap(w http.ResponseWriter, r *http.Request) {
 						return
 					}
 					_ = app.db.AuditLog("LDAP", sess.Username, "Manual sync of source "+idStr)
-					writeJSON(w, map[string]interface{}{"status": "ok", "count": count})
+					writeJSON(w, map[string]interface{}{"status": "ok", "count": count, "lastSync": s.LastSync})
 					return
 				}
 			}

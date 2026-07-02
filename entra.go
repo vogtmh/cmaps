@@ -700,7 +700,7 @@ func (app *App) handleRestEntraSyncOne(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		_ = app.db.AuditLog("LDAP", sess.Username, "Manual EntraID sync of source "+strconv.Itoa(id))
-		writeJSON(w, map[string]interface{}{"status": "ok", "count": count})
+		writeJSON(w, map[string]interface{}{"status": "ok", "count": count, "lastSync": nowTimestamp()})
 		return
 	}
 	client, err := newEntraClient(*src)
@@ -735,5 +735,5 @@ func (app *App) handleRestEntraSyncOne(w http.ResponseWriter, r *http.Request) {
 	_ = app.db.PutEntraSource(*src)
 	_ = app.db.SetEntraSetting("entraLastSync", now)
 	_ = app.db.AuditLog("LDAP", sess.Username, "Manual EntraID sync of source "+strconv.Itoa(id))
-	writeJSON(w, map[string]interface{}{"status": "ok", "count": count})
+	writeJSON(w, map[string]interface{}{"status": "ok", "count": count, "lastSync": now})
 }

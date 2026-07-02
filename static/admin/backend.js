@@ -349,6 +349,10 @@ function syncLDAP(ldap_id, adminuser) {
       console.log(result)
       $("#"+button_div).css("background-color","rgba(0, 100, 0, 1.0)");
       document.getElementById(button_div).value = "Success"
+      if (result && result.lastSync) {
+        var cell = document.getElementById('ldapLastSync'+ldap_id);
+        if (cell) cell.textContent = result.lastSync;
+      }
     },
     error: function() {
       console.log('[LDAP] update failed');
@@ -1177,6 +1181,10 @@ function syncEntra(id) {
       if (out) {
         out.style.color = 'var(--sy-ok)';
         out.textContent = 'Synced ' + (result && result.count != null ? result.count + ' placement(s).' : 'successfully.');
+      }
+      if (result && result.lastSync) {
+        var cell = document.getElementById('entraLastSync' + id);
+        if (cell) cell.textContent = result.lastSync;
       }
     },
     error: function (xhr) {
