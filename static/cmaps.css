@@ -1888,7 +1888,9 @@ canvas {
 }
 .page_content{
   width:1600px;
-  height:1200px;
+  /* 1200px by default; detail maps publish a taller --content-height from
+     resize.js so the fixed bottom overlay buttons clear the floor plan. */
+  height:var(--content-height, 1200px);
   -ms-transform-origin: top left;
   -webkit-transform-origin: top left;
   transform-origin: top left;
@@ -1896,6 +1898,12 @@ canvas {
   transition: left 300ms ease-in-out, top 300ms ease-in-out !important;
   position: absolute;
   z-index: 0;
+  /* Map layout = single source of truth: resize.js publishes these vars and the
+     server seeds them for first paint. `zoom` re-rasterizes desk labels crisply;
+     since zoom also scales offsets, resize.js pre-divides left/top by the zoom. */
+  zoom: var(--content-sc, 1);
+  left: calc(var(--content-left, 0) * 1px);
+  top: calc(var(--content-top, 0) * 1px);
 }
 
 a {color: white;text-decoration: none;}

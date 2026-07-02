@@ -15,7 +15,7 @@
   <meta name="viewport" content="width=device-width">
 
   <script src="../tools/Chart.min.js?v={{assetver}}"></script>
-  <script src="../tools/jquery3.js?v={{assetver}}"></script>
+  <script src="../tools/jquery.js?v={{assetver}}"></script>
   <script src="../tools/resize.js?v={{assetver}}"></script>
   <script src="../tools/underscore.js?v={{assetver}}"></script>
   <script src="backend.js?v={{assetver}}"></script>
@@ -97,7 +97,7 @@
 </script>
 
 <!-- Content -->
-<div id="content" class="page_content" style="position:absolute; top:{{.ContentTop}}px; left:{{.ContentLeft}}px; width:{{.TargetScreenWidth}}px; zoom:{{.ContentScale}};"> <br />
+<div id="content" class="page_content" style="--content-sc:{{.ContentScale}};--content-left:{{.ContentLeft}};--content-top:{{.ContentTop}};"> <br />
 
 {{define "admincontent"}}
 {{if and .Message (ne .ActiveTab "ldap")}}<div style="margin-left:20px; padding:8px; background:rgba(0,120,0,0.6); border-radius:5px; width:600px;">{{.Message}}</div><br />{{end}}
