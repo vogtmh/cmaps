@@ -1189,64 +1189,252 @@ function identifierTargetMode() {
   return el ? el.value : 'samaccountname';
 }
 
-// analyzeIdentifier previews the migration to the selected identifier mode:
-// how many users convert, which conflict, and per-area record counts. Makes no
-// changes. On success it reveals the "Start migration" button.
+// identifierCurrentMode is the identifier that is actually active (seeded on the
+// selection card by the server), used to detect a change and to reset on cancel.
+function identifierCurrentMode() {
+  var c = document.getElementById('identifierSelectCard');
+  return (c && c.getAttribute('data-current')) || 'samaccountname';
+}
+
+// resetIdentifierSelection puts the radio buttons back to the active identifier.
+function resetIdentifierSelection() {
+  var el = document.querySelector('input[name="identifierMode"][value="' + identifierCurrentMode() + '"]');
+  if (el) el.checked = true;
+}
+
+// migResetAssistant returns the assistant UI to its initial step-1 state.
+function migResetAssistant() {
+  migSetStep(1);
+  var a = document.getElementById('identifierAnalysis'); if (a) a.innerHTML = '';
+  var nb = document.getElementById('migToCreateBtn'); if (nb) nb.style.display = 'none';
+  var bd = document.getElementById('migStagedBreakdown'); if (bd) bd.innerHTML = '';
+  var prog = document.getElementById('identifierProgress'); if (prog) prog.classList.remove('active');
+  var logEl = document.getElementById('identifierLog'); if (logEl) { logEl.textContent = ''; logEl.style.display = 'none'; }
+}
+
+// identifierLabel returns the friendly name for an identifier mode.
+function identifierLabel(mode) {
+  return mode === 'mail' ? 'E-Mail' : 'SAMAccountname';
+}
+
+// showMigrationAssistant reveals the migration card (hiding the selection card),
+// sets the direction in the header and immediately analyzes the migration.
+function showMigrationAssistant() {
+  var migCard = document.getElementById('identifierMigrateCard');
+  if (!migCard) return; // no migration assistant (insufficient permission)
+  var selCard = document.getElementById('identifierSelectCard');
+  if (selCard) selCard.style.display = 'none';
+  migCard.style.display = 'block';
+  migResetAssistant();
+  var title = document.getElementById('migTitle');
+  if (title) {
+    title.textContent = 'Migration assistant: ' + identifierLabel(identifierCurrentMode()) +
+      ' \u2192 ' + identifierLabel(identifierTargetMode());
+  }
+  analyzeIdentifier();
+}
+
+// hideMigrationAssistant hides the migration card and restores the selection card.
+function hideMigrationAssistant() {
+  var migCard = document.getElementById('identifierMigrateCard');
+  if (migCard) migCard.style.display = 'none';
+  var selCard = document.getElementById('identifierSelectCard');
+  if (selCard) selCard.style.display = '';
+  migResetAssistant();
+}
+
+// identifierModeChanged fires when a radio is toggled: switching away from the
+// active identifier opens the migration assistant.
+function identifierModeChanged() {
+  if (identifierTargetMode() === identifierCurrentMode()) return;
+  showMigrationAssistant();
+}
+
+// migAnalysis holds the most recent analyze result so the review step can echo
+// exactly what will change.
+var migAnalysis = null;
+
+// migSetStep highlights the given step in the 3-step indicator (blue = active,
+// green = completed, grey = not yet reached) and shows the matching phase panel.
+function migSetStep(n) {
+  for (var i = 1; i <= 3; i++) {
+    var el = document.querySelector('#migSteps .mig-step[data-step="' + i + '"]');
+    if (el) {
+      el.classList.remove('active', 'done');
+      if (i < n) el.classList.add('done');
+      else if (i === n) el.classList.add('active');
+    }
+    var line = document.querySelectorAll('#migSteps .mig-line')[i - 1];
+    if (line) line.classList.toggle('done', i < n);
+    var ph = document.getElementById('migPhase' + i);
+    if (ph) ph.style.display = (i === n) ? 'block' : 'none';
+  }
+}
+
+// migGoto moves directly to a step in the indicator.
+function migGoto(n) {
+  migSetStep(n);
+}
+
+// migCancel discards the staged migration, hides the assistant and restores the
+// selection card with the active identifier re-selected.
+function migCancel() {
+  var btn = document.getElementById('migCancelBtn');
+  if (btn) btn.disabled = true;
+  $.ajax({
+    url: '../rest/identifier/cancel', type: 'POST', dataType: 'JSON',
+    complete: function () {
+      if (btn) btn.disabled = false;
+      resetIdentifierSelection();
+      hideMigrationAssistant();
+    }
+  });
+}
+
+// migMarkAllDone paints every step green (used after a successful apply).
+function migMarkAllDone() {
+  var steps = document.querySelectorAll('#migSteps .mig-step');
+  for (var i = 0; i < steps.length; i++) { steps[i].classList.remove('active'); steps[i].classList.add('done'); }
+  var lines = document.querySelectorAll('#migSteps .mig-line');
+  for (var j = 0; j < lines.length; j++) lines[j].classList.add('done');
+}
+
+// migStat / migRow render the structured analysis blocks.
+function migStat(n, label, tone) {
+  return '<div class="mig-stat mig-stat-' + tone + '"><span class="mig-stat-num">' + (n || 0) +
+    '</span><span class="mig-stat-lbl">' + label + '</span></div>';
+}
+function migRow(label, n) {
+  return '<tr><td>' + label + '</td><td class="mig-num">' + (n || 0) + '</td></tr>';
+}
+
+// renderMigAnalysis turns an analyze result into a structured summary: headline
+// stat cards, a per-area record table and the conflict list.
+function renderMigAnalysis(r) {
+  var c = r.counts || {};
+  var conf = r.conflicts || [];
+  var h = '<div class="mig-stats">';
+  h += migStat(r.mappable, 'to convert', 'ok');
+  h += migStat(r.already, 'already in ' + esc(r.target), 'muted');
+  h += migStat(conf.length, 'conflict(s) skipped', conf.length ? 'warn' : 'muted');
+  h += '</div>';
+  h += '<table class="mig-table"><thead><tr><th>Data area</th><th class="mig-num">Records</th></tr></thead><tbody>';
+  h += migRow('Avatar images', c.avatars);
+  h += migRow('Map admins', c.mapAdmins);
+  h += migRow('Bookings', c.bookings);
+  h += migRow('Changelog', c.changelog);
+  h += migRow('Audit log', c.audit);
+  h += migRow('Desks', c.desks);
+  h += '</tbody></table>';
+  if (conf.length) {
+    h += '<div class="mig-conflicts"><div class="mig-conflicts-head">Conflicts (skipped, left untouched)</div>';
+    h += conf.slice(0, 50).map(function (x) {
+      return '<div class="mig-conflict">\u2022 ' + esc(x.old) + (x.new ? ' \u2192 ' + esc(x.new) : '') + ' \u2014 ' + esc(x.reason) + '</div>';
+    }).join('');
+    if (conf.length > 50) h += '<div class="mig-conflict">\u2026 and ' + (conf.length - 50) + ' more.</div>';
+    h += '</div>';
+  }
+  return h;
+}
+
+// analyzeIdentifier (step 1) previews the migration to the selected identifier
+// mode and, on success, reveals the "Next: create data" button. Makes no changes.
 function analyzeIdentifier() {
   var target = identifierTargetMode();
   var out = document.getElementById('identifierAnalysis');
-  var migBtn = document.getElementById('identifierMigrateBtn');
-  if (migBtn) migBtn.style.display = 'none';
+  var nextBtn = document.getElementById('migToCreateBtn');
+  if (nextBtn) nextBtn.style.display = 'none';
+  if (out) out.innerHTML = '<div class="mig-note">Analyzing\u2026</div>';
   $.ajax({
     url: '../rest/identifier/analyze', type: 'POST', dataType: 'JSON',
     data: { target: target },
     success: function (r) {
       if (r.current === r.target) {
-        out.innerHTML = 'This is already the active identifier.';
+        if (out) out.innerHTML = '<div class="mig-note">This is already the active identifier.</div>';
         return;
       }
-      var c = r.counts || {};
-      var html = '<b>' + r.mappable + '</b> user(s) will be converted, ' +
-        '<b>' + r.already + '</b> already in the target format, ' +
-        '<b>' + (r.conflicts ? r.conflicts.length : 0) + '</b> conflict(s) will be skipped.<br>' +
-        'Records to scan: ' + (c.avatars || 0) + ' avatar(s), ' + (c.mapAdmins || 0) + ' map admin(s), ' +
-        (c.bookings || 0) + ' booking(s), ' + (c.changelog || 0) + ' changelog, ' +
-        (c.audit || 0) + ' audit, ' + (c.desks || 0) + ' desk(s).';
-      if (r.conflicts && r.conflicts.length) {
-        html += '<br><b>Conflicts (skipped, left untouched):</b><br>';
-        html += r.conflicts.slice(0, 50).map(function (x) {
-          return '&nbsp;&nbsp;\u2022 ' + dbEscape(x.old) + (x.new ? ' \u2192 ' + dbEscape(x.new) : '') + ' \u2014 ' + dbEscape(x.reason);
-        }).join('<br>');
-        if (r.conflicts.length > 50) html += '<br>&nbsp;&nbsp;\u2026 and ' + (r.conflicts.length - 50) + ' more.';
-      }
-      out.innerHTML = html;
-      if (migBtn) migBtn.style.display = 'inline-flex';
+      migAnalysis = r;
+      if (out) out.innerHTML = renderMigAnalysis(r);
+      if (nextBtn) nextBtn.style.display = 'inline-flex';
     },
     error: function (xhr) {
-      out.textContent = 'Analyze failed: ' + (xhr.responseText || xhr.status);
+      if (out) out.innerHTML = '<div class="mig-note mig-note-warn">Analyze failed: ' + esc(xhr.responseText || xhr.status) + '</div>';
     }
   });
 }
 
-function startIdentifierMigration() {
-  var target = identifierTargetMode();
-  if (!confirm('Migrate the employee identifier to "' + target + '"?\n\nThis converts avatar files, map-admin ' +
-    'records, the audit log, changelog, bookings and desks, then activates the new setting. Users will need to ' +
-    'log in again. Make sure you have a backup.')) return;
-  var btn = document.getElementById('identifierMigrateBtn');
-  var abtn = document.getElementById('identifierAnalyzeBtn');
-  if (btn) { btn.disabled = true; btn.textContent = 'Migrating\u2026'; }
-  if (abtn) abtn.disabled = true;
-  var logEl = document.getElementById('identifierLog');
-  if (logEl) { logEl.textContent = ''; logEl.style.display = 'block'; }
+// renderStageResult turns a stage-result response into the "X records: Y changes
+// staged" breakdown shown in the review step.
+function renderStageResult(r) {
+  if (!r || r.status === 'none' || r.status === 'expired') {
+    return '<div class="mig-note mig-note-warn">No staged changes were found' +
+      (r && r.status === 'expired' ? ' (they expired)' : '') +
+      '. Go back and create the data again.</div>';
+  }
+  var target = r.target || identifierTargetMode();
+  var areas = r.areas || [];
+  var totalChanges = 0;
+  areas.forEach(function (a) { totalChanges += (a.changed || 0); });
+  var h = '<div class="mig-note mig-note-ok"><b>' + totalChanges + ' change(s) staged</b> for the switch to <b>' + esc(target) + '</b>. ' +
+    'Everything below lives in a temporary area &mdash; the live data is only modified when you click Apply.</div>';
+  h += '<div class="mig-staged">';
+  areas.forEach(function (a) {
+    var line = a.total + ' ' + esc(a.label.toLowerCase()) + ': ' +
+      (a.changed ? '<b>' + a.changed + ' change(s) staged</b>' : 'no changes');
+    h += '<div class="mig-conflict">\u2022 ' + line + '</div>';
+  });
+  h += '</div>';
+  if (r.conflicts) {
+    h += '<div class="mig-note">' + r.conflicts + ' conflict(s) will be skipped and left untouched.</div>';
+  }
+  h += '<div class="mig-note mig-note-warn">Applying activates the new identifier and users will need to sign in again. Make sure you have a backup.</div>';
+  return h;
+}
+
+// loadStageResult fetches the staged breakdown and renders it in the review step.
+function loadStageResult() {
+  var el = document.getElementById('migStagedBreakdown');
+  if (el) el.innerHTML = '<div class="mig-note">Loading staged changes\u2026</div>';
   $.ajax({
-    url: '../rest/identifier/migrate', type: 'POST', dataType: 'JSON',
-    data: { target: target },
-    complete: function () { pollIdentifierMigration(); }
+    url: '../rest/identifier/stageresult', type: 'GET', dataType: 'JSON',
+    success: function (r) { if (el) el.innerHTML = renderStageResult(r); },
+    error: function () { if (el) el.innerHTML = '<div class="mig-note mig-note-warn">Could not load the staged changes.</div>'; }
   });
 }
 
-function pollIdentifierMigration() {
+// migStartStaging (step 1 -> 2) runs the full conversion into temporary staging
+// buckets, then automatically advances to the review step when it finishes.
+function migStartStaging() {
+  var target = identifierTargetMode();
+  migSetStep(2);
+  var logEl = document.getElementById('identifierLog');
+  if (logEl) { logEl.textContent = ''; logEl.style.display = 'block'; }
+  $.ajax({
+    url: '../rest/identifier/create', type: 'POST', dataType: 'JSON',
+    data: { target: target },
+    complete: function () { pollIdentifierMigration('create'); }
+  });
+}
+
+// startIdentifierApply (step 3) commits the switch after a final confirmation.
+function startIdentifierApply() {
+  var target = identifierTargetMode();
+  if (!confirm('Apply the switch to "' + target + '" now?\n\nThis converts the live records, removes the old ' +
+    'avatar files and activates the new identifier. Users will need to log in again.')) return;
+  var btn = document.getElementById('migApplyBtn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Applying\u2026'; }
+  var logEl = document.getElementById('identifierLog');
+  if (logEl) { logEl.textContent = ''; logEl.style.display = 'block'; }
+  $.ajax({
+    url: '../rest/identifier/apply', type: 'POST', dataType: 'JSON',
+    data: { target: target },
+    complete: function () { pollIdentifierMigration('apply'); }
+  });
+}
+
+// pollIdentifierMigration polls the shared progress endpoint for either phase and
+// updates the stepper/buttons when the job finishes.
+function pollIdentifierMigration(phase) {
   var timer = setInterval(function () {
     $.ajax({
       url: '../rest/identifier/progress', type: 'GET', dataType: 'JSON',
@@ -1262,12 +1450,23 @@ function pollIdentifierMigration() {
           }
           var stage = document.getElementById('identifierProgStage');
           if (stage) stage.textContent = snap.error ? ('Error: ' + snap.error) : (snap.summary || 'Done');
-          var btn = document.getElementById('identifierMigrateBtn');
-          if (btn) { btn.disabled = false; btn.textContent = 'Start migration'; }
-          var abtn = document.getElementById('identifierAnalyzeBtn');
-          if (abtn) abtn.disabled = false;
-          if (!snap.error) {
-            setTimeout(function () { loadAdminTab('ldap', 'general', true); }, 1800);
+          if (phase === 'create') {
+            if (snap.error) {
+              migSetStep(1);
+              var out = document.getElementById('identifierAnalysis');
+              if (out) out.innerHTML = '<div class="mig-note mig-note-warn">Staging failed: ' + esc(snap.error) + '</div>';
+            } else {
+              // Conversion staged in the temporary buckets — auto-advance to review.
+              migSetStep(3);
+              loadStageResult();
+            }
+          } else {
+            var ab = document.getElementById('migApplyBtn');
+            if (ab) { ab.disabled = false; ab.textContent = 'Apply and switch identifier'; }
+            if (!snap.error) {
+              migMarkAllDone();
+              setTimeout(function () { loadAdminTab('ldap', 'general', true); }, 1800);
+            }
           }
         }
       },

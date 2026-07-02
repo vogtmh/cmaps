@@ -81,7 +81,10 @@ func (app *App) registerRESTRoutes(mux *http.ServeMux) {
 	rest("/rest/directory/search", app.handleRestDirectorySearch)
 	rest("/rest/directory/match", app.handleRestDirectoryMatch)
 	rest("/rest/identifier/analyze", app.handleRestIdentifierAnalyze)
-	rest("/rest/identifier/migrate", app.handleRestIdentifierMigrate)
+	rest("/rest/identifier/create", app.handleRestIdentifierCreate)
+	rest("/rest/identifier/stageresult", app.handleRestIdentifierStageResult)
+	rest("/rest/identifier/cancel", app.handleRestIdentifierCancel)
+	rest("/rest/identifier/apply", app.handleRestIdentifierApply)
 	rest("/rest/identifier/progress", app.handleRestIdentifierProgress)
 	rest("/rest/vips", app.handleRestVips)
 	rest("/rest/setting", app.handleRestSetting)
@@ -445,6 +448,16 @@ func safeNextPath(next string) string {
 	}
 	if strings.ContainsAny(next, "\\\r\n\t") {
 		return "/"
+	}
+	// Strip the AJAX fragment flag: a next path captured from a background
+	// tab-switch request (e.g. /admin/?tab=config&partial=1) would otherwise
+	// render only the bare content fragment after login and look broken. Force
+	// a full-page render by removing the partial marker.
+	if u, err := url.Parse(next); err == nil && u.Query().Has("partial") {
+		q := u.Query()
+		q.Del("partial")
+		u.RawQuery = q.Encode()
+		next = u.String()
 	}
 	return next
 }

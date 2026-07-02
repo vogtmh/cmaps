@@ -3,7 +3,7 @@
   CompanyMaps 9 AdminPanel
   Ported from the legacy admin/index.php
 ==================================================================== -->
-<html lang="en">
+<html lang="en" style="--sc:{{.Autozoom}};">
 <head>
   <title>{{.AppTitle}}</title>
   <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
@@ -27,9 +27,9 @@
 <div id="container"> </div>
 
 <!-- Page header chrome -->
-<div class="control_background" style="width:100%; height: 69px; position: fixed; top: 0px; left: 0px;background: #333333; transform:scaleY({{.Autozoom}})"> </div>
-<div id="controlpanel" class="control_container" style="position:fixed; left: 0px; top: 0px; height:69px;width:100%;background-color:#333333;opacity:1.0;z-index:1;transform:scale({{.Autozoom}});transform-origin:50% 0%;">
-  <div class="control_content" style="position: absolute; left:50%; margin-left:-{{.HalfWidth}}px; top:0px;width:{{.TargetScreenWidth}}px;height:69px; z-index:2;transform-origin:50% 0%;background-color:#333333">
+<div class="control_background"> </div>
+<div id="controlpanel" class="control_container">
+  <div class="control_content" id="control_content">
 
     <div class="headeritem" id="tab_dashboard" style="width:200px; background: transparent; margin-left:0px;">
       <span class="headeritem_picture" style="opacity:1.0;"><a href="?tab=dashboard"><img src="../images/logo.png" width="45" alt="" onmouseover='this.src="../images/dashboard.png"' onmouseout='this.src="../images/logo.png"' /></a></span>
@@ -563,7 +563,7 @@
 
   {{if gt .PermAdminpanel 0}}
   <div id="syncsub_general" class="syncsub" style="display:none;">
-    <div class="sync-card">
+    <div class="sync-card" id="identifierSelectCard" data-current="{{.IdentifierMode}}">
       <div class="sync-card-head">
         <h2 class="sync-card-title">Employee identifier</h2>
         <span class="sync-badge sync-badge-accent" id="identifierBadge">{{if eq .IdentifierMode "mail"}}E-Mail{{else}}SAMAccountname{{end}}</span>
@@ -574,24 +574,56 @@
         activates the new setting. Run it on a backup first &mdash; you can migrate back and forth.</p>
       <div class="sync-field" style="max-width:640px;">
         <label class="sync-label">Identifier</label>
-        <label style="display:block; margin:4px 0;"><input type="radio" name="identifierMode" value="samaccountname" {{if ne .IdentifierMode "mail"}}checked{{end}}> SAMAccountname <span class="sync-status-text">&mdash; only supported by LDAP (default)</span></label>
-        <label style="display:block; margin:4px 0;"><input type="radio" name="identifierMode" value="mail" {{if eq .IdentifierMode "mail"}}checked{{end}}> E-Mail <span class="sync-status-text">&mdash; supported by LDAP, EntraID and SAML SSO</span></label>
+        <label style="display:block; margin:4px 0;"><input type="radio" name="identifierMode" value="samaccountname" onchange="identifierModeChanged()" {{if ne .IdentifierMode "mail"}}checked{{end}}> SAMAccountname <span class="sync-status-text">&mdash; only supported by LDAP (default)</span></label>
+        <label style="display:block; margin:4px 0;"><input type="radio" name="identifierMode" value="mail" onchange="identifierModeChanged()" {{if eq .IdentifierMode "mail"}}checked{{end}}> E-Mail <span class="sync-status-text">&mdash; supported by LDAP, EntraID and SAML SSO</span></label>
       </div>
-      {{if gt .PermAdminpanel 1}}
-      <div class="sync-form-actions">
-        <button type="button" class="sync-btn" id="identifierAnalyzeBtn" onclick="analyzeIdentifier()">Analyze migration&hellip;</button>
-        <button type="button" class="sync-btn sync-btn-primary" id="identifierMigrateBtn" onclick="startIdentifierMigration()" style="display:none;">Start migration</button>
+    </div>
+
+    {{if gt .PermAdminpanel 1}}
+    <div class="sync-card" id="identifierMigrateCard" style="display:none;">
+      <div class="sync-card-head"><h2 class="sync-card-title" id="migTitle">Migration assistant</h2></div>
+
+      <div class="mig-steps" id="migSteps">
+        <div class="mig-step active" data-step="1"><span class="mig-dot">1</span><span class="mig-label">Analyze</span></div>
+        <div class="mig-line"></div>
+        <div class="mig-step" data-step="2"><span class="mig-dot">2</span><span class="mig-label">Create new data</span></div>
+        <div class="mig-line"></div>
+        <div class="mig-step" data-step="3"><span class="mig-dot">3</span><span class="mig-label">Review &amp; apply</span></div>
       </div>
-      <div id="identifierAnalysis" class="sync-status-text" style="margin-top:8px;"></div>
+
+      <div class="mig-phase" id="migPhase1">
+        <p class="sync-card-hint">Preview how much data exists and how many records will change before touching anything. Nothing is modified in this step.</p>
+        <div id="identifierAnalysis" class="mig-analysis"></div>
+        <div class="sync-form-actions">
+          <button type="button" class="sync-btn" onclick="migCancel()">&larr; Cancel</button>
+          <button type="button" class="sync-btn sync-btn-primary" id="migToCreateBtn" onclick="migStartStaging()" style="display:none;">Next: create data &rarr;</button>
+        </div>
+      </div>
+
+      <div class="mig-phase" id="migPhase2" style="display:none;">
+        <p class="sync-card-hint">Converting all data into a temporary staging area. No live records or avatar files are touched &mdash; this just computes exactly what will change. You will move to the review step automatically when it finishes.</p>
+      </div>
+
+      <div class="mig-phase" id="migPhase3" style="display:none;">
+        <p class="sync-card-hint">These changes are staged and ready. Click <b>Apply</b> to swap them into the live data and activate the new identifier, or <b>Cancel</b> to discard them. Staged data is discarded automatically if not applied within 1 hour.</p>
+        <div id="migStagedBreakdown" class="mig-analysis"></div>
+        <div class="sync-form-actions">
+          <button type="button" class="sync-btn" id="migCancelBtn" onclick="migCancel()">&larr; Cancel</button>
+          <button type="button" class="sync-btn sync-btn-primary" id="migApplyBtn" onclick="startIdentifierApply()">Apply and switch identifier</button>
+        </div>
+      </div>
+
       <div class="sync-progress" id="identifierProgress">
         <div class="sync-progress-head"><span id="identifierProgStage">Working&hellip;</span><span id="identifierProgCount"></span></div>
         <div class="sync-progress-track"><div class="sync-progress-fill" id="identifierProgFill"></div></div>
       </div>
       <pre class="sync-log" id="identifierLog" style="display:none;"></pre>
-      {{else}}
-      <p class="sync-card-hint">You need full admin-panel permission to run a migration.</p>
-      {{end}}
     </div>
+    {{else}}
+    <div class="sync-card">
+      <p class="sync-card-hint">You need full admin-panel permission to run a migration.</p>
+    </div>
+    {{end}}
   </div>
   {{end}}
 

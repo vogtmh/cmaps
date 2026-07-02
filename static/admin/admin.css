@@ -664,6 +664,51 @@
   .dash-fade { transition: none; transform: none; }
 }
 
+/* ── Identifier migration assistant ─────────────────────────── */
+/* 3-step indicator: active = blue, completed = green, future = grey. */
+.mig-steps { display: flex; align-items: center; gap: 6px; margin: 4px 0 18px; }
+.mig-step { display: flex; align-items: center; gap: 8px; }
+.mig-dot {
+  width: 26px; height: 26px; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 13px; font-weight: 700; flex-shrink: 0;
+  background: var(--sy-off-bg); color: var(--sy-muted);
+  border: 1px solid var(--sy-border);
+}
+.mig-label { font-size: 13px; font-weight: 600; color: var(--sy-muted); white-space: nowrap; }
+.mig-line { flex: 1; height: 2px; min-width: 24px; background: var(--sy-border); border-radius: 2px; }
+.mig-line.done { background: var(--sy-ok); }
+.mig-step.active .mig-dot { background: var(--sy-accent); color: #fff; border-color: var(--sy-accent); }
+.mig-step.active .mig-label { color: var(--sy-fg); }
+.mig-step.done .mig-dot { background: var(--sy-ok); color: #fff; border-color: var(--sy-ok); }
+.mig-step.done .mig-label { color: var(--sy-fg); }
+
+.mig-analysis { margin: 6px 0 14px; }
+.mig-stats { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 14px; }
+.mig-stat {
+  display: flex; flex-direction: column; gap: 2px;
+  padding: 10px 16px; border-radius: 8px; min-width: 120px;
+  border: 1px solid var(--sy-border); background: var(--sy-surface2);
+}
+.mig-stat-num { font-size: 22px; font-weight: 700; line-height: 1; }
+.mig-stat-lbl { font-size: 12px; color: var(--sy-muted); }
+.mig-stat-ok .mig-stat-num { color: var(--sy-ok); }
+.mig-stat-warn .mig-stat-num { color: var(--sy-warn); }
+.mig-stat-muted .mig-stat-num { color: var(--sy-fg); }
+.mig-table { border-collapse: collapse; width: 100%; max-width: 420px; }
+.mig-table th, .mig-table td { text-align: left; padding: 6px 12px; border-bottom: 1px solid var(--sy-border); font-size: 13px; }
+.mig-table th { color: var(--sy-muted); font-weight: 600; }
+.mig-table .mig-num { text-align: right; font-variant-numeric: tabular-nums; }
+.mig-conflicts { margin-top: 14px; padding: 10px 14px; border-radius: 8px; background: var(--sy-warn-bg); }
+.mig-conflicts-head { font-weight: 700; margin-bottom: 6px; color: var(--sy-warn); font-size: 13px; }
+.mig-conflict { font-size: 12px; color: var(--sy-fg); padding: 1px 0; }
+.mig-note { font-size: 13px; margin: 8px 0; }
+.mig-note-warn { color: var(--sy-warn); font-weight: 600; }
+.mig-note-ok { color: var(--sy-ok); }
+.mig-staged { margin: 6px 0 10px; padding: 8px 14px; border-radius: 8px; background: var(--sy-ok-bg); }
+.mig-apply-list { margin: 8px 0 12px; padding-left: 20px; font-size: 13px; }
+.mig-apply-list li { margin: 3px 0; }
+
 /* Overview stat tiles */
 .dash-grid {
   display: grid;

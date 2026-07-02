@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	bolt "go.etcd.io/bbolt"
 )
@@ -169,48 +170,219 @@ func (app *App) deskAvatarCount() int {
 	return n
 }
 
-// rewriteBucketField rewrites values in a bucket in place (same keys). The
-// transform returns the new value bytes and whether it changed. Changes are
-// gathered first, then applied in a single write transaction, so the cursor is
-// never mutated mid-iteration.
-func (app *App) rewriteBucketField(bucket []byte, transform func(v []byte) ([]byte, bool)) (int, error) {
-	type kv struct{ k, v []byte }
-	var changes []kv
-	err := app.db.bolt.View(func(tx *bolt.Tx) error {
-		b := tx.Bucket(bucket)
+// copyFile is defined in wizard.go.
+
+// ── Shadow-bucket staging ───────────────────────────────────
+//
+// The migration never touches live data — neither database records nor avatar
+// files — until the admin presses Apply. The "create" step converts every record
+// into a set of temporary staging buckets and records exactly how many rows
+// changed per area. Apply then copies the staged rows into the live buckets and
+// performs the avatar file renames in one go. Cancelling, or one hour of
+// inactivity, simply drops the staging buckets, leaving the live data pristine.
+
+var (
+	bktMigMeta      = []byte("migstage_meta")
+	bktMigAudit     = []byte("migstage_audit")
+	bktMigChangelog = []byte("migstage_changelog")
+	bktMigBookings  = []byte("migstage_bookings")
+	bktMigDesks     = []byte("migstage_desks")
+	bktMigAdmins    = []byte("migstage_admins")
+)
+
+var migStageBuckets = [][]byte{bktMigMeta, bktMigAudit, bktMigChangelog, bktMigBookings, bktMigDesks, bktMigAdmins}
+
+const migStageTTL = time.Hour
+
+// migStageArea is one row of the "changes staged" breakdown shown in step 3.
+type migStageArea struct {
+	Key     string `json:"key"`
+	Label   string `json:"label"`
+	Total   int    `json:"total"`
+	Changed int    `json:"changed"`
+}
+
+// migStageInfo is the staging metadata persisted in bktMigMeta.
+type migStageInfo struct {
+	Target    string         `json:"target"`
+	Current   string         `json:"current"`
+	CreatedAt int64          `json:"createdAt"`
+	Conflicts int            `json:"conflicts"`
+	Areas     []migStageArea `json:"areas"`
+}
+
+// stageExpired reports whether staging metadata is older than the TTL.
+func (info migStageInfo) stageExpired() bool {
+	return time.Since(time.Unix(info.CreatedAt, 0)) > migStageTTL
+}
+
+// purgeStaging drops all staging buckets. No avatar files are ever created during
+// staging, so nothing on disk needs cleaning up.
+func (app *App) purgeStaging() {
+	_ = app.db.bolt.Update(func(tx *bolt.Tx) error {
+		for _, b := range migStageBuckets {
+			_ = tx.DeleteBucket(b)
+		}
+		return nil
+	})
+}
+
+// readStageInfo returns the current staging metadata, if any.
+func (app *App) readStageInfo() (migStageInfo, bool) {
+	var info migStageInfo
+	found := false
+	_ = app.db.bolt.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket(bktMigMeta)
 		if b == nil {
 			return nil
 		}
-		c := b.Cursor()
-		for k, v := c.First(); k != nil; k, v = c.Next() {
-			nv, changed := transform(v)
-			if changed {
-				changes = append(changes, kv{append([]byte(nil), k...), nv})
-			}
+		v := b.Get([]byte("info"))
+		if v == nil {
+			return nil
+		}
+		if json.Unmarshal(v, &info) == nil {
+			found = true
 		}
 		return nil
 	})
-	if err != nil {
-		return 0, err
-	}
-	err = app.db.bolt.Update(func(tx *bolt.Tx) error {
-		b := tx.Bucket(bucket)
-		for _, ch := range changes {
-			if err := b.Put(ch.k, ch.v); err != nil {
-				return err
-			}
-		}
-		return nil
-	})
-	return len(changes), err
+	return info, found
 }
 
-// copyFile is defined in wizard.go.
+func (app *App) writeStageInfo(info migStageInfo) error {
+	return app.db.bolt.Update(func(tx *bolt.Tx) error {
+		b, err := tx.CreateBucketIfNotExists(bktMigMeta)
+		if err != nil {
+			return err
+		}
+		data, err := json.Marshal(info)
+		if err != nil {
+			return err
+		}
+		return b.Put([]byte("info"), data)
+	})
+}
 
-// runIdentifierMigration performs the full migration to the target mode, driving
-// the shared migrateProg progress bar.
-func (app *App) runIdentifierMigration(target string) {
+// purgeStaleStaging drops the staging buckets if they have expired.
+func (app *App) purgeStaleStaging() {
+	if info, ok := app.readStageInfo(); ok && info.stageExpired() {
+		app.purgeStaging()
+	}
+}
+
+// startMigStageJanitor periodically discards abandoned migration staging.
+func (app *App) startMigStageJanitor(interval time.Duration) {
+	go func() {
+		t := time.NewTicker(interval)
+		defer t.Stop()
+		for range t.C {
+			app.purgeStaleStaging()
+		}
+	}()
+}
+
+// stageBucket converts every record in src through transform and writes the
+// changed rows (same key) into a freshly recreated dst staging bucket. It
+// returns the total rows scanned and the number of changed rows staged.
+func (app *App) stageBucket(dst, src []byte, transform func(v []byte) ([]byte, bool)) (total, changed int, err error) {
+	err = app.db.bolt.Update(func(tx *bolt.Tx) error {
+		_ = tx.DeleteBucket(dst)
+		d, e := tx.CreateBucket(dst)
+		if e != nil {
+			return e
+		}
+		s := tx.Bucket(src)
+		if s == nil {
+			return nil
+		}
+		c := s.Cursor()
+		for k, v := c.First(); k != nil; k, v = c.Next() {
+			total++
+			nv, ch := transform(v)
+			if !ch {
+				continue
+			}
+			if e := d.Put(append([]byte(nil), k...), nv); e != nil {
+				return e
+			}
+			changed++
+		}
+		return nil
+	})
+	return
+}
+
+// stageAdmins stages the map-admin (directory-derived) user records that need
+// re-keying. Each staged row is keyed by the OLD username and holds the JSON of
+// the new user (carrying the new username), so apply can delete the old key and
+// insert the new one.
+func (app *App) stageAdmins(plan *migPlan) (total, changed int, err error) {
+	err = app.db.bolt.Update(func(tx *bolt.Tx) error {
+		_ = tx.DeleteBucket(bktMigAdmins)
+		d, e := tx.CreateBucket(bktMigAdmins)
+		if e != nil {
+			return e
+		}
+		s := tx.Bucket(bucketUsers)
+		if s == nil {
+			return nil
+		}
+		c := s.Cursor()
+		for k, v := c.First(); k != nil; k, v = c.Next() {
+			var u User
+			if json.Unmarshal(v, &u) != nil {
+				continue
+			}
+			if u.IsLocal {
+				continue
+			}
+			total++
+			newName, ok := plan.mapUsername(u.Username)
+			if !ok || newName == u.Username {
+				continue
+			}
+			nu := u
+			nu.Username = newName
+			nb, err := json.Marshal(nu)
+			if err != nil {
+				return err
+			}
+			if e := d.Put(append([]byte(nil), k...), nb); e != nil {
+				return e
+			}
+			changed++
+		}
+		return nil
+	})
+	return
+}
+
+// avatarChangeCount counts avatar files whose base id maps to a different target
+// id — i.e. the number of files that Apply will rename. No files are touched.
+func (app *App) avatarChangeCount(plan *migPlan) (total, changed int) {
+	entries, err := os.ReadDir(app.cfg.dataPath("avatarcache"))
+	if err != nil {
+		return 0, 0
+	}
+	for _, e := range entries {
+		name := e.Name()
+		if e.IsDir() || len(name) <= 4 || !strings.EqualFold(name[len(name)-4:], ".jpg") {
+			continue
+		}
+		total++
+		base := name[:len(name)-4]
+		if nb, ok := plan.mapBare(base); ok && !strings.EqualFold(nb, base) {
+			changed++
+		}
+	}
+	return
+}
+
+// runIdentifierStage runs the full conversion into the temporary staging buckets
+// without altering any live data. It records a per-area change breakdown that the
+// review step displays before the admin commits with Apply.
+func (app *App) runIdentifierStage(target string) {
 	prog := &app.migrateProg
+	app.purgeStaging()
 	plan, err := app.buildMigPlan(target)
 	if err != nil {
 		prog.finish("", "building migration plan: "+err.Error())
@@ -220,78 +392,17 @@ func (app *App) runIdentifierMigration(target string) {
 		prog.finish("", "the directory is empty — run a directory sync before migrating")
 		return
 	}
-	prog.logf("Migrating identifier: %s → %s", plan.current, target)
+	prog.logf("Staging conversion: %s → %s", plan.current, target)
 	prog.logf("%d directory user(s): %d to convert, %d already in target form, %d conflict(s) skipped.",
 		plan.totalDir, plan.mappable, plan.already, len(plan.conflicts))
-	for _, c := range plan.conflicts {
-		prog.logf("   ⚠ skipped %s: %s", c.Old, c.Reason)
+
+	var areas []migStageArea
+	add := func(key, label string, total, changed int) {
+		areas = append(areas, migStageArea{Key: key, Label: label, Total: total, Changed: changed})
 	}
 
-	converted := map[string]int{}
-
-	// 1. Backfill synthetic mail addresses for local accounts so they are never
-	//    reported as missing a mail. Their login/username is left unchanged.
-	prog.beginPhase(0, "Local accounts")
-	users, _ := app.db.ListUsers()
-	for _, u := range users {
-		if u.IsLocal && strings.TrimSpace(u.Mail) == "" {
-			u.Mail = u.Username + "@cmaps.local"
-			_ = app.db.PutUser(u)
-			converted["localMail"]++
-		}
-	}
-
-	// 2. Avatar files: copy <old>.jpg -> <new>.jpg, then remove the old file.
-	dirPath := app.cfg.dataPath("avatarcache")
-	entries, _ := os.ReadDir(dirPath)
-	prog.beginPhase(len(entries), "Avatar images")
-	for _, e := range entries {
-		prog.step("")
-		name := e.Name()
-		if e.IsDir() || len(name) <= 4 || !strings.EqualFold(name[len(name)-4:], ".jpg") {
-			continue
-		}
-		base := name[:len(name)-4]
-		nb, ok := plan.mapBare(base)
-		if !ok || strings.EqualFold(nb, base) {
-			continue
-		}
-		src := app.cfg.dataPath("avatarcache", name)
-		dst := app.cfg.dataPath("avatarcache", nb+".jpg")
-		if err := copyFile(src, dst); err != nil {
-			prog.logf("   ✗ avatar %s: %v", base, err)
-			continue
-		}
-		_ = os.Remove(src)
-		converted["avatars"]++
-	}
-	prog.logf("Avatars: %d converted.", converted["avatars"])
-
-	// 3. Map-admin records (bucketUsers): rekey directory-derived admins.
-	prog.beginPhase(len(users), "Map admins")
-	for _, u := range users {
-		prog.step("")
-		if u.IsLocal {
-			continue
-		}
-		newName, ok := plan.mapUsername(u.Username)
-		if !ok || newName == u.Username {
-			continue
-		}
-		nu := u
-		nu.Username = newName
-		if err := app.db.PutUser(nu); err != nil {
-			prog.logf("   ✗ admin %s: %v", u.Username, err)
-			continue
-		}
-		_ = app.db.DeleteUser(u.Username)
-		converted["admins"]++
-	}
-	prog.logf("Map admins: %d re-keyed.", converted["admins"])
-
-	// 4. Audit log (usernames, may carry DOMAIN\ prefix).
-	prog.beginPhase(0, "Audit log")
-	n, _ := app.rewriteBucketField(bucketAudit, func(v []byte) ([]byte, bool) {
+	prog.setStage("Staging audit log")
+	t, c, err := app.stageBucket(bktMigAudit, bucketAudit, func(v []byte) ([]byte, bool) {
 		var e AuditEntry
 		if json.Unmarshal(v, &e) != nil {
 			return nil, false
@@ -307,12 +418,15 @@ func (app *App) runIdentifierMigration(target string) {
 		}
 		return nv, true
 	})
-	converted["audit"] = n
-	prog.logf("Audit log: %d record(s) converted.", n)
+	if err != nil {
+		prog.finish("", "staging audit log: "+err.Error())
+		return
+	}
+	add("audit", "Audit log", t, c)
+	prog.logf("Audit log: %d of %d record(s) staged.", c, t)
 
-	// 5. Changelog (bare avatar id).
-	prog.beginPhase(0, "Changelog")
-	n, _ = app.rewriteBucketField(bucketChangelog, func(v []byte) ([]byte, bool) {
+	prog.setStage("Staging changelog")
+	t, c, err = app.stageBucket(bktMigChangelog, bucketChangelog, func(v []byte) ([]byte, bool) {
 		var e ChangelogEntry
 		if json.Unmarshal(v, &e) != nil {
 			return nil, false
@@ -328,12 +442,15 @@ func (app *App) runIdentifierMigration(target string) {
 		}
 		return nv, true
 	})
-	converted["changelog"] = n
-	prog.logf("Changelog: %d record(s) converted.", n)
+	if err != nil {
+		prog.finish("", "staging changelog: "+err.Error())
+		return
+	}
+	add("changelog", "Changelog", t, c)
+	prog.logf("Changelog: %d of %d record(s) staged.", c, t)
 
-	// 6. Bookings (bare user id).
-	prog.beginPhase(0, "Bookings")
-	n, _ = app.rewriteBucketField(bucketBookings, func(v []byte) ([]byte, bool) {
+	prog.setStage("Staging bookings")
+	t, c, err = app.stageBucket(bktMigBookings, bucketBookings, func(v []byte) ([]byte, bool) {
 		var b Booking
 		if json.Unmarshal(v, &b) != nil {
 			return nil, false
@@ -349,12 +466,15 @@ func (app *App) runIdentifierMigration(target string) {
 		}
 		return nv, true
 	})
-	converted["bookings"] = n
-	prog.logf("Bookings: %d record(s) converted.", n)
+	if err != nil {
+		prog.finish("", "staging bookings: "+err.Error())
+		return
+	}
+	add("bookings", "Bookings", t, c)
+	prog.logf("Bookings: %d of %d record(s) staged.", c, t)
 
-	// 7. Desks (bare avatar id on localdesk placements).
-	prog.beginPhase(0, "Desks")
-	n, _ = app.rewriteBucketField(bucketDesks, func(v []byte) ([]byte, bool) {
+	prog.setStage("Staging desks")
+	t, c, err = app.stageBucket(bktMigDesks, bucketDesks, func(v []byte) ([]byte, bool) {
 		var d Desk
 		if json.Unmarshal(v, &d) != nil {
 			return nil, false
@@ -373,10 +493,223 @@ func (app *App) runIdentifierMigration(target string) {
 		}
 		return nv, true
 	})
-	converted["desks"] = n
-	prog.logf("Desks: %d record(s) converted.", n)
+	if err != nil {
+		prog.finish("", "staging desks: "+err.Error())
+		return
+	}
+	add("desks", "Desks", t, c)
+	prog.logf("Desks: %d of %d record(s) staged.", c, t)
 
-	// 8. Flip the identifier setting now that the data is converted.
+	prog.setStage("Staging map admins")
+	t, c, err = app.stageAdmins(plan)
+	if err != nil {
+		prog.finish("", "staging map admins: "+err.Error())
+		return
+	}
+	add("admins", "Map admins", t, c)
+	prog.logf("Map admins: %d of %d record(s) staged.", c, t)
+
+	prog.setStage("Scanning avatars")
+	at, ac := app.avatarChangeCount(plan)
+	add("avatars", "Avatar images", at, ac)
+	prog.logf("Avatars: %d of %d file(s) will be renamed.", ac, at)
+
+	// Local accounts: count those still missing a synthetic mail.
+	users, _ := app.db.ListUsers()
+	localTotal, localChanged := 0, 0
+	for _, u := range users {
+		if u.IsLocal {
+			localTotal++
+			if strings.TrimSpace(u.Mail) == "" {
+				localChanged++
+			}
+		}
+	}
+	add("localmail", "Local account mail", localTotal, localChanged)
+
+	info := migStageInfo{
+		Target:    target,
+		Current:   plan.current,
+		CreatedAt: time.Now().Unix(),
+		Conflicts: len(plan.conflicts),
+		Areas:     areas,
+	}
+	if err := app.writeStageInfo(info); err != nil {
+		prog.finish("", "writing staging metadata: "+err.Error())
+		return
+	}
+
+	totalChanges := 0
+	for _, a := range areas {
+		totalChanges += a.Changed
+	}
+	prog.finish(fmt.Sprintf("Staged %d change(s). Review, then apply to switch.", totalChanges), "")
+}
+
+// applyStagedBucket copies every staged row into the live bucket under the same
+// key (overwrite). Returns the number of rows applied.
+func (app *App) applyStagedBucket(live, stage []byte) (int, error) {
+	n := 0
+	err := app.db.bolt.Update(func(tx *bolt.Tx) error {
+		s := tx.Bucket(stage)
+		if s == nil {
+			return nil
+		}
+		l := tx.Bucket(live)
+		if l == nil {
+			return nil
+		}
+		c := s.Cursor()
+		for k, v := c.First(); k != nil; k, v = c.Next() {
+			if e := l.Put(append([]byte(nil), k...), append([]byte(nil), v...)); e != nil {
+				return e
+			}
+			n++
+		}
+		return nil
+	})
+	return n, err
+}
+
+// applyStagedAdmins re-keys the staged map-admin records: the staged key is the
+// old username and the value holds the new user (with the new username).
+func (app *App) applyStagedAdmins() (int, error) {
+	n := 0
+	err := app.db.bolt.Update(func(tx *bolt.Tx) error {
+		s := tx.Bucket(bktMigAdmins)
+		if s == nil {
+			return nil
+		}
+		l := tx.Bucket(bucketUsers)
+		if l == nil {
+			return nil
+		}
+		c := s.Cursor()
+		for k, v := c.First(); k != nil; k, v = c.Next() {
+			var u User
+			if json.Unmarshal(v, &u) != nil {
+				continue
+			}
+			if e := l.Put([]byte(u.Username), append([]byte(nil), v...)); e != nil {
+				return e
+			}
+			if string(k) != u.Username {
+				if e := l.Delete(append([]byte(nil), k...)); e != nil {
+					return e
+				}
+			}
+			n++
+		}
+		return nil
+	})
+	return n, err
+}
+
+// runIdentifierApply commits a previously staged migration: it swaps the staged
+// rows into the live buckets, performs the avatar file renames, backfills local
+// mail, flips the identifier setting, rebuilds the derived caches and finally
+// drops the staging buckets. Nothing on disk or in the live buckets is touched
+// until this point.
+func (app *App) runIdentifierApply(target string) {
+	prog := &app.migrateProg
+	info, ok := app.readStageInfo()
+	if !ok || info.Target != target {
+		prog.finish("", "no staged migration found — please run the create step again")
+		return
+	}
+	if info.stageExpired() {
+		app.purgeStaging()
+		prog.finish("", "the staged migration expired (older than 1 hour) — please run the create step again")
+		return
+	}
+	plan, err := app.buildMigPlan(target)
+	if err != nil {
+		prog.finish("", "building migration plan: "+err.Error())
+		return
+	}
+	prog.logf("Applying staged migration: %s → %s", info.Current, target)
+
+	prog.setStage("Applying audit log")
+	if n, err := app.applyStagedBucket(bucketAudit, bktMigAudit); err != nil {
+		prog.finish("", "applying audit log: "+err.Error())
+		return
+	} else {
+		prog.logf("Audit log: %d record(s) updated.", n)
+	}
+
+	prog.setStage("Applying changelog")
+	if n, err := app.applyStagedBucket(bucketChangelog, bktMigChangelog); err != nil {
+		prog.finish("", "applying changelog: "+err.Error())
+		return
+	} else {
+		prog.logf("Changelog: %d record(s) updated.", n)
+	}
+
+	prog.setStage("Applying bookings")
+	if n, err := app.applyStagedBucket(bucketBookings, bktMigBookings); err != nil {
+		prog.finish("", "applying bookings: "+err.Error())
+		return
+	} else {
+		prog.logf("Bookings: %d record(s) updated.", n)
+	}
+
+	prog.setStage("Applying desks")
+	if n, err := app.applyStagedBucket(bucketDesks, bktMigDesks); err != nil {
+		prog.finish("", "applying desks: "+err.Error())
+		return
+	} else {
+		prog.logf("Desks: %d record(s) updated.", n)
+	}
+
+	prog.setStage("Applying map admins")
+	if n, err := app.applyStagedAdmins(); err != nil {
+		prog.finish("", "applying map admins: "+err.Error())
+		return
+	} else {
+		prog.logf("Map admins: %d re-keyed.", n)
+	}
+
+	// Avatar files: rename <old>.jpg -> <new>.jpg (disk is only touched now).
+	entries, _ := os.ReadDir(app.cfg.dataPath("avatarcache"))
+	prog.beginPhase(len(entries), "Renaming avatars")
+	avatars := 0
+	for _, e := range entries {
+		prog.step("")
+		name := e.Name()
+		if e.IsDir() || len(name) <= 4 || !strings.EqualFold(name[len(name)-4:], ".jpg") {
+			continue
+		}
+		base := name[:len(name)-4]
+		nb, ok := plan.mapBare(base)
+		if !ok || strings.EqualFold(nb, base) {
+			continue
+		}
+		src := app.cfg.dataPath("avatarcache", name)
+		dst := app.cfg.dataPath("avatarcache", nb+".jpg")
+		if err := copyFile(src, dst); err != nil {
+			prog.logf("   ✗ avatar %s: %v", base, err)
+			continue
+		}
+		_ = os.Remove(src)
+		avatars++
+	}
+	prog.logf("Avatars: %d renamed.", avatars)
+
+	// Local accounts: backfill synthetic mail so they are never missing one.
+	prog.setStage("Backfilling local accounts")
+	users, _ := app.db.ListUsers()
+	localMail := 0
+	for _, u := range users {
+		if u.IsLocal && strings.TrimSpace(u.Mail) == "" {
+			u.Mail = u.Username + "@cmaps.local"
+			_ = app.db.PutUser(u)
+			localMail++
+		}
+	}
+	if localMail > 0 {
+		prog.logf("Local accounts: %d synthetic mail address(es) added.", localMail)
+	}
+
 	prog.setStage("Applying setting")
 	if err := app.db.SetSetting("identifier", target); err != nil {
 		prog.finish("", "converted data but failed to save the identifier setting: "+err.Error())
@@ -385,7 +718,6 @@ func (app *App) runIdentifierMigration(target string) {
 	_ = app.db.AuditLog("config", "System", "Employee identifier switched to "+target)
 	prog.logf("Identifier setting is now: %s", target)
 
-	// 9. Rebuild the derived directory/mirror caches with the new identifiers.
 	prog.setStage("Re-syncing directory")
 	if app.anyLdapSourceEnabled() {
 		if _, err := app.RunADSync(); err != nil {
@@ -402,9 +734,8 @@ func (app *App) runIdentifierMigration(target string) {
 		}
 	}
 
-	summary := fmt.Sprintf("Migrated to %s. %d avatar(s), %d admin(s), %d audit, %d changelog, %d booking(s), %d desk(s). %d conflict(s) skipped.",
-		target, converted["avatars"], converted["admins"], converted["audit"], converted["changelog"], converted["bookings"], converted["desks"], len(plan.conflicts))
-	prog.finish(summary, "")
+	app.purgeStaging()
+	prog.finish(fmt.Sprintf("Migrated to %s. %d avatar(s) renamed, %d conflict(s) skipped.", target, avatars, info.Conflicts), "")
 }
 
 // ── REST endpoints ──────────────────────────────────────────
@@ -455,8 +786,10 @@ func (app *App) handleRestIdentifierAnalyze(w http.ResponseWriter, r *http.Reque
 	})
 }
 
-// handleRestIdentifierMigrate starts the background migration worker.
-func (app *App) handleRestIdentifierMigrate(w http.ResponseWriter, r *http.Request) {
+// handleRestIdentifierCreate starts the "create new data" phase: it converts
+// every record into temporary staging buckets and records a per-area change
+// breakdown, without touching any live data or avatar files.
+func (app *App) handleRestIdentifierCreate(w http.ResponseWriter, r *http.Request) {
 	sess, ok := app.currentSession(r)
 	if !ok || app.permLevel(sess, "adminpanel") < 2 {
 		http.Error(w, "forbidden", http.StatusForbidden)
@@ -467,18 +800,91 @@ func (app *App) handleRestIdentifierMigrate(w http.ResponseWriter, r *http.Reque
 		http.Error(w, "invalid target identifier", http.StatusBadRequest)
 		return
 	}
-	if !app.migrateProg.start(0, "Starting…") {
+	if !app.migrateProg.start(0, "Staging…") {
 		writeJSON(w, map[string]interface{}{"started": false, "running": true})
 		return
 	}
-	_ = app.db.AuditLog("config", sess.Username, "Started identifier migration to "+target)
+	_ = app.db.AuditLog("config", sess.Username, "Staged identifier migration data for "+target)
+	go func() {
+		defer func() {
+			if rec := recover(); rec != nil {
+				app.migrateProg.finish("", fmt.Sprintf("staging crashed: %v", rec))
+			}
+		}()
+		app.runIdentifierStage(target)
+	}()
+	writeJSON(w, map[string]interface{}{"started": true})
+}
+
+// handleRestIdentifierStageResult returns the staged per-area change breakdown
+// for the review step. Expired staging is purged and reported as such.
+func (app *App) handleRestIdentifierStageResult(w http.ResponseWriter, r *http.Request) {
+	sess, ok := app.currentSession(r)
+	if !ok || app.permLevel(sess, "adminpanel") < 1 {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	info, found := app.readStageInfo()
+	if !found {
+		writeJSON(w, map[string]interface{}{"status": "none"})
+		return
+	}
+	if info.stageExpired() {
+		app.purgeStaging()
+		writeJSON(w, map[string]interface{}{"status": "expired"})
+		return
+	}
+	remaining := int(migStageTTL.Seconds()) - int(time.Since(time.Unix(info.CreatedAt, 0)).Seconds())
+	if remaining < 0 {
+		remaining = 0
+	}
+	writeJSON(w, map[string]interface{}{
+		"status":       "ok",
+		"target":       info.Target,
+		"current":      info.Current,
+		"conflicts":    info.Conflicts,
+		"areas":        info.Areas,
+		"expiresInSec": remaining,
+	})
+}
+
+// handleRestIdentifierCancel discards a staged migration, leaving the live data
+// untouched.
+func (app *App) handleRestIdentifierCancel(w http.ResponseWriter, r *http.Request) {
+	sess, ok := app.currentSession(r)
+	if !ok || app.permLevel(sess, "adminpanel") < 2 {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	app.purgeStaging()
+	writeJSON(w, map[string]interface{}{"status": "ok"})
+}
+
+// handleRestIdentifierApply starts the final "apply" phase: it converts the live
+// records, removes the superseded old avatars and activates the new identifier.
+func (app *App) handleRestIdentifierApply(w http.ResponseWriter, r *http.Request) {
+	sess, ok := app.currentSession(r)
+	if !ok || app.permLevel(sess, "adminpanel") < 2 {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	target := r.FormValue("target")
+	if !app.validMigTarget(target) {
+		http.Error(w, "invalid target identifier", http.StatusBadRequest)
+		return
+	}
+	if !app.migrateProg.start(0, "Applying…") {
+		writeJSON(w, map[string]interface{}{"started": false, "running": true})
+		return
+	}
+	_ = app.db.AuditLog("config", sess.Username, "Applied identifier migration to "+target)
 	go func() {
 		defer func() {
 			if rec := recover(); rec != nil {
 				app.migrateProg.finish("", fmt.Sprintf("migration crashed: %v", rec))
 			}
 		}()
-		app.runIdentifierMigration(target)
+		app.runIdentifierApply(target)
 	}()
 	writeJSON(w, map[string]interface{}{"started": true})
 }

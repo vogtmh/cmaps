@@ -151,6 +151,10 @@ func main() {
 	// Robin), surfaced on the dashboard. First run shortly after boot.
 	app.startIntegrationHealthScheduler(30*time.Second, time.Hour)
 
+	// Discard abandoned identifier-migration staging (temp buckets) that was
+	// never applied within its 1-hour TTL.
+	app.startMigStageJanitor(10 * time.Minute)
+
 	log.Printf("CompanyMaps 9 listening on %s (data dir: %s)", cfg.ListenAddr, cfg.DataDir)
 	if err := http.ListenAndServe(cfg.ListenAddr, handler); err != nil {
 		log.Fatalf("server: %v", err)
