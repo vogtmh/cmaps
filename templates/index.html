@@ -1,6 +1,6 @@
 <!DOCTYPE HTML>
 <!-- CompanyMaps 9 client (ported from index.php) -->
-<html lang="en">
+<html lang="en" style="--sc:{{.Autozoom}};">
 <head>
   <title>{{.AppTitle}}</title>
   <meta charset="utf-8">
@@ -38,9 +38,9 @@
 <div id="container"> </div>
 
 <!-- HEADER -->
-<div class="control_background" style="width:100%; height: 69px; position: fixed; top: 0px; left: 0px;background: #333333; z-index:1; transform:scaleY({{.Autozoom}})"> </div>
-<div id="controlpanel" class="control_container" style="position:fixed; left: 0px; top: 0px; height:{{.TopHeader}}px;width:100%;background-color:#333333;opacity:1.0;z-index:1;display:flex;justify-content:center;align-items:flex-start;">
-<div class="control_content" id="control_content" style="position: relative; top:0px;width:{{.TargetScreenWidth}}px;height:69px; z-index:2;zoom:{{.Autozoom}};background-color:#333333">
+<div class="control_background"> </div>
+<div id="controlpanel" class="control_container">
+<div class="control_content" id="control_content">
 
   <!-- Logo -->
   <div class="headeritem" id="logocontrol" style="width:200px; background: transparent;">
@@ -156,8 +156,8 @@
 </div>
 
 <!-- Notification area -->
-<div id="notifypanel" class="notify_container" style="position:fixed; left: 0px; top: {{.Top72}}px; height:0px;width:100%;background-color:transparent;z-index:1;display:flex;justify-content:center;pointer-events: none;">
-  <div id="notifycontent" class="notify_content" style="position: relative; top:0px;width:{{.TargetScreenWidth}}px;height:0px; z-index:2;zoom:{{.Autozoom}};background-color:transparent;pointer-events: none;">
+<div id="notifypanel" class="notify_container">
+  <div id="notifycontent" class="notify_content">
     <span style="position:relative; width:454px;height:0px;display:inline;float:left;line-height: 40px;">&nbsp;</span>
   </div>
 </div>
@@ -284,8 +284,8 @@
 
 <!-- User menu -->
 {{if .LoggedIn}}
-<div class="buttons_left_anchor" style="position:fixed; left: 10px; bottom: {{.Bottom25}}px; z-index:5;">
-<div class="buttons_left" style="position:relative; height:80px;background: transparent; zoom:{{.Autozoom}};">
+<div class="buttons_left_anchor">
+<div class="buttons_left">
   <div id="personal_menu" style="position:absolute; left: 0px; bottom: 0px; width:390px; height:270px;background-color:#333333; border-radius:40px;">
     <div id="pm_logout_label" style="position:absolute; left: 20px; bottom: 210px; width:80px; height:10px;background: transparent;font-size:12px;text-align:center;">Logout</div>
     <div id="pm_logout_btn" class="iconbtn-circle iconbtn-logout iconbtn-orange" style="position:absolute; left: 20px; bottom: 120px; width:80px; height:80px;" onClick="logoutUser()"></div>
@@ -310,7 +310,7 @@
     </form>
   </div>
   <div id="avatarbutton" onclick="togglePersonalMenu()">
-    <img src="{{.AvatarURL}}" style="width:80px; height:80px;">
+    <img src="{{.AvatarURL}}" style="width:60px; height:60px;">
   </div>
   <div class="avatarbutton_row">
     <div class="avatarbutton_username" onclick="togglePersonalMenu()">{{if .Fullname}}{{.Fullname}}{{else}}{{.Username}}{{end}}</div>
@@ -323,8 +323,8 @@
 {{end}}
 
 <!-- Admin menu -->
-<div class="buttons_right_anchor" style="position:fixed; right: 10px; bottom: {{.Bottom40}}px; z-index:5;">
-<div id="buttons_right" class="buttons_right" style="position:relative; display:flex; flex-direction:row; align-items:center; justify-content:flex-end; gap:8px; width:auto; background: transparent; zoom:{{.Autozoom}};">
+<div class="buttons_right_anchor">
+<div id="buttons_right" class="buttons_right">
   {{if .LoggedIn}}
     {{if and .IsOverview (gt .PermMaps 1)}}
     <div class="inputgrid" id="inputgrid" title="Add location" onClick="return doNewItem('showInputgrid')" style="width:80px; height:60px; display:flex; align-items:center; justify-content:center; border-radius:16px; box-sizing:border-box; cursor:pointer;{{if eq .UserMode "user"}}display:none;{{end}}">
@@ -347,7 +347,7 @@
 
 <!-- Login icon -->
 {{if not .LoggedIn}}
-<div class="loginicon" id="loginicon" onClick="cmapsLogin()" title="Login" style="position:fixed; bottom:10px;left:10px; z-index:3; transform:scale({{.Autozoom}});transform-origin:0% 100%;"></div>
+<div class="loginicon" id="loginicon" onClick="cmapsLogin()" title="Login"></div>
 {{end}}
 
 {{if .DailyVisitors}}<script>updateCounter(); setInterval(updateCounter, 60000)</script>{{end}}
@@ -355,16 +355,16 @@
 <!-- Teams sidebar -->
 <script>updateTeams()</script>
 <div id="addressbook" style="position: fixed;background:#333;right:0px;bottom:0px;width: 100%; max-width:400px;height:100%;opacity:0.95;display:none;">
-  <div class="adressbook_margin" style="height:{{.TopHeader}}px;width:100%;margin-bottom:5px;background:none;"></div>
+  <div class="adressbook_margin"></div>
 </div>
 
 <!-- Recent changes sidebar + full-screen modal -->
 <script>announceValue = {{.AnnounceCookie}}</script>
-<div id="datepicker_wrap" style="position:fixed;left:0px;bottom:0px;width:100%;display:flex;justify-content:center;align-items:flex-end;z-index:0;pointer-events:none;"><div class="datepicker" id="theDate" style="zoom:{{.Autozoom}};pointer-events:auto;"></div></div>
-<div id="clock_wrap" style="position:fixed;left:0px;bottom:0px;width:100%;display:flex;justify-content:center;align-items:flex-end;z-index:1;pointer-events:none;"><div class="clock" id="theTime" onclick="toggleDatepicker()" style="zoom:{{.Autozoom}};pointer-events:auto;"></div></div>
-<div id="announcementbar" class="announcementbar" style="position: fixed;background:#333333;right:0px;top:0px;width:590px;height:100%;opacity:0.95;display:none;">
-  <div class="announcementbar_margin" style="height:{{.TopHeader}}px;width:100%;margin-bottom:5px;background:none;"></div>
-  <div id="announcementbar_body" class="announcementbar_body" style="height:92%; overflow-y: scroll;width:610px;font-size:20px;"></div>
+<div id="datepicker_wrap" style="position:fixed;left:0px;bottom:0px;width:100%;display:flex;justify-content:center;align-items:flex-end;z-index:0;pointer-events:none;"><div class="datepicker" id="theDate"></div></div>
+<div id="clock_wrap" style="position:fixed;left:0px;bottom:0px;width:100%;display:flex;justify-content:center;align-items:flex-end;z-index:1;pointer-events:none;"><div class="clock" id="theTime" onclick="toggleDatepicker()"></div></div>
+<div id="announcementbar" class="announcementbar">
+  <div class="announcementbar_margin"></div>
+  <div id="announcementbar_body" class="announcementbar_body"></div>
 </div>
 <div id="changesModal" class="changes-modal" style="display:none;">
   <div class="changes-modal-inner">

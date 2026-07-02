@@ -52,10 +52,6 @@ type indexData struct {
 	ContentLeft        string // LeftPos / ContentScale (for the zoom-based layout)
 	ContentTop         string // TopHeader / ContentScale (for the zoom-based layout)
 	LeftPos            int
-	TopHeader          int // 69*autozoom
-	Top72              int // 72*autozoom
-	Bottom25           int // 25*autozoom
-	Bottom40           int // 40*autozoom
 	Floors             []floorButton
 
 	NoDescription    bool
@@ -346,10 +342,6 @@ func (app *App) renderIndex(w http.ResponseWriter, r *http.Request, sess Session
 		ContentLeft:        strconv.FormatFloat(contentLeft, 'f', -1, 64),
 		ContentTop:         strconv.FormatFloat(contentTop, 'f', -1, 64),
 		LeftPos:            leftPos,
-		TopHeader:          69 * autozoom,
-		Top72:              72 * autozoom,
-		Bottom25:           25 * autozoom,
-		Bottom40:           40 * autozoom,
 		Floors:             floors,
 
 		NoDescription:    cookieBool(r, "setting_nodescription"),

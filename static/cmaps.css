@@ -31,6 +31,8 @@ pre, code, kbd, samp, tt { font-family: inherit; }
     padding: 10px;
     cursor: pointer;
     z-index:1;
+    pointer-events:auto;
+    zoom: var(--sc, 1);
 }
 
 .clock:hover {
@@ -46,6 +48,8 @@ pre, code, kbd, samp, tt { font-family: inherit; }
     border-radius:10px 10px 0px 0px;
     display:none;
     z-index:0;
+    pointer-events:auto;
+    zoom: var(--sc, 1);
 }
 
 .datepicker_separator {
@@ -1698,18 +1702,105 @@ pre, code, kbd, samp, tt { font-family: inherit; }
     background-size: 55%;
     border-radius: 50%;
     cursor: pointer;
+    position: fixed;
+    bottom: 10px;
+    left: 10px;
+    z-index: 3;
+    transform: scale(var(--sc, 1));
+    transform-origin: 0% 100%;
 }
 
 .loginicon:hover {
     background-color: #559F35;
 }
 
+/* ── UI scale system ─────────────────────────────────────────
+   Every piece of chrome that scales with the viewport reads a single
+   CSS custom property `--sc` (the UI scale factor). resize.js updates
+   `--sc` on <html> on load and on every resize; the server sets its
+   initial value inline on <html> so the first paint is already correct.
+   This is the SINGLE source of truth for these layouts — do NOT re-add
+   per-element sizing in resize.js or the template inline styles. */
+.control_background {
+    position: fixed; top: 0; left: 0;
+    width: 100%; height: 69px;
+    background: #333333; z-index: 1;
+    transform-origin: 50% 0%;
+    transform: scaleY(var(--sc, 1));
+}
+.control_container {
+    position: fixed; left: 0; top: 0;
+    width: 100%; height: calc(69px * var(--sc, 1));
+    background-color: #333333; opacity: 1; z-index: 1;
+    transition: all 300ms ease-in-out !important;
+    display: flex; justify-content: center; align-items: flex-start;
+}
+.control_content {
+    position: relative; top: 0;
+    width: 1600px; height: 69px; z-index: 2;
+    background-color: #333333;
+    zoom: var(--sc, 1);
+}
+.notify_container {
+    position: fixed; left: 0; width: 100%; height: 40px;
+    top: calc(72px * var(--sc, 1));
+    background-color: transparent; z-index: 1;
+    pointer-events: none;
+    transition: all 300ms ease-in-out !important;
+    display: flex; justify-content: center;
+}
+.notify_content {
+    position: relative; top: 0;
+    width: 1600px; height: 0px; z-index: 2;
+    background-color: transparent; pointer-events: none;
+    zoom: var(--sc, 1);
+}
+.buttons_left_anchor {
+    position: fixed; left: 10px; z-index: 5;
+    bottom: calc(0px * var(--sc, 1));
+}
+.buttons_left {
+    position: relative; height: 60px; background: transparent;
+    zoom: var(--sc, 1);
+}
+.buttons_right_anchor {
+    position: fixed; right: 10px; z-index: 5;
+    bottom: calc(15px * var(--sc, 1));
+}
+.buttons_right {
+    position: relative; width: auto; background: transparent;
+    display: flex; flex-direction: row;
+    align-items: center; justify-content: flex-end; gap: 8px;
+    zoom: var(--sc, 1);
+}
+.adressbook_margin {
+    width: 100%; margin-bottom: 5px; background: none;
+    height: calc(69px * var(--sc, 1));
+}
+.announcementbar_margin {
+    width: 100%; margin-bottom: 5px; background: none;
+    height: calc(69px * var(--sc, 1));
+}
+.announcementbar {
+    position: fixed; right: 0; top: 0;
+    width: 590px; height: 100%;
+    background: #333333; opacity: 0.95; display: none;
+    transform-origin: 100% 0%;
+    transform: scaleX(calc(var(--sc, 1) * 0.7));
+}
+.announcementbar_body {
+    width: 610px; font-size: 20px; overflow-y: scroll;
+    height: calc(131.56% / var(--sc, 1));
+    transform-origin: 100% 0%;
+    transform: scaleY(calc(var(--sc, 1) * 0.7));
+}
+
 #avatarbutton {
     position:absolute; 
     left: 20px; 
     bottom: 20px; 
-    width:80px; 
-    height:80px;
+    width:60px; 
+    height:60px;
     border-radius:50%;
     cursor:pointer;
     background: transparent;
@@ -1725,7 +1816,7 @@ pre, code, kbd, samp, tt { font-family: inherit; }
     visibility: hidden;
     opacity: 0;
     transform: scale(0.2);
-    transform-origin: 60px calc(100% - 60px);
+    transform-origin: 50px calc(100% - 50px);
     transition:
         transform 0.42s cubic-bezier(0.34, 1.4, 0.5, 1),
         opacity 0.18s ease-out,
@@ -1763,16 +1854,16 @@ pre, code, kbd, samp, tt { font-family: inherit; }
 .avatarbutton_username {
     position:relative;
     width:auto; 
-    height:80px;
-    line-height: 80px; 
+    height:60px;
+    line-height: 60px; 
     vertical-align: middle;
     white-space: nowrap;
     cursor:pointer;
     background-color:#333; 
     font-size:1.3em;z-index:0;
-    padding-left:70px;
+    padding-left:50px;
     padding-right:24px;
-    border-radius:0px 40px 40px 0px;
+    border-radius:0px 30px 30px 0px;
 }
 
 .avatarbutton_username:hover {
@@ -2881,6 +2972,13 @@ input[type=submit]:hover, input[type=button]:hover {
     background-color: #333;
     background-size: cover;
     border-radius:50%;
+}
+
+/* Adminpanel button in the left control row: sized to match the 60px
+   usermode toggle instead of the classic 80px edit buttons. */
+#adminpanel_button {
+    width:60px;
+    height:60px;
 }
 
 .editbutton:hover {

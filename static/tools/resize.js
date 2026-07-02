@@ -33,25 +33,12 @@ function getCookie(cname) {
 
 
 $(function(){
-  // declare all variables used in scalePages function
+  // Only #content is still positioned imperatively here (its zoom depends on the
+  // open/closed sidebar state, computed below). Every other scaled chrome element
+  // is driven by the `--sc` CSS variable published in scalePages(); the layout
+  // itself lives in cmaps.css ("UI scale system"). Do NOT re-add per-element
+  // sizing here — change the stylesheet instead.
   var page = $('.page_content');
-  var controlcontainer = $('.control_container');
-  var controlcontent = $('.control_content');
-  var controlback = $('.control_background');
-  var notifycontainer = $('.notify_container');
-  var notifycontent = $('.notify_content');
-  var loginicon = $('.loginicon');
-  var buttonsleftanchor = $('.buttons_left_anchor');
-  var buttonsleft = $('.buttons_left');
-  var buttonsrightanchor = $('.buttons_right_anchor');
-  var buttonsright = $('.buttons_right');
-  var datepicker = $('.datepicker');
-  var clock = $('.clock');
-  //var statsmenu = $('.statsmenu');
-  var adressbook_margin = $('.adressbook_margin');
-  var announcementbar_margin = $('.announcementbar_margin');
-  var announcementbar = $('.announcementbar');
-  var announcementbar_body = $('.announcementbar_body');
   
   pageWidth = $('#container').width();
   pageHeight = $('#container').height();
@@ -92,12 +79,11 @@ $(function(){
   basePage.scale = (setWidth / basePage.width)*0.99;
   setWidth = setWidth*manualscale;
   var newLeftPos = Math.abs(Math.floor((maxWidth-setWidth)/2));
-  controlcontainer.attr('style', 'position:fixed; left: 0px; top: 0px; height:' + (69*basePage.scale) + 'px;width:100%;background-color:#333333;opacity:1.0;z-index:1; transition: all 300ms ease-in-out !important; display:flex; justify-content:center; align-items:flex-start;');
-  controlback.attr('style', 'width:100%; height: 69px; position: fixed; top: 0px; left: 0px;background: #333333;transform-origin:50% 0%;z-index:1; transform:scaleY(' + basePage.scale + ');');
-  loginicon.attr('style', 'position:fixed; bottom:10px;left:10px; z-index:3; opacity:1.0;transform:scale(' + basePage.scale + ');transform-origin:0% 100%;');
-  controlcontent.attr('style', 'position:relative; top:0px;width:1600px;height:69px; z-index:2;zoom:' + basePage.scale + ';background-color:#333333;');
-  notifycontainer.attr('style', 'position:fixed; left: 0px; top:' + (72*basePage.scale) + 'px; height:40px;width:100%;background-color:transparent;z-index:1; pointer-events: none;transition: all 300ms ease-in-out !important; display:flex; justify-content:center;');
-  notifycontent.attr('style', 'position:relative; top:0px;width:1600px;height:0px; z-index:2;zoom:' + basePage.scale + ';background-color:transparent;pointer-events: none;');
+  // Single source of truth for the UI scale: publish the factor as the `--sc`
+  // CSS custom property on <html>. All scaled chrome (header, notify bar, login
+  // icon, left/right button clusters, margins, datepicker, clock, announcement
+  // bar) reads it from cmaps.css. See the "UI scale system" block there.
+  document.documentElement.style.setProperty('--sc', basePage.scale);
   // The map content uses CSS `zoom` (not transform:scale) so the browser
   // re-rasterizes desk labels at the final size and fonts stay crisp. `zoom`
   // also scales left/top offsets, so divide them by the zoom factor.
@@ -132,14 +118,14 @@ $(function(){
   // Reserve empty space at the bottom of the edit sidebar so the palette never
   // renders behind the floating bottom-right edit-mode toggle and health icon.
   // Those live in #buttons_right (zoom:basePage.scale, UNcapped) inside an anchor
-  // fixed at bottom:40*scale. Their box rises ~65px (toggle incl. margins / the
+  // fixed at bottom:15*scale. Their box rises ~65px (toggle incl. margins / the
   // same-height health icon beside it) above that anchor, so the cluster reaches
-  // about (40 + 65) * scale from the viewport bottom; add ~10px padding so the
+  // about (15 + 65) * scale from the viewport bottom; add ~10px padding so the
   // toggle and health icon never touch the palette. Converted into the footer's
   // own CAPPED-zoom space that is /editSidebarScale.
   var footerEl = document.getElementById('editsidebar_footer');
   if (footerEl) {
-    var reserveScreen = (40 + 65 + 10) * basePage.scale;
+    var reserveScreen = (15 + 65 + 10) * basePage.scale;
     footerEl.style.height = Math.ceil(reserveScreen / (editSidebarScale || 1)) + 'px';
   }
   var leftW = ((typeof searchSidebarWidth === 'number') && searchSidebarWidth > 0) ? searchSidebarWidth * basePage.scale : 0;
@@ -180,25 +166,7 @@ $(function(){
     pageStyle += 'height:' + (detailmapimage.offsetHeight + (150/contentZoom)) + 'px;';
   }
   page.attr('style', pageStyle);
-  buttonsleftanchor.attr('style', 'position:fixed; left: 10px; bottom: '+ (25*basePage.scale) + 'px; z-index:5;');
-  buttonsleft.attr('style', 'position:relative; height:80px;background: transparent; zoom:' + basePage.scale + ';');
-  buttonsrightanchor.attr('style', 'position:fixed; right: 10px; bottom: '+ (40*basePage.scale) + 'px; z-index:5;');
-  buttonsright.attr('style', 'position:relative; display:flex; flex-direction:row; align-items:center; justify-content:flex-end; gap:8px; width:auto; background: transparent; zoom:' + basePage.scale + ';');
-  
-  datepicker.attr('style', 'position:relative;width:180px;height:175px;padding:15px 15px 10px 15px;background-color:#333;border-radius:10px 10px 0px 0px;display:none;zoom:' + basePage.scale + ';z-index:0;pointer-events:auto;');
-  clock.attr('style', 'position:relative;width:180px;text-align:center;background-color:#333;border-radius:10px 10px 0px 0px;padding:10px;cursor:pointer;zoom:' + basePage.scale + ';z-index:1;pointer-events:auto;');
-  $('.clock').hover(function(){
-    $(this).css({ "background-color": "#555" });
-  }, function(){
-    $(this).css({ "background-color": "" });
-  });
-  
-  //statsmenu.attr('style', 'position: fixed; z-index: 2;top: 45%;margin-top: -250px;left: -' + (620*basePage.scale) + 'px;width: 680px;height: 500px;background-color: transparent;text-align: center;padding: 20px;border-radius:0px 20px 20px 0px;opacity:1.0;transform:scale('+ basePage.scale +');transform-origin:0% 50%;');
-  adressbook_margin.attr('style', 'height:' + (69*basePage.scale) + 'px;width:100%;margin-bottom:5px;background:none;');
-  announcementbar_margin.attr('style', 'height:' + (69*basePage.scale) + 'px;width:100%;margin-bottom:5px;background:none;');
-  announcementbar.attr('style', 'position: fixed;background:#333;right:0px;top:0px;width:590px;height:100%;opacity:0.95;display:none;transform-origin:100% 0%;transform:scaleX(' + (basePage.scale*0.7) + ');');
-  announcementbar_body.attr('style', 'overflow-y: scroll;height:'+ (92*1.43/basePage.scale) +'%;width:610px;font-size:20px;transform-origin:100% 0%;transform:scaleY(' + (basePage.scale*0.7) + ');');
-  
+
   document.cookie = "autozoom=" + basePage.scale+'; expires=Fri, 31 Dec 9999 23:59:59 GMT; SameSite=Lax';
   document.cookie = "LeftPos=" + newLeftPos+'; expires=Fri, 31 Dec 9999 23:59:59 GMT; SameSite=Lax';
   autozoom = mapScale;
