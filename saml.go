@@ -138,6 +138,39 @@ func (s *samlDebugStoreType) getLast() *samlDebugInfo {
 	return s.last
 }
 
+// --- Captured live login responses (for the "Show my SAML login response"
+// button on the SAML SSO subtab) ---
+//
+// On every successful SAML login by a user who holds an admin role, we keep the
+// full decoded SAML response XML and its parsed attributes in memory, keyed by
+// username. An admin can then inspect exactly what their IdP sent (which claims,
+// which mail value, etc.) without wiring up a separate debug login. It is a
+// diagnostic aid only, held in memory and cleared on restart.
+
+type samlCapture struct {
+	When       string            `json:"when"`
+	Username   string            `json:"username"`
+	RawXML     string            `json:"raw_xml"`
+	Attributes map[string]string `json:"attributes"`
+}
+
+var samlCaptures = struct {
+	mu sync.Mutex
+	m  map[string]*samlCapture
+}{m: make(map[string]*samlCapture)}
+
+func samlStoreCapture(c *samlCapture) {
+	samlCaptures.mu.Lock()
+	samlCaptures.m[strings.ToLower(c.Username)] = c
+	samlCaptures.mu.Unlock()
+}
+
+func samlGetCapture(username string) *samlCapture {
+	samlCaptures.mu.Lock()
+	defer samlCaptures.mu.Unlock()
+	return samlCaptures.m[strings.ToLower(username)]
+}
+
 func samlBaseURL(r *http.Request) string {
 	scheme := "https"
 	if r.TLS == nil {
@@ -484,16 +517,30 @@ h2{color:#2ecc71;margin:0 0 16px}p{color:#666;margin:0 0 24px}a{color:#0a66c2}</
 		return
 	}
 
-	if samaccountname == "" {
+	// In samaccountname mode the SamAccountName claim IS the identity, so it is
+	// mandatory. In mail mode the identity comes from the mail address, so a
+	// SamAccountName claim is not required — the IdP may stop emitting it once the
+	// tenant has moved off on-prem AD, and SSO must keep working regardless.
+	if app.identifierMode() != "mail" && samaccountname == "" {
 		fail("SAML assertion did not contain a SamAccountName attribute.")
 		return
 	}
 
-	// Build the mapadmins-style username (domain\samaccountname) so the existing
-	// RBAC records match. Persist the user so admins can grant a role later.
-	username := samaccountname
-	if domain := app.db.GetSetting("domain"); domain != "" {
-		username = domain + "\\" + samaccountname
+	// Compute the active identifier (samaccountname or mail-based) and the
+	// mapadmins-style username so the existing RBAC records match. In mail mode
+	// the username is the bare mail identifier (no DOMAIN\ prefix, which only
+	// applies to samaccountname logins). Persist the user so admins can grant a
+	// role later.
+	identifier := app.userIdentifier(samaccountname, mail)
+	if identifier == "" {
+		fail("SAML login uses the e-mail address as the identifier, but the assertion did not contain a mail attribute.")
+		return
+	}
+	username := identifier
+	if app.identifierMode() != "mail" {
+		if domain := app.db.GetSetting("domain"); domain != "" {
+			username = domain + "\\" + samaccountname
+		}
 	}
 	u, known, _ := app.db.GetUser(username)
 	if !known {
@@ -505,8 +552,19 @@ h2{color:#2ecc71;margin:0 0 16px}p{color:#666;margin:0 0 24px}a{color:#0a66c2}</
 	u.LastLogin = time.Now().In(app.db.loc).Format("2006-01-02 15:04:05")
 	_ = app.db.PutUser(u)
 
+	// Capture the full response for admins so they can inspect exactly what the
+	// IdP sent from the SAML SSO subtab.
+	if u.Role != 0 {
+		samlStoreCapture(&samlCapture{
+			When:       time.Now().In(app.db.loc).Format("2006-01-02 15:04:05"),
+			Username:   username,
+			RawXML:     string(xmlBytes),
+			Attributes: samlExtractAllAttrs(assertion),
+		})
+	}
+
 	sess := Session{
-		Samaccountname: samaccountname,
+		Samaccountname: identifier,
 		Username:       username,
 		Fullname:       fullname,
 		Mail:           mail,
@@ -675,6 +733,30 @@ func (app *App) handleSAMLDebugLast(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	json.NewEncoder(w).Encode(info)
+}
+
+// handleSAMLMyCapture returns the full SAML response captured for the currently
+// logged-in admin on their most recent SAML login (raw XML + parsed attributes).
+func (app *App) handleSAMLMyCapture(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	sess, ok := app.currentSession(r)
+	if !ok {
+		json.NewEncoder(w).Encode(map[string]string{"status": "none", "message": "Not signed in."})
+		return
+	}
+	c := samlGetCapture(sess.Username)
+	if c == nil {
+		json.NewEncoder(w).Encode(map[string]string{"status": "none",
+			"message": "No SAML response captured for your account yet. Sign in via SAML SSO (not local login) to capture one."})
+		return
+	}
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"status":     "ok",
+		"when":       c.When,
+		"username":   c.Username,
+		"attributes": c.Attributes,
+		"raw_xml":    c.RawXML,
+	})
 }
 
 func (app *App) handleSAMLImportMetadata(w http.ResponseWriter, r *http.Request) {

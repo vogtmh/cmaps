@@ -175,6 +175,7 @@ type adminData struct {
 	BackupGroups            []backupGroup
 	WorldMap                bool
 	InternalBooking         bool
+	IdentifierMode          string
 	GeoapifyConfigured      bool
 }
 
@@ -1105,6 +1106,7 @@ func (app *App) buildAdminData(r *http.Request, sess Session, tab, msg string) a
 		})
 
 	case "ldap":
+		d.IdentifierMode = app.identifierMode()
 		d.LdapSources, _ = app.db.ListLdapSources()
 		d.RobinSpaces, _ = app.db.ListRobinSpaces()
 		sort.Slice(d.RobinSpaces, func(i, j int) bool { return d.RobinSpaces[i].Spacename < d.RobinSpaces[j].Spacename })

@@ -655,6 +655,15 @@
    ============================================================ */
 .dash-wrap { padding-top: 10px; padding-bottom: 30px; }
 
+/* Progressive load: dashboard cards start hidden and fade/slide in the moment
+   their own data arrives, so nothing waits on the slowest query and no spinner
+   is shown. Once revealed, in-place polling updates never re-trigger the fade. */
+.dash-fade { opacity: 0; transform: translateY(8px); transition: opacity .4s ease, transform .4s ease; }
+.dash-fade.ready { opacity: 1; transform: none; }
+@media (prefers-reduced-motion: reduce) {
+  .dash-fade { transition: none; transform: none; }
+}
+
 /* Overview stat tiles */
 .dash-grid {
   display: grid;

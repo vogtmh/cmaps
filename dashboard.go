@@ -207,6 +207,52 @@ func (app *App) handleRestDashboard(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, out)
 }
 
+// dashboardPermitted enforces the shared read permission for every dashboard
+// section endpoint (dashboard, adminpanel or health).
+func (app *App) dashboardPermitted(r *http.Request) bool {
+	sess, ok := app.currentSession(r)
+	return ok && (app.permLevel(sess, "dashboard") >= 1 || app.permLevel(sess, "adminpanel") >= 1 || app.permLevel(sess, "health") >= 1)
+}
+
+// The dashboard sections are served as independent endpoints so each card can be
+// fetched in parallel and faded in the moment its own data is ready, instead of
+// blocking the whole dashboard on the slowest query.
+
+func (app *App) handleRestDashboardOverview(w http.ResponseWriter, r *http.Request) {
+	if !app.dashboardPermitted(r) {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	writeJSON(w, map[string]interface{}{"overview": app.dashboardOverview()})
+}
+
+func (app *App) handleRestDashboardSystem(w http.ResponseWriter, r *http.Request) {
+	if !app.dashboardPermitted(r) {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	writeJSON(w, map[string]interface{}{"system": app.dashboardSystem()})
+}
+
+func (app *App) handleRestDashboardIntegrations(w http.ResponseWriter, r *http.Request) {
+	if !app.dashboardPermitted(r) {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	app.intgHealthMu.Lock()
+	health := app.intgHealth
+	app.intgHealthMu.Unlock()
+	writeJSON(w, map[string]interface{}{"integrations": app.dashboardIntegrations(health)})
+}
+
+func (app *App) handleRestDashboardVisitors(w http.ResponseWriter, r *http.Request) {
+	if !app.dashboardPermitted(r) {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	writeJSON(w, map[string]interface{}{"visitors": app.dashboardVisitors()})
+}
+
 func (app *App) dashboardSystem() map[string]interface{} {
 	host, _ := os.Hostname()
 	var ms runtime.MemStats

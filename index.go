@@ -281,10 +281,7 @@ func (app *App) renderIndex(w http.ResponseWriter, r *http.Request, sess Session
 	// Avatar.
 	avatarURL := "images/noavatar2.png"
 	if loggedIn {
-		userid := sess.Username
-		if i := strings.LastIndex(userid, "\\"); i >= 0 {
-			userid = userid[i+1:]
-		}
+		userid := app.sessionUserID(sess)
 		if _, err := os.Stat(app.cfg.dataPath("avatarcache", userid+".jpg")); err == nil {
 			avatarURL = "avatarcache/" + userid + ".jpg?time=" + strconv.FormatInt(time.Now().Unix(), 10)
 		}

@@ -103,17 +103,17 @@
 
 {{if eq .ActiveTab "dashboard"}}
   <div class="sync-wrap dash-wrap">
-    <div id="dashOverview" class="dash-grid"></div>
+    <div id="dashOverview" class="dash-grid dash-fade"></div>
     <div class="sync-cols dash-cols">
       <div class="sync-col">
-        <div id="dashSystem" class="sync-card"></div>
-        <div id="dashIntegrations" class="sync-card"></div>
-        <div id="dashVisitors" class="sync-card"></div>
+        <div id="dashSystem" class="sync-card dash-fade"></div>
+        <div id="dashIntegrations" class="sync-card dash-fade"></div>
+        <div id="dashVisitors" class="sync-card dash-fade"></div>
       </div>
       {{if gt .PermHealth 0}}
       <div class="sync-col">
-        <div id="dashHealthLdap" class="sync-card"></div>
-        <div id="dashHealthDesks" class="sync-card"></div>
+        <div id="dashHealthLdap" class="sync-card dash-fade"></div>
+        <div id="dashHealthDesks" class="sync-card dash-fade"></div>
       </div>
       {{end}}
     </div>
@@ -536,6 +536,9 @@
   {{if .IsEditor}}<script>token = "{{.Token}}"; username = "{{.Username}}"; console.log("Token: " + token);</script>{{end}}
   <div class="sync-wrap">
   <div class="sync-tabs">
+    {{if gt .PermAdminpanel 0}}
+    <button type="button" class="sync-tab" id="syncnav_general" onclick="showSyncSub('general')"><span class="sync-navdot"></span>General</button>
+    {{end}}
     {{if gt .PermLdap 0}}
     <button type="button" class="sync-tab" id="syncnav_ldap" onclick="showSyncSub('ldap')"><span class="sync-navdot"></span>LDAP</button>
     {{end}}
@@ -557,6 +560,40 @@
     {{if .Message}}<span class="sync-msg" id="syncMsg">{{.Message}}</span>{{end}}
   </div>
   <div class="sync-pane">
+
+  {{if gt .PermAdminpanel 0}}
+  <div id="syncsub_general" class="syncsub" style="display:none;">
+    <div class="sync-card">
+      <div class="sync-card-head">
+        <h2 class="sync-card-title">Employee identifier</h2>
+        <span class="sync-badge sync-badge-accent" id="identifierBadge">{{if eq .IdentifierMode "mail"}}E-Mail{{else}}SAMAccountname{{end}}</span>
+      </div>
+      <p class="sync-card-hint">The identifier is the key used for avatar filenames, the audit log, map-admin
+        records, bookings and the changelog. Switching it runs a migration assistant that converts all existing
+        data to the new format (creating the new records/files first, then removing the old ones) and only then
+        activates the new setting. Run it on a backup first &mdash; you can migrate back and forth.</p>
+      <div class="sync-field" style="max-width:640px;">
+        <label class="sync-label">Identifier</label>
+        <label style="display:block; margin:4px 0;"><input type="radio" name="identifierMode" value="samaccountname" {{if ne .IdentifierMode "mail"}}checked{{end}}> SAMAccountname <span class="sync-status-text">&mdash; only supported by LDAP (default)</span></label>
+        <label style="display:block; margin:4px 0;"><input type="radio" name="identifierMode" value="mail" {{if eq .IdentifierMode "mail"}}checked{{end}}> E-Mail <span class="sync-status-text">&mdash; supported by LDAP, EntraID and SAML SSO</span></label>
+      </div>
+      {{if gt .PermAdminpanel 1}}
+      <div class="sync-form-actions">
+        <button type="button" class="sync-btn" id="identifierAnalyzeBtn" onclick="analyzeIdentifier()">Analyze migration&hellip;</button>
+        <button type="button" class="sync-btn sync-btn-primary" id="identifierMigrateBtn" onclick="startIdentifierMigration()" style="display:none;">Start migration</button>
+      </div>
+      <div id="identifierAnalysis" class="sync-status-text" style="margin-top:8px;"></div>
+      <div class="sync-progress" id="identifierProgress">
+        <div class="sync-progress-head"><span id="identifierProgStage">Working&hellip;</span><span id="identifierProgCount"></span></div>
+        <div class="sync-progress-track"><div class="sync-progress-fill" id="identifierProgFill"></div></div>
+      </div>
+      <pre class="sync-log" id="identifierLog" style="display:none;"></pre>
+      {{else}}
+      <p class="sync-card-hint">You need full admin-panel permission to run a migration.</p>
+      {{end}}
+    </div>
+  </div>
+  {{end}}
 
   {{if gt .PermLdap 0}}
   <div id="syncsub_ldap" class="syncsub" style="display:none;">
@@ -870,6 +907,7 @@
       </table>
       <div class="sync-form-actions" style="margin-top:8px;">
         <button type="button" class="sync-btn" onClick="showSamlDebug()">Show last test result</button>
+        <button type="button" class="sync-btn" onClick="showMySamlResponse()">Show my SAML login response</button>
       </div>
     </div>
 
@@ -975,6 +1013,16 @@
           <button type="button" class="sync-btn sync-btn-sm" onClick="document.getElementById('samlDebugOverlay').style.display='none'">Close</button>
         </div>
         <pre id="samlDebugBody" class="sync-modal-body"></pre>
+      </div>
+    </div>
+
+    <div id="samlMyResponseOverlay" class="sync-modal">
+      <div class="sync-modal-box">
+        <div class="sync-modal-head">
+          <h2>My SAML login response</h2>
+          <button type="button" class="sync-btn sync-btn-sm" onClick="document.getElementById('samlMyResponseOverlay').style.display='none'">Close</button>
+        </div>
+        <pre id="samlMyResponseBody" class="sync-modal-body"></pre>
       </div>
     </div>
   </div>
@@ -1442,7 +1490,7 @@
     </div>
   </div>
   <script>
-    showSyncSub("{{if .SyncSub}}{{.SyncSub}}{{else}}ldap{{end}}");
+    showSyncSub("{{if .SyncSub}}{{.SyncSub}}{{else}}general{{end}}");
     if (typeof showRobinResultTab === 'function') { showRobinResultTab('rooms'); }
     if (typeof updateEntraAuthMethod === 'function') { updateEntraAuthMethod(); }
     if (typeof showEntraCmpTab === 'function') { showEntraCmpTab('diff'); }

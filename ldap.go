@@ -350,13 +350,13 @@ func (app *App) fetchSourceDirectory(src LdapSource) ([]DirectoryUser, SourceDeb
 				}
 			}
 
-			userid := e.GetEqualFoldAttributeValue("samaccountname")
-			if userid == "" {
+			sam := e.GetEqualFoldAttributeValue("samaccountname")
+			if sam == "" {
 				dbg.Skipped++
 				dbg.SkipReasons["no samaccountname"]++
 				continue
 			}
-			if key := strings.ToLower(userid); seen[key] {
+			if key := strings.ToLower(sam); seen[key] {
 				continue // same account can match several letters via aliases
 			} else {
 				seen[key] = true
@@ -366,17 +366,19 @@ func (app *App) fetchSourceDirectory(src LdapSource) ([]DirectoryUser, SourceDeb
 			if title == "" {
 				title = "-"
 			}
+			mail := e.GetEqualFoldAttributeValue("mail")
 			out = append(out, DirectoryUser{
-				Userid:     userid,
-				Givenname:  e.GetEqualFoldAttributeValue("givenname"),
-				Surname:    e.GetEqualFoldAttributeValue("sn"),
-				Mail:       e.GetEqualFoldAttributeValue("mail"),
-				Office:     e.GetEqualFoldAttributeValue("physicaldeliveryofficename"),
-				Department: e.GetEqualFoldAttributeValue("department"),
-				Title:      title,
-				Phone:      e.GetEqualFoldAttributeValue("telephonenumber"),
-				Mobile:     e.GetEqualFoldAttributeValue("mobile"),
-				Aliases:    extractProxyAliases(e.GetEqualFoldAttributeValues("proxyAddresses"), e.GetEqualFoldAttributeValue("mail")),
+				Userid:         app.userIdentifier(sam, mail),
+				Samaccountname: sam,
+				Givenname:      e.GetEqualFoldAttributeValue("givenname"),
+				Surname:        e.GetEqualFoldAttributeValue("sn"),
+				Mail:           mail,
+				Office:         e.GetEqualFoldAttributeValue("physicaldeliveryofficename"),
+				Department:     e.GetEqualFoldAttributeValue("department"),
+				Title:          title,
+				Phone:          e.GetEqualFoldAttributeValue("telephonenumber"),
+				Mobile:         e.GetEqualFoldAttributeValue("mobile"),
+				Aliases:        extractProxyAliases(e.GetEqualFoldAttributeValues("proxyAddresses"), mail),
 			})
 		}
 	}
@@ -447,6 +449,7 @@ func deriveMirrorUsers(dir []DirectoryUser) []LdapUser {
 
 		base := LdapUser{
 			Userid:          d.Userid,
+			Samaccountname:  d.Samaccountname,
 			Givenname:       d.Givenname,
 			Surname:         d.Surname,
 			Telephonenumber: d.Phone,

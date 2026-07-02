@@ -26,6 +26,10 @@ type App struct {
 	ldapProg  syncProgress
 	entraProg syncProgress
 
+	// migrateProg tracks the background identifier migration (samaccountname <->
+	// mail) so the admin Sync > General subtab can show a live progress bar + log.
+	migrateProg syncProgress
+
 	// robinDeskProg tracks the background desk-data diagnostic so the admin Sync
 	// tab can show a live progress bar + log.
 	robinDeskProg syncProgress

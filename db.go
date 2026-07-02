@@ -100,6 +100,9 @@ func deskKey(mapName string, id int) []byte {
 // (the old ipphone column) used for avatar filenames.
 type LdapUser struct {
 	Userid          string `json:"userid"`
+	// Samaccountname is the raw AD account name, kept independently of Userid so
+	// the identifier can be switched between samaccountname and mail (and back).
+	Samaccountname  string `json:"samaccountname,omitempty"`
 	Givenname       string `json:"givenname"`
 	Surname         string `json:"surname"`
 	Telephonenumber string `json:"telephonenumber"`
@@ -123,8 +126,11 @@ type LdapUser struct {
 // name resolution, and is the local source the office-filtered ldapmirror is
 // derived from.
 type DirectoryUser struct {
-	Userid     string `json:"userid"` // samaccountname
-	Givenname  string `json:"givenname"`
+	Userid string `json:"userid"` // active identifier (samaccountname or mail-based)
+	// Samaccountname is the raw AD account name, retained regardless of the
+	// configured identifier mode so migrations can round-trip.
+	Samaccountname string `json:"samaccountname,omitempty"`
+	Givenname      string `json:"givenname"`
 	Surname    string `json:"surname"`
 	Mail       string `json:"mail"`
 	Office     string `json:"office"`

@@ -300,16 +300,16 @@ func (c *entraClient) listUsers() ([]entraGraphUser, error) {
 // graphUserToDirectory maps a Graph user object onto the DirectoryUser shape
 // used by deriveMirrorUsers, so the EntraID sync produces exactly the same
 // office-filtered mirror as the LDAP sync.
-func graphUserToDirectory(u entraGraphUser) DirectoryUser {
-	userid := strings.TrimSpace(u.OnPremisesSamAccountName)
-	if userid == "" {
+func (app *App) graphUserToDirectory(u entraGraphUser) DirectoryUser {
+	sam := strings.TrimSpace(u.OnPremisesSamAccountName)
+	if sam == "" {
 		// Fall back to the UPN local part (before "@") when the account is not
 		// synced from on-prem AD.
 		upn := strings.TrimSpace(u.UserPrincipalName)
 		if at := strings.Index(upn, "@"); at > 0 {
-			userid = upn[:at]
+			sam = upn[:at]
 		} else {
-			userid = upn
+			sam = upn
 		}
 	}
 	mail := strings.TrimSpace(u.Mail)
@@ -325,9 +325,10 @@ func graphUserToDirectory(u entraGraphUser) DirectoryUser {
 		phone = strings.TrimSpace(u.BusinessPhones[0])
 	}
 	return DirectoryUser{
-		Userid:     userid,
-		Givenname:  strings.TrimSpace(u.GivenName),
-		Surname:    strings.TrimSpace(u.Surname),
+		Userid:         app.userIdentifier(sam, mail),
+		Samaccountname: sam,
+		Givenname:      strings.TrimSpace(u.GivenName),
+		Surname:        strings.TrimSpace(u.Surname),
 		Mail:       mail,
 		Office:     strings.TrimSpace(u.OfficeLocation),
 		Department: strings.TrimSpace(u.Department),
@@ -484,7 +485,7 @@ func (app *App) runEntraSync(prog *syncProgress) (int, error) {
 			if !u.AccountEnabled {
 				continue
 			}
-			dir = append(dir, graphUserToDirectory(u))
+			dir = append(dir, app.graphUserToDirectory(u))
 		}
 		mirror := deriveMirrorUsers(dir)
 		if err := app.db.PutSourceMirror("entra", src.ID, mirror); err != nil {
@@ -718,7 +719,7 @@ func (app *App) handleRestEntraSyncOne(w http.ResponseWriter, r *http.Request) {
 		if !u.AccountEnabled {
 			continue
 		}
-		dir = append(dir, graphUserToDirectory(u))
+		dir = append(dir, app.graphUserToDirectory(u))
 	}
 	mirror := deriveMirrorUsers(dir)
 	if err := app.db.PutSourceMirror("entra", src.ID, mirror); err != nil {

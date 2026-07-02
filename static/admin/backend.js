@@ -148,15 +148,6 @@ function updateHealthDetails() {
     async: true, 
     type: 'get',
     dataType: 'JSON',
-    beforeSend: function() {
-      // Show a spinner in each health card on first render only; later polls
-      // refresh the contents in place.
-      var spin = '<img src="../images/spinner.png" style="display:block;margin:24px auto;" />';
-      var l = document.getElementById('dashHealthLdap');
-      var d = document.getElementById('dashHealthDesks');
-      if (l && !l.innerHTML) { l.innerHTML = spin; }
-      if (d && !d.innerHTML) { d.innerHTML = spin; }
-    },
     success: function(result){
       renderDashHealthLdap(result.health && result.health.ldap || [], result.consistency_ldap || 0);
       renderDashHealthDesks(result.health && result.health.desks || [], result.consistency_desks || 0);
@@ -189,6 +180,7 @@ function renderDashHealthLdap(ldaparray, total) {
       + '</div></div>';
   }
   el.innerHTML = html;
+  dashReveal(el);
 }
 
 // renderDashHealthDesks renders the desk consistency card (right column).
@@ -222,6 +214,7 @@ function renderDashHealthDesks(deskarray, total) {
       + '</div></div>';
   }
   el.innerHTML = html;
+  dashReveal(el);
 }
 
 // dashEsc escapes a value for safe insertion as HTML text content.
@@ -231,26 +224,35 @@ function dashEsc(s) {
     .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
-// updateDashboard fetches the consolidated dashboard payload and renders the
-// overview tiles, system card, integration status and visitor chart.
+// updateDashboard fetches each dashboard section from its own endpoint in
+// parallel and renders every card independently, so a card fades in the instant
+// its own data is ready instead of waiting for the slowest query. On the 15s
+// poll the same handlers just refresh the contents in place (no re-fade).
 function updateDashboard() {
-  $.ajax({
-    url: '../rest/dashboard',
-    async: true,
-    type: 'get',
-    dataType: 'JSON',
-    success: function (result) {
-      result = result || {};
-      renderDashOverview(result.overview, result.health);
-      renderDashSystem(result.system);
-      renderDashIntegrations(result.integrations);
-      renderDashVisitors(result.visitors);
-      console.log('[Dashboard] updated');
-    }
+  var sections = [
+    ['../rest/dashboard/overview', function (r) { renderDashOverview(r.overview); }],
+    ['../rest/dashboard/system', function (r) { renderDashSystem(r.system); }],
+    ['../rest/dashboard/integrations', function (r) { renderDashIntegrations(r.integrations); }],
+    ['../rest/dashboard/visitors', function (r) { renderDashVisitors(r.visitors); }]
+  ];
+  sections.forEach(function (s) {
+    $.ajax({
+      url: s[0], async: true, type: 'get', dataType: 'JSON',
+      success: function (result) { s[1](result || {}); }
+    });
   });
 }
 
-function renderDashOverview(ov, health) {
+// dashReveal fades a dashboard card in once its content is populated. After the
+// first reveal the card keeps its "ready" state so polling refreshes update the
+// contents without re-animating.
+function dashReveal(el) {
+  if (!el || el.classList.contains('ready')) { return; }
+  if (!el.classList.contains('dash-fade')) { el.classList.add('dash-fade'); }
+  requestAnimationFrame(function () { el.classList.add('ready'); });
+}
+
+function renderDashOverview(ov) {
   ov = ov || {};
   var tiles = [
     ['Locations', ov.maps], ['Desks & items', ov.desks],
@@ -264,7 +266,7 @@ function renderDashOverview(ov, health) {
       + '</div><div class="dash-lbl">' + tiles[i][0] + '</div></div>';
   }
   var el = document.getElementById('dashOverview');
-  if (el) { el.innerHTML = html; }
+  if (el) { el.innerHTML = html; dashReveal(el); }
 }
 
 function dashMeter(pct, label, detail) {
@@ -300,7 +302,7 @@ function renderDashSystem(sys) {
   }
   html += '<div class="dash-kv-grid">' + kvhtml + '</div>';
   var el = document.getElementById('dashSystem');
-  if (el) { el.innerHTML = html; }
+  if (el) { el.innerHTML = html; dashReveal(el); }
 }
 
 function renderDashIntegrations(list) {
@@ -329,7 +331,7 @@ function renderDashIntegrations(list) {
     + '<table class="sync-table"><thead><tr><th>Integration</th><th>Status</th><th>Last sync</th><th>Next sync</th></tr></thead>'
     + '<tbody>' + rows + '</tbody></table>';
   var el = document.getElementById('dashIntegrations');
-  if (el) { el.innerHTML = html; }
+  if (el) { el.innerHTML = html; dashReveal(el); }
 }
 
 function renderDashVisitors(vis) {
@@ -349,7 +351,7 @@ function renderDashVisitors(vis) {
     + '<span class="sync-badge sync-badge-accent">' + total + ' total</span></div>'
     + '<div class="dash-bars">' + bars + '</div>';
   var el = document.getElementById('dashVisitors');
-  if (el) { el.innerHTML = html; }
+  if (el) { el.innerHTML = html; dashReveal(el); }
 }
 
 function syncLDAP(ldap_id, adminuser) {
@@ -468,7 +470,7 @@ function cancelEditLdap() {
 }
 
 function showSyncSub(name) {
-  var subs = ['ldap', 'entra', 'saml', 'robin', 'geo', 'database'];
+  var subs = ['general', 'ldap', 'entra', 'saml', 'robin', 'geo', 'database'];
   // Fall back to the first available subsection if the requested one is not
   // rendered (e.g. the user lacks the matching permission).
   if (!document.getElementById('syncsub_' + name)) {
@@ -957,6 +959,31 @@ function showSamlDebug() {
   });
 }
 
+// showMySamlResponse shows the full SAML response captured on the current admin's
+// most recent SAML login: the parsed attributes (what the IdP actually sent) and
+// the raw response XML.
+function showMySamlResponse() {
+  var body = document.getElementById('samlMyResponseBody');
+  body.textContent = 'Loading...';
+  document.getElementById('samlMyResponseOverlay').style.display = 'block';
+  $.ajax({
+    url: '../rest/saml/mycapture', type: 'get', dataType: 'JSON',
+    success: function(d) {
+      if (!d || d.status !== 'ok') {
+        body.textContent = (d && d.message) || 'No SAML response captured yet.';
+        return;
+      }
+      var out = 'Captured: ' + d.when + '\nUsername: ' + d.username + '\n\n';
+      out += '=== Attributes ===\n' + JSON.stringify(d.attributes || {}, null, 2);
+      out += '\n\n=== Raw response XML ===\n' + (d.raw_xml || '');
+      body.textContent = out;
+    },
+    error: function() {
+      body.textContent = 'Failed to load your SAML response (forbidden or server error).';
+    }
+  });
+}
+
 // ── Collapsible (one-time config) sections ──────────────────
 function toggleCollapse(id, btn) {
   var el = document.getElementById(id);
@@ -1154,6 +1181,99 @@ function updateRobinDeskModeDesc() {
 
 function startLdapSync() {
   startSync('ldap', '../rest/ldap/sync', '../rest/ldap/progress', 'ldap');
+}
+
+// ── Employee identifier migration (Sync > General) ───────────
+function identifierTargetMode() {
+  var el = document.querySelector('input[name="identifierMode"]:checked');
+  return el ? el.value : 'samaccountname';
+}
+
+// analyzeIdentifier previews the migration to the selected identifier mode:
+// how many users convert, which conflict, and per-area record counts. Makes no
+// changes. On success it reveals the "Start migration" button.
+function analyzeIdentifier() {
+  var target = identifierTargetMode();
+  var out = document.getElementById('identifierAnalysis');
+  var migBtn = document.getElementById('identifierMigrateBtn');
+  if (migBtn) migBtn.style.display = 'none';
+  $.ajax({
+    url: '../rest/identifier/analyze', type: 'POST', dataType: 'JSON',
+    data: { target: target },
+    success: function (r) {
+      if (r.current === r.target) {
+        out.innerHTML = 'This is already the active identifier.';
+        return;
+      }
+      var c = r.counts || {};
+      var html = '<b>' + r.mappable + '</b> user(s) will be converted, ' +
+        '<b>' + r.already + '</b> already in the target format, ' +
+        '<b>' + (r.conflicts ? r.conflicts.length : 0) + '</b> conflict(s) will be skipped.<br>' +
+        'Records to scan: ' + (c.avatars || 0) + ' avatar(s), ' + (c.mapAdmins || 0) + ' map admin(s), ' +
+        (c.bookings || 0) + ' booking(s), ' + (c.changelog || 0) + ' changelog, ' +
+        (c.audit || 0) + ' audit, ' + (c.desks || 0) + ' desk(s).';
+      if (r.conflicts && r.conflicts.length) {
+        html += '<br><b>Conflicts (skipped, left untouched):</b><br>';
+        html += r.conflicts.slice(0, 50).map(function (x) {
+          return '&nbsp;&nbsp;\u2022 ' + dbEscape(x.old) + (x.new ? ' \u2192 ' + dbEscape(x.new) : '') + ' \u2014 ' + dbEscape(x.reason);
+        }).join('<br>');
+        if (r.conflicts.length > 50) html += '<br>&nbsp;&nbsp;\u2026 and ' + (r.conflicts.length - 50) + ' more.';
+      }
+      out.innerHTML = html;
+      if (migBtn) migBtn.style.display = 'inline-flex';
+    },
+    error: function (xhr) {
+      out.textContent = 'Analyze failed: ' + (xhr.responseText || xhr.status);
+    }
+  });
+}
+
+function startIdentifierMigration() {
+  var target = identifierTargetMode();
+  if (!confirm('Migrate the employee identifier to "' + target + '"?\n\nThis converts avatar files, map-admin ' +
+    'records, the audit log, changelog, bookings and desks, then activates the new setting. Users will need to ' +
+    'log in again. Make sure you have a backup.')) return;
+  var btn = document.getElementById('identifierMigrateBtn');
+  var abtn = document.getElementById('identifierAnalyzeBtn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Migrating\u2026'; }
+  if (abtn) abtn.disabled = true;
+  var logEl = document.getElementById('identifierLog');
+  if (logEl) { logEl.textContent = ''; logEl.style.display = 'block'; }
+  $.ajax({
+    url: '../rest/identifier/migrate', type: 'POST', dataType: 'JSON',
+    data: { target: target },
+    complete: function () { pollIdentifierMigration(); }
+  });
+}
+
+function pollIdentifierMigration() {
+  var timer = setInterval(function () {
+    $.ajax({
+      url: '../rest/identifier/progress', type: 'GET', dataType: 'JSON',
+      success: function (snap) {
+        renderSyncProgress('identifier', snap);
+        if (!snap.running && snap.done) {
+          clearInterval(timer);
+          var fill = document.getElementById('identifierProgFill');
+          if (fill) {
+            fill.classList.remove('indeterminate');
+            fill.style.width = '100%';
+            if (snap.error) fill.style.background = 'var(--sy-danger)';
+          }
+          var stage = document.getElementById('identifierProgStage');
+          if (stage) stage.textContent = snap.error ? ('Error: ' + snap.error) : (snap.summary || 'Done');
+          var btn = document.getElementById('identifierMigrateBtn');
+          if (btn) { btn.disabled = false; btn.textContent = 'Start migration'; }
+          var abtn = document.getElementById('identifierAnalyzeBtn');
+          if (abtn) abtn.disabled = false;
+          if (!snap.error) {
+            setTimeout(function () { loadAdminTab('ldap', 'general', true); }, 1800);
+          }
+        }
+      },
+      error: function () { clearInterval(timer); }
+    });
+  }, 800);
 }
 
 // ── EntraID (Microsoft Graph) ────────────────────────────────

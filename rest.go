@@ -134,12 +134,13 @@ func (app *App) handleRestAuditlog(w http.ResponseWriter, r *http.Request) {
 		limit = 100
 	}
 	entries, hasMore, _ := app.db.ListAuditPage(offset, limit, q.Get("type"), q.Get("time"), q.Get("user"), q.Get("info"))
+	resolveMail := app.mailResolver()
 	items := make([]map[string]string, 0, len(entries))
 	for _, e := range entries {
 		items = append(items, map[string]string{
 			"timestamp": e.Timestamp,
 			"type":      e.Type,
-			"user":      e.User,
+			"user":      resolveMail(e.User),
 			"info":      e.Info,
 		})
 	}

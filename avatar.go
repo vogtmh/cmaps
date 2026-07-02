@@ -33,10 +33,7 @@ func (app *App) handleRestAvatar(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	userid := sess.Samaccountname
-	if idx := strings.LastIndex(sess.Username, "\\"); idx >= 0 {
-		userid = sess.Username[idx+1:]
-	}
+	userid := app.sessionUserID(sess)
 	if userid == "" {
 		http.Error(w, "no user id", http.StatusBadRequest)
 		return

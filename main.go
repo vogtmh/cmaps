@@ -248,6 +248,7 @@ func (app *App) registerSAMLRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/rest/saml/validate", app.requirePerm("adminpanel", 2, app.handleSAMLValidate))
 	mux.HandleFunc("/rest/saml/spinfo", app.requirePerm("adminpanel", 2, app.handleSAMLSPInfo))
 	mux.HandleFunc("/rest/saml/debug", app.requirePerm("adminpanel", 2, app.handleSAMLDebugLast))
+	mux.HandleFunc("/rest/saml/mycapture", app.requirePerm("adminpanel", 1, app.handleSAMLMyCapture))
 	mux.HandleFunc("/rest/saml/import-metadata", app.requirePerm("adminpanel", 2, app.handleSAMLImportMetadata))
 }
 

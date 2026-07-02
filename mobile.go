@@ -77,10 +77,7 @@ func (app *App) handleMobile(w http.ResponseWriter, r *http.Request) {
 			bs.Perms[f] = app.permLevel(sess, f)
 		}
 		// Avatar lookup mirrors the desktop index page.
-		userid := sess.Username
-		if i := strings.LastIndex(userid, "\\"); i >= 0 {
-			userid = userid[i+1:]
-		}
+		userid := app.sessionUserID(sess)
 		if _, err := os.Stat(app.cfg.dataPath("avatarcache", userid+".jpg")); err == nil {
 			bs.AvatarURL = "/avatarcache/" + userid + ".jpg?time=" + strconv.FormatInt(time.Now().Unix(), 10)
 		}
