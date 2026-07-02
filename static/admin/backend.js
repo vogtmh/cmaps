@@ -149,189 +149,206 @@ function updateHealthDetails() {
     type: 'get',
     dataType: 'JSON',
     beforeSend: function() {
-      // Create two containers for LDAP and Desks
-      var healthdetails = ''
-      + '<div id="healthldap" style="width:780px; height:auto; float:left; margin-left:20px;">'
-      + '<img src="../images/spinner.png" style="margin-left:262px;" />'
-      + '</div>'
-      + '<div id="healthdesks" style="width:780px; height:auto; float:right; margin-right:10px;">'
-      + '<img src="../images/spinner.png" style="margin-left:262px;" />'
-      + '</div>'
-
-      var checkdiv = document.getElementById('healthdetails')
-      if (checkdiv === null) {
-        var root = document.getElementById('content')
-        var newElement = document.createElement('div')
-        newElement.setAttribute('id', 'healthdetails')
-        newElement.innerHTML = healthdetails
-        root.appendChild(newElement)  
-      }
+      // Show a spinner in each health card on first render only; later polls
+      // refresh the contents in place.
+      var spin = '<img src="../images/spinner.png" style="display:block;margin:24px auto;" />';
+      var l = document.getElementById('dashHealthLdap');
+      var d = document.getElementById('dashHealthDesks');
+      if (l && !l.innerHTML) { l.innerHTML = spin; }
+      if (d && !d.innerHTML) { d.innerHTML = spin; }
     },
     success: function(result){
-
-      // ---- LDAP consistency (left column) ----
-      // One card per over-occupied office; the tile shows the total number of
-      // people involved (result.consistency_ldap), not the number of offices.
-      var ldaparray = result.health.ldap || [];
-      var ldapTotal = result.consistency_ldap;
-      var ldapColor = ldapTotal >= 30 ? 'red' : (ldapTotal >= 1 ? 'orange' : 'green');
-      var healthldap = ''
-        + '<div style="width:750px; margin-left:20px; background:'+ldapColor+'; opacity:0.85; text-align:center; border-radius:8px; padding:24px 0;">'
-        + '<h1 style="margin:0;">LDAP errors</h1><h2 style="margin:4px 0 0;">'+ldapTotal+'</h2>'
-        + '</div>';
-      for (var i = 0; i < ldaparray.length; i++) {
-        var lo = ldaparray[i];
-        healthldap += ''
-          + '<div style="width:750px; margin-left:20px; margin-top:10px; background:#3a3a3a; border-left:5px solid '+ldapColor+'; border-radius:8px; padding:14px 16px; box-sizing:border-box;">'
-          + '<div style="font-size:16px; font-weight:bold; color:#eee;">Office &ldquo;'+healthEsc(lo.desk)+'&rdquo; is shared by '+lo.count+' people</div>'
-          + '<div style="margin:6px 0 10px; color:#bbb; font-size:13px; line-height:1.4;">More than four people are mapped to the same office in the directory. Fix the office/room attribute for the people below in your directory source, then re-sync &mdash; or ignore this office to accept it.</div>'
-          + '<div style="color:#ccc; font-size:13px; margin-bottom:12px;">'+healthEsc((lo.names || []).join(', '))+'</div>'
-          + '<a href="javascript:{}" onclick="submitWhitelist(\'ldap\','+healthJsArg(lo.desk)+')" style="display:inline-block; background:#505050; color:#fff; padding:6px 14px; border-radius:6px; text-decoration:none; font-size:13px;">Ignore</a>'
-          + '</div>';
-      }
-      document.getElementById('healthldap').innerHTML = healthldap;
-
-      // ---- Desk consistency (right column) ----
-      // One card per duplicated desk name on a map. The tile shows the total
-      // number of desks involved (result.consistency_desks), so four desks named
-      // "Desk" read as 4 errors in a single card instead of 16 across four rows.
-      var deskarray = result.health.desks || [];
-      var deskTotal = result.consistency_desks;
-      var deskColor = deskTotal >= 5 ? 'red' : (deskTotal >= 1 ? 'orange' : 'green');
-      var healthdesks = ''
-        + '<div style="width:750px; margin-right:10px; background:'+deskColor+'; opacity:0.85; text-align:center; border-radius:8px; padding:24px 0;">'
-        + '<h1 style="margin:0;">Desk errors</h1><h2 style="margin:4px 0 0;">'+deskTotal+'</h2>'
-        + '</div>';
-      for (var k = 0; k < deskarray.length; k++) {
-        var de = deskarray[k];
-        var members = de.members || [];
-        var memberRows = '';
-        for (var m = 0; m < members.length; m++) {
-          var who = (members[m].employee && String(members[m].employee).trim()) ? members[m].employee : '(unassigned)';
-          var dept = members[m].department ? ' \u2014 ' + members[m].department : '';
-          memberRows += '<li style="margin:2px 0;">' + healthEsc(who) + healthEsc(dept) + '</li>';
-        }
-        healthdesks += ''
-          + '<div style="width:750px; margin-right:10px; margin-top:10px; background:#3a3a3a; border-left:5px solid '+deskColor+'; border-radius:8px; padding:14px 16px; box-sizing:border-box;">'
-          + '<div style="font-size:16px; font-weight:bold; color:#eee;">&ldquo;'+healthEsc(de.desk)+'&rdquo; is used by '+de.count+' desks on map '+healthEsc(de.map)+'</div>'
-          + '<div style="margin:6px 0 10px; color:#bbb; font-size:13px; line-height:1.4;">Desk names must be unique on a map. Open the map in edit mode &mdash; the affected desks are highlighted with a red ring &mdash; and rename each duplicate to a unique number, or ignore this name to accept it.</div>'
-          + '<ul style="margin:0 0 12px 18px; color:#ccc; font-size:13px;">'+memberRows+'</ul>'
-          + '<a href="../?map='+encodeURIComponent(de.map)+'" style="display:inline-block; background:#0979D8; color:#fff; padding:6px 14px; border-radius:6px; text-decoration:none; font-size:13px; margin-right:8px;">Show on map</a>'
-          + '<a href="javascript:{}" onclick="submitWhitelist(\'desks\','+healthJsArg(de.desk)+')" style="display:inline-block; background:#505050; color:#fff; padding:6px 14px; border-radius:6px; text-decoration:none; font-size:13px;">Ignore</a>'
-          + '</div>';
-      }
-      document.getElementById('healthdesks').innerHTML = healthdesks;
-
+      renderDashHealthLdap(result.health && result.health.ldap || [], result.consistency_ldap || 0);
+      renderDashHealthDesks(result.health && result.health.desks || [], result.consistency_desks || 0);
       console.log('[HealthDetails] updated');
     }
   })
 }
 
-function updateSystemStats() {
+// renderDashHealthLdap renders the LDAP consistency card (right column) in the
+// same sync-card visual style as the information cards on the left.
+function renderDashHealthLdap(ldaparray, total) {
+  var el = document.getElementById('dashHealthLdap');
+  if (!el) { return; }
+  var badgeClass = total >= 30 ? 'sync-badge-danger' : (total >= 1 ? 'sync-badge-warn' : 'sync-badge-ok');
+  var badge = total >= 1 ? (total + ' issue' + (total === 1 ? '' : 's')) : 'All good';
+  var html = '<div class="sync-card-head"><h2 class="sync-card-title">LDAP consistency</h2>'
+    + '<span class="sync-badge ' + badgeClass + '">' + badge + '</span></div>';
+  if (!ldaparray.length) {
+    html += '<div class="dash-health-empty">No over-occupied offices found.</div>';
+  }
+  for (var i = 0; i < ldaparray.length; i++) {
+    var lo = ldaparray[i];
+    var itemState = total >= 30 ? 'fail' : 'warn';
+    html += '<div class="dash-health-item ' + itemState + '">'
+      + '<div class="dash-health-item-title">Office &ldquo;' + healthEsc(lo.desk) + '&rdquo; is shared by ' + lo.count + ' people</div>'
+      + '<div class="dash-health-item-desc">More than four people are mapped to the same office in the directory. Fix the office/room attribute for the people below in your directory source, then re-sync &mdash; or ignore this office to accept it.</div>'
+      + '<div class="dash-health-item-desc">' + healthEsc((lo.names || []).join(', ')) + '</div>'
+      + '<div class="dash-health-actions">'
+      + '<a href="javascript:{}" class="sync-btn sync-btn-sm" onclick="submitWhitelist(\'ldap\',' + healthJsArg(lo.desk) + ')">Ignore</a>'
+      + '</div></div>';
+  }
+  el.innerHTML = html;
+}
+
+// renderDashHealthDesks renders the desk consistency card (right column).
+function renderDashHealthDesks(deskarray, total) {
+  var el = document.getElementById('dashHealthDesks');
+  if (!el) { return; }
+  var badgeClass = total >= 5 ? 'sync-badge-danger' : (total >= 1 ? 'sync-badge-warn' : 'sync-badge-ok');
+  var badge = total >= 1 ? (total + ' issue' + (total === 1 ? '' : 's')) : 'All good';
+  var html = '<div class="sync-card-head"><h2 class="sync-card-title">Desk consistency</h2>'
+    + '<span class="sync-badge ' + badgeClass + '">' + badge + '</span></div>';
+  if (!deskarray.length) {
+    html += '<div class="dash-health-empty">No duplicated desk names found.</div>';
+  }
+  for (var k = 0; k < deskarray.length; k++) {
+    var de = deskarray[k];
+    var members = de.members || [];
+    var memberRows = '';
+    for (var m = 0; m < members.length; m++) {
+      var who = (members[m].employee && String(members[m].employee).trim()) ? members[m].employee : '(unassigned)';
+      var dept = members[m].department ? ' \u2014 ' + members[m].department : '';
+      memberRows += '<li>' + healthEsc(who) + healthEsc(dept) + '</li>';
+    }
+    var itemState = total >= 5 ? 'fail' : 'warn';
+    html += '<div class="dash-health-item ' + itemState + '">'
+      + '<div class="dash-health-item-title">&ldquo;' + healthEsc(de.desk) + '&rdquo; is used by ' + de.count + ' desks on map ' + healthEsc(de.map) + '</div>'
+      + '<div class="dash-health-item-desc">Desk names must be unique on a map. Open the map in edit mode &mdash; the affected desks are highlighted with a red ring &mdash; and rename each duplicate to a unique number, or ignore this name to accept it.</div>'
+      + '<ul class="dash-health-item-list">' + memberRows + '</ul>'
+      + '<div class="dash-health-actions">'
+      + '<a href="../?map=' + encodeURIComponent(de.map) + '" class="sync-btn sync-btn-sm sync-btn-primary">Show on map</a>'
+      + '<a href="javascript:{}" class="sync-btn sync-btn-sm" onclick="submitWhitelist(\'desks\',' + healthJsArg(de.desk) + ')">Ignore</a>'
+      + '</div></div>';
+  }
+  el.innerHTML = html;
+}
+
+// dashEsc escapes a value for safe insertion as HTML text content.
+function dashEsc(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+// updateDashboard fetches the consolidated dashboard payload and renders the
+// overview tiles, system card, integration status and visitor chart.
+function updateDashboard() {
   $.ajax({
-    url: '../rest/system',
-    async: true, 
+    url: '../rest/dashboard',
+    async: true,
     type: 'get',
     dataType: 'JSON',
-    beforeSend: function() {
-      var element = document.getElementById('systemstats');
-      if (element === null) {
-        var systemspinner = ''
-        + '<div id="spinner" style="width:100%; height:auto; box-sizing:border-box; text-align:center;">'
-        + '<img src="../images/spinner.png" />'
-        + '</div>'
-
-        var checkdiv = document.getElementById('systemspinner')
-        if (checkdiv === null) {
-          var root = document.getElementById('content')
-          var newElement = document.createElement('div')
-          newElement.setAttribute('id', 'systemspinner')
-          newElement.innerHTML = systemspinner
-          root.appendChild(newElement)  
-        }
-      }
-    },
-    success: function(result){
-
-      var element = document.getElementById('systemspinner');
-      if (element !== null) {
-       element.parentNode.removeChild(element);
-      }
-
-      var color='green'
-      var percentage = result.cpuload
-      if (percentage >=95 ) {color='red';}
-      else if (percentage >= 85) {color='orange';}
-      else {color='green';}
-      var systemstats = ''
-      + '<div id="cpuload" style="width:300px; height:300px; float:left; margin-left:10px; margin-right:15px; background:'+color+'; opacity:0.7; text-align:center;line-height:300px;">'
-      + '<span style="display: inline-block; vertical-align: middle; line-height: normal;">'
-      + '<h1>CPU Load</h1><h2>'+percentage+'</h2>'
-      + '</span>'
-      + '</div>'
-
-      var color='green'
-      var percentage = result.memoryused
-      if (percentage >=95 ) {color='red';}
-      else if (percentage >= 85) {color='orange';}
-      else {color='green';}
-      systemstats += ''
-      + '<div id="memoryused" style="width:300px; height:300px; float:left; margin-right:15px; background:'+color+'; opacity:0.7; text-align:center;line-height:300px;">'
-      + '<span style="display: inline-block; vertical-align: middle; line-height: normal;">'
-      + '<h1>Memory used</h1><h2>'+percentage+'</h2>'
-      + '</span>'
-      + '</div>'
-
-      var color='green'
-      var percentage = result.diskused
-      if (percentage >=95 ) {color='red';}
-      else if (percentage >= 85) {color='orange';}
-      else {color='green';}
-      systemstats += ''
-      + '<div id="diskused" style="width:300px; height:300px; float:left; margin-right:15px; background:'+color+'; opacity:0.7; text-align:center;line-height:300px;">'
-      + '<span style="display: inline-block; vertical-align: middle; line-height: normal;">'
-      + '<h1>Disk used</h1><h2>'+percentage+'</h2>'
-      + '</span>'
-      + '</div>'
-
-      var color='green'
-      var percentage = result.consistency_ldap
-      if (percentage >=30 ) {color='red';}
-      else if (percentage >= 1) {color='orange';}
-      else {color='green';}
-      systemstats += ''
-      + '<div id="consistency_ldap" style="width:300px; height:300px; float:left; margin-right:15px; background:'+color+'; opacity:0.7; text-align:center;line-height:300px;">'
-      + '<span style="display: inline-block; vertical-align: middle; line-height: normal;">'
-      + '<h1>LDAP Consistency Errors</h1><h2>'+percentage+'</h2>'
-      + '</span>'
-      + '</div>'
-
-      var color='green'
-      var percentage = result.consistency_desks
-      if (percentage >=5 ) {color='red';}
-      else if (percentage >= 1) {color='orange';}
-      else {color='green';}
-      systemstats += ''
-      + '<div id="consistency_desks" style="width:300px; height:300px; float:left; margin-right:15px; background:'+color+'; opacity:0.7; text-align:center;line-height:300px;">'
-      + '<span style="display: inline-block; vertical-align: middle; line-height: normal;">'
-      + '<h1>Desks Consistency Errors</h1><h2>'+percentage+'</h2>'
-      + '</span>'
-      + '</div>'
-
-      var element = document.getElementById('systemstats');
-      if (element !== null) {
-       element.parentNode.removeChild(element);
-      }
-
-      var p = document.getElementById('content')
-      var newElement = document.createElement('div')
-      newElement.setAttribute('id', 'systemstats')
-      newElement.innerHTML = systemstats
-      p.appendChild(newElement)
-
-      console.log('[SystemStats] updated');
+    success: function (result) {
+      result = result || {};
+      renderDashOverview(result.overview, result.health);
+      renderDashSystem(result.system);
+      renderDashIntegrations(result.integrations);
+      renderDashVisitors(result.visitors);
+      console.log('[Dashboard] updated');
     }
-  })
+  });
+}
+
+function renderDashOverview(ov, health) {
+  ov = ov || {};
+  var tiles = [
+    ['Locations', ov.maps], ['Desks & items', ov.desks],
+    ['Directory users', ov.directoryUsers], ['EntraID users', ov.entraUsers],
+    ['Meeting rooms', ov.rooms], ['Teams', ov.teams],
+    ['Admin accounts', ov.admins], ['Item types', ov.itemTypes]
+  ];
+  var html = '';
+  for (var i = 0; i < tiles.length; i++) {
+    html += '<div class="dash-tile"><div class="dash-num">' + (tiles[i][1] || 0)
+      + '</div><div class="dash-lbl">' + tiles[i][0] + '</div></div>';
+  }
+  var el = document.getElementById('dashOverview');
+  if (el) { el.innerHTML = html; }
+}
+
+function dashMeter(pct, label, detail) {
+  var p = parseFloat(pct) || 0;
+  var state = p >= 95 ? 'fail' : (p >= 85 ? 'warn' : 'ok');
+  return '<div class="dash-meter-row">'
+    + '<div class="dash-meter-top"><span>' + label + '</span>'
+    + '<span class="dash-meter-val">' + p.toFixed(1) + '%'
+    + (detail ? ' <span class="dash-muted">' + dashEsc(detail) + '</span>' : '') + '</span></div>'
+    + '<div class="dash-meter"><div class="dash-meter-fill ' + state + '" style="width:'
+    + Math.min(p, 100) + '%;"></div></div></div>';
+}
+
+function renderDashSystem(sys) {
+  sys = sys || {};
+  var html = '<div class="sync-card-head"><h2 class="sync-card-title">System</h2>'
+    + '<span class="sync-badge sync-badge-accent">CompanyMaps v' + dashEsc(sys.appVersion) + '</span></div>';
+  html += dashMeter(sys.cpuPct, 'CPU load', '');
+  html += dashMeter(sys.memPct, 'Memory', (sys.memUsed || '') + ' / ' + (sys.memTotal || ''));
+  html += dashMeter(sys.diskPct, 'Disk', (sys.diskUsed || '') + ' / ' + (sys.diskTotal || '')
+    + (sys.diskFree ? ' (' + sys.diskFree + ' free)' : ''));
+  var kv = [
+    ['Hostname', sys.hostname], ['Platform', sys.os],
+    ['Uptime', sys.uptime], ['Go runtime', sys.goVersion],
+    ['CPU cores', sys.numCPU], ['Goroutines', sys.goroutines],
+    ['Heap in use', sys.heapAlloc], ['Server time', sys.serverTime]
+  ];
+  var kvhtml = '';
+  for (var i = 0; i < kv.length; i++) {
+    kvhtml += '<div class="dash-kv"><span class="dash-kv-k">' + kv[i][0]
+      + '</span><span class="dash-kv-v">' + dashEsc(kv[i][1]) + '</span></div>';
+  }
+  html += '<div class="dash-kv-grid">' + kvhtml + '</div>';
+  var el = document.getElementById('dashSystem');
+  if (el) { el.innerHTML = html; }
+}
+
+function renderDashIntegrations(list) {
+  list = list || [];
+  var rows = '';
+  for (var i = 0; i < list.length; i++) {
+    var it = list[i];
+    var state, badgeClass, badge;
+    if (!it.configured) { state = 'off'; badgeClass = 'sync-badge-off'; badge = 'Not configured'; }
+    else if (!it.enabled) { state = 'off'; badgeClass = 'sync-badge-off'; badge = 'Disabled'; }
+    else if (it.testDone && it.testOk) { state = 'ok'; badgeClass = 'sync-badge-ok'; badge = 'Connected'; }
+    else if (it.testDone && !it.testOk) { state = 'fail'; badgeClass = 'sync-badge-danger'; badge = 'Error'; }
+    else { state = 'warn'; badgeClass = 'sync-badge-warn'; badge = 'Enabled'; }
+    var msg = it.testDone ? dashEsc(it.testMessage) : 'Connectivity test pending\u2026';
+    var checked = it.checked
+      ? '<div class="dash-muted" style="font-size:11px;margin-top:3px;">Last checked ' + dashEsc(it.checked) + '</div>' : '';
+    rows += '<tr>'
+      + '<td><div class="dash-intg-name"><span class="dash-dot ' + state + '"></span><b>' + dashEsc(it.name) + '</b></div>'
+      + '<div class="dash-muted" style="font-size:12px;margin-top:3px;">' + msg + '</div>' + checked + '</td>'
+      + '<td><span class="sync-badge ' + badgeClass + '">' + badge + '</span></td>'
+      + '<td>' + (it.lastSync ? dashEsc(it.lastSync) : '<span class="dash-muted">\u2014</span>') + '</td>'
+      + '<td>' + (it.nextSync ? dashEsc(it.nextSync) : '<span class="dash-muted">\u2014</span>') + '</td>'
+      + '</tr>';
+  }
+  var html = '<div class="sync-card-head"><h2 class="sync-card-title">Sync integrations</h2></div>'
+    + '<table class="sync-table"><thead><tr><th>Integration</th><th>Status</th><th>Last sync</th><th>Next sync</th></tr></thead>'
+    + '<tbody>' + rows + '</tbody></table>';
+  var el = document.getElementById('dashIntegrations');
+  if (el) { el.innerHTML = html; }
+}
+
+function renderDashVisitors(vis) {
+  vis = vis || [];
+  var max = 1, total = 0;
+  for (var i = 0; i < vis.length; i++) { if (vis[i].count > max) { max = vis[i].count; } }
+  var bars = '';
+  for (var j = 0; j < vis.length; j++) {
+    var c = vis[j].count || 0; total += c;
+    var h = Math.round((c / max) * 100);
+    bars += '<div class="dash-bar-col">'
+      + '<div class="dash-bar-val">' + c + '</div>'
+      + '<div class="dash-bar-track"><div class="dash-bar-fill" style="height:' + h + '%;"></div></div>'
+      + '<div class="dash-bar-lbl">' + dashEsc(vis[j].label) + '</div></div>';
+  }
+  var html = '<div class="sync-card-head"><h2 class="sync-card-title">Visitors &mdash; last 7 days</h2>'
+    + '<span class="sync-badge sync-badge-accent">' + total + ' total</span></div>'
+    + '<div class="dash-bars">' + bars + '</div>';
+  var el = document.getElementById('dashVisitors');
+  if (el) { el.innerHTML = html; }
 }
 
 function syncLDAP(ldap_id, adminuser) {

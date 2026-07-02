@@ -62,6 +62,7 @@ func (app *App) registerRESTRoutes(mux *http.ServeMux) {
 	rest("/rest/update", app.handleRestUpdate)
 	rest("/rest/meeting", app.handleRestMeeting)
 	rest("/rest/system", app.handleRestSystem)
+	rest("/rest/dashboard", app.handleRestDashboard)
 	rest("/rest/ldap", app.handleRestLdap)
 	rest("/rest/ldap/debug", app.handleRestLdapDebug)
 	rest("/rest/ldap/sync", app.handleRestLdapSync)

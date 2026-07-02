@@ -36,12 +36,6 @@
       <span class="headeritem_picture" style="opacity:1.0;"><a href="?tab=dashboard"><img src="../images/logo.png" width="45" alt="" onmouseover='this.src="../images/dashboard.png"' onmouseout='this.src="../images/logo.png"' /></a></span>
       <span class="headeritem_text">Dashboard</span>
     </div>
-    {{if gt .PermHealth 0}}
-    <div class="headeritem" id="tab_health" style="width:120px;">
-      <span class="headeritem_picture"><a href="?tab=health"><img src="../images/health.png" width="45" alt="" /></a></span>
-      <span class="headeritem_text">Health</span>
-    </div>
-    {{end}}
     {{if gt .PermConfig 0}}
     <div class="headeritem" id="tab_config" style="width:120px;">
       <span class="headeritem_picture"><a href="?tab=config"><img src="../images/settings.png" width="45" alt="" /></a></span>
@@ -109,21 +103,37 @@
 {{if and .Message (ne .ActiveTab "ldap")}}<div style="margin-left:20px; padding:8px; background:rgba(0,120,0,0.6); border-radius:5px; width:600px;">{{.Message}}</div><br />{{end}}
 
 {{if eq .ActiveTab "dashboard"}}
-  <script>
-    updateSystemStats();
-    adminSetInterval(updateSystemStats, 15000);
-  </script>
-
-{{else if eq .ActiveTab "health"}}
-  <form id="updateWhitelist" name="updateWhitelist" action="?tab=health" method="post">
-    <input type="hidden" name="tab" value="health">
+  <div class="sync-wrap dash-wrap">
+    <div id="dashOverview" class="dash-grid"></div>
+    <div class="sync-cols dash-cols">
+      <div class="sync-col">
+        <div id="dashSystem" class="sync-card"></div>
+        <div id="dashIntegrations" class="sync-card"></div>
+        <div id="dashVisitors" class="sync-card"></div>
+      </div>
+      {{if gt .PermHealth 0}}
+      <div class="sync-col">
+        <div id="dashHealthLdap" class="sync-card"></div>
+        <div id="dashHealthDesks" class="sync-card"></div>
+      </div>
+      {{end}}
+    </div>
+  </div>
+  {{if gt .PermHealth 0}}
+  <form id="updateWhitelist" name="updateWhitelist" action="?tab=dashboard" method="post">
+    <input type="hidden" name="tab" value="dashboard">
     <input type="hidden" id="ignoreHealthName" name="ignoreHealthName" value="a">
     <input type="hidden" id="ignoreHealthType" name="ignoreHealthType" value="a">
     <input type="submit" value="No" style="display:none;">
   </form>
+  {{end}}
   <script>
+    updateDashboard();
+    adminSetInterval(updateDashboard, 15000);
+    {{if gt .PermHealth 0}}
     updateHealthDetails();
     adminSetInterval(updateHealthDetails, 60000);
+    {{end}}
   </script>
 
 {{else if eq .ActiveTab "config"}}

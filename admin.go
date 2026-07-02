@@ -241,6 +241,10 @@ func (app *App) handleAdmin(w http.ResponseWriter, r *http.Request) {
 	if tab == "itemtypes" {
 		tab = "config"
 	}
+	// The Health tab has been merged into the Dashboard; alias the legacy link.
+	if tab == "health" {
+		tab = "dashboard"
+	}
 	// Fall back to dashboard if the user lacks permission for the tab. The Sync
 	// tab (ldap) is accessible with either the "ldap" permission (LDAP/Robin
 	// subtabs) or the "adminpanel" permission (SAML subtab).
@@ -281,7 +285,7 @@ func (app *App) handleAdminPost(w http.ResponseWriter, r *http.Request, sess Ses
 	tab := r.FormValue("tab")
 
 	switch tab {
-	case "health":
+	case "dashboard":
 		name := r.FormValue("ignoreHealthName")
 		typ := r.FormValue("ignoreHealthType")
 		if name != "" && typ != "" {

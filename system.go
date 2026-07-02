@@ -18,7 +18,7 @@ import (
 // feature permission.
 func (app *App) handleRestSystem(w http.ResponseWriter, r *http.Request) {
 	sess, ok := app.currentSession(r)
-	if !ok || app.permLevel(sess, "health") < 1 {
+	if !ok || (app.permLevel(sess, "health") < 1 && app.permLevel(sess, "dashboard") < 1) {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}

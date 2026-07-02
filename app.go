@@ -66,6 +66,16 @@ type App struct {
 	nextLdapSync  time.Time
 	nextEntraSync time.Time
 	nextRobinSync time.Time
+
+	// startTime is the process boot time, used to compute uptime on the dashboard.
+	startTime time.Time
+
+	// intgHealth caches the most recent hourly connectivity-test result for each
+	// sync integration ("ldap", "entra", "saml", "robin"), rendered on the
+	// dashboard. The whole map is replaced on each run, so readers copy the
+	// reference under the mutex and never mutate it in place.
+	intgHealthMu sync.Mutex
+	intgHealth   map[string]intgHealthResult
 }
 
 // setNextSync records the next scheduled sync time for one integration.

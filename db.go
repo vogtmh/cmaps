@@ -677,6 +677,12 @@ func (db *DB) ListDesks(mapName string) ([]Desk, error) {
 	return desks, err
 }
 
+// ListAllDesks returns every desk/item record across all maps. Used for the
+// dashboard overview counts.
+func (db *DB) ListAllDesks() ([]Desk, error) {
+	return listJSON[Desk](db, bucketDesks, "")
+}
+
 func (db *DB) GetDesk(mapName string, id int) (Desk, bool, error) {
 	return getJSON[Desk](db, bucketDesks, deskKey(mapName, id))
 }

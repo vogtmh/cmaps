@@ -17,7 +17,7 @@ function checkHealthStatus() {
         $("#healthstatus").css('background-color','#333');
       }
       else {
-        var healthstatus = '<a href="admin/?tab=health">'
+        var healthstatus = '<a href="admin/?tab=dashboard">'
                          + '<img src="images/warning.png" style="width:44px;height:44px;" alt="" />'
                          + '</a>'
         document.getElementById('healthstatus').innerHTML = healthstatus

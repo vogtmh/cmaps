@@ -648,3 +648,146 @@
   background: rgba(60, 60, 60, 0.5);
   border-radius: 5px;
 }
+
+/* ============================================================
+   Dashboard — modern overview (scoped under .sync-wrap so it
+   reuses the Sync tab's card/table/badge design system).
+   ============================================================ */
+.dash-wrap { padding-top: 10px; padding-bottom: 30px; }
+
+/* Overview stat tiles */
+.dash-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 14px;
+  margin-bottom: 18px;
+}
+.dash-tile {
+  background: var(--sy-surface);
+  border: 1px solid var(--sy-border);
+  border-radius: 12px;
+  padding: 16px 18px;
+  min-width: 0;
+}
+.dash-tile .dash-num {
+  font-size: 2em;
+  font-weight: 700;
+  line-height: 1.1;
+  color: var(--sy-fg);
+}
+.dash-tile .dash-lbl {
+  margin-top: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  color: var(--sy-muted);
+}
+.dash-tile-ok   { border-left: 4px solid var(--sy-ok); }
+.dash-tile-warn { border-left: 4px solid var(--sy-warn); }
+.dash-tile-warn .dash-num { color: #f0a868; }
+.dash-tile-fail { border-left: 4px solid var(--sy-danger); }
+.dash-tile-fail .dash-num { color: #f08070; }
+
+/* Two-column row for System + Integrations */
+.dash-cols > .sync-card { flex: 1 1 380px; margin-bottom: 18px; }
+
+.dash-muted { color: var(--sy-muted); }
+
+/* Meters (CPU / memory / disk) */
+.dash-meter-row { margin: 0 0 14px; }
+.dash-meter-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+.dash-meter-val { font-weight: 400; color: var(--sy-fg); }
+.dash-meter {
+  height: 10px;
+  border-radius: 6px;
+  background: var(--sy-surface2);
+  overflow: hidden;
+}
+.dash-meter-fill { height: 100%; border-radius: 6px; transition: width 0.4s ease; }
+.dash-meter-fill.ok   { background: var(--sy-ok); }
+.dash-meter-fill.warn { background: var(--sy-warn); }
+.dash-meter-fill.fail { background: var(--sy-danger); }
+
+/* Key/value grid of host facts */
+.dash-kv-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 8px 18px;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--sy-border);
+}
+.dash-kv { display: flex; justify-content: space-between; gap: 10px; font-size: 13px; min-width: 0; }
+.dash-kv-k { color: var(--sy-muted); }
+.dash-kv-v { color: var(--sy-fg); text-align: right; word-break: break-word; }
+
+/* Integration status dots */
+.dash-intg-name { display: flex; align-items: center; gap: 8px; }
+.dash-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; background: var(--sy-off); }
+.dash-dot.ok   { background: var(--sy-ok); box-shadow: 0 0 0 3px var(--sy-ok-bg); }
+.dash-dot.fail { background: var(--sy-danger); box-shadow: 0 0 0 3px rgba(231,76,60,0.18); }
+.dash-dot.warn { background: var(--sy-warn); box-shadow: 0 0 0 3px var(--sy-warn-bg); }
+.dash-dot.off  { background: var(--sy-off); }
+
+/* Visitor bar chart */
+.dash-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  height: 180px;
+  padding-top: 10px;
+}
+.dash-bar-col {
+  flex: 1 1 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  height: 100%;
+  min-width: 0;
+}
+.dash-bar-val { font-size: 12px; color: var(--sy-muted); margin-bottom: 4px; }
+.dash-bar-track {
+  flex: 1;
+  width: 100%;
+  max-width: 46px;
+  display: flex;
+  align-items: flex-end;
+  background: var(--sy-surface2);
+  border-radius: 6px 6px 0 0;
+  overflow: hidden;
+}
+.dash-bar-fill {
+  width: 100%;
+  min-height: 2px;
+  background: var(--sy-accent);
+  border-radius: 6px 6px 0 0;
+  transition: height 0.4s ease;
+}
+.dash-bar-lbl { font-size: 11px; color: var(--sy-muted); margin-top: 6px; }
+
+/* Section heading between the grid and the health detail cards */
+.dash-section { margin: 8px 0 12px; font-size: 1.15em; }
+
+/* Health cards (right column): individual consistency issues */
+.dash-health-empty { color: var(--sy-muted); font-size: 13px; padding: 4px 0 2px; }
+.dash-health-item {
+  border: 1px solid var(--sy-border);
+  border-left: 4px solid var(--sy-warn);
+  border-radius: 8px;
+  padding: 12px 14px;
+  margin-bottom: 10px;
+}
+.dash-health-item:last-child { margin-bottom: 0; }
+.dash-health-item.fail { border-left-color: var(--sy-danger); }
+.dash-health-item-title { font-weight: 700; font-size: 14px; margin: 0 0 5px; }
+.dash-health-item-desc { color: var(--sy-muted); font-size: 12px; line-height: 1.5; margin: 0 0 8px; }
+.dash-health-item-list { color: var(--sy-muted); font-size: 12px; line-height: 1.5; margin: 0 0 10px 16px; padding: 0; }
+.dash-health-actions { display: flex; gap: 8px; flex-wrap: wrap; }

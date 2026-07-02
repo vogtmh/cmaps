@@ -82,11 +82,12 @@ func main() {
 	}
 
 	app := &App{
-		cfg:      cfg,
-		db:       db,
-		sessions: NewSessionStore(),
-		tmpl:     tmpl,
-		staticFS: staticSub,
+		cfg:       cfg,
+		db:        db,
+		sessions:  NewSessionStore(),
+		tmpl:      tmpl,
+		staticFS:  staticSub,
+		startTime: time.Now(),
 	}
 
 	// Backfill newer optional settings so they appear in the admin panel on
@@ -145,6 +146,10 @@ func main() {
 
 	// Background Robin location discovery (no-op until token + organisation set).
 	app.StartRobinLocationScheduler(1 * time.Hour)
+
+	// Hourly connectivity tests for every sync integration (LDAP, EntraID, SAML,
+	// Robin), surfaced on the dashboard. First run shortly after boot.
+	app.startIntegrationHealthScheduler(30*time.Second, time.Hour)
 
 	log.Printf("CompanyMaps 9 listening on %s (data dir: %s)", cfg.ListenAddr, cfg.DataDir)
 	if err := http.ListenAndServe(cfg.ListenAddr, handler); err != nil {
