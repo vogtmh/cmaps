@@ -766,11 +766,14 @@ function showNameplate (deskid, desktype) {
     else {
       var color = '#999';
     }
-    // Robin live-occupancy overlay: keep the standard grey header (the tinted
-    // ball already marks the desk as a Robin reservation) and show a badge.
+    // Directory source badge: LDAP / EntraID / Robin occupancies get a labelled
+    // badge (the harmonized blue ball no longer distinguishes the source itself).
     var robinBadge = '';
-    if (attr.robin == '1') {
-      robinBadge = '<span class="robinbadge">Robin</span>';
+    if (attr.source) {
+      var srcLabel = { ldap: 'LDAP', entraid: 'EntraID', robin: 'Robin' }[attr.source];
+      if (srcLabel) {
+        robinBadge = '<span class="sourcebadge src-' + attr.source + '">' + srcLabel + '</span>';
+      }
     }
     avatarcolor = avatarcolor.replace(/[^,]+(?=\))/, '1.0');
     if (attr.y < 100) {
@@ -1203,11 +1206,14 @@ function showSticky (deskid, desktype, caption) {
     else {
       var color = '#999';
     }
-    // Robin live-occupancy overlay: keep the standard grey header and show a
+    // Directory source badge: LDAP / EntraID / Robin occupancies get a labelled
     // badge next to the copy icon instead of tinting the whole plate.
     var robinBadge = '';
-    if (attr.robin == '1') {
-      robinBadge = '<span class="robinbadge">Robin</span>';
+    if (attr.source) {
+      var srcLabel = { ldap: 'LDAP', entraid: 'EntraID', robin: 'Robin' }[attr.source];
+      if (srcLabel) {
+        robinBadge = '<span class="sourcebadge src-' + attr.source + '">' + srcLabel + '</span>';
+      }
     }
     avatarcolor = avatarcolor.replace(/[^,]+(?=\))/, '1.0');
     deskidstring = "'" + deskid + "'";
@@ -2589,12 +2595,6 @@ function updateDesks(forceRefresh) {
             break;
           }
           deskClass = 'deskball ' + deskType;
-          // Robin live-occupancy overlay: tag the ball with a class so the pink
-          // tint comes from CSS and survives resetColors() (which only clears
-          // inline background-color set by the search highlighter).
-          if (counter.robin == '1') {
-            deskClass += ' robin';
-          }
 
           switch (deskType) {
             case "floor": 

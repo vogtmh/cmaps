@@ -447,7 +447,6 @@ body { overflow: hidden; }
 .m_desk.keycardlock { background-color: rgba(240, 220, 0, 0.7); background-image: url('/images/keycardlock.png'); }
 .m_desk.keylock { background-color: rgba(240, 220, 0, 0.7); background-image: url('/images/keylock.png'); }
 .m_desk.custom { background-color: var(--m-accent); }
-.m_desk.robin { background-color: #a81f6b; }
 .m_desk.highlight {
 	box-shadow: 0 0 0 3px rgba(242,194,0,0.7), 0 0 14px 5px rgba(242,194,0,0.75);
 	z-index: 6;

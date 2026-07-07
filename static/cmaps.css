@@ -1231,26 +1231,29 @@ pre, code, kbd, samp, tt { font-family: inherit; }
     opacity: 1.0;
 }
 
-/* Robin live-occupancy badge shown on overlaid desk plates */
-.robinbadge {
+/* Directory-source badge shown on occupied desk plates (LDAP / EntraID / Robin).
+   Solid black pill for every source; the source is told apart by text color. */
+.sourcebadge {
     position: absolute;
     bottom: 2px;
     height: 30px;
-    line-height: 28px;
+    line-height: 30px;
     padding: 0 12px;
     border-radius: 15px;
-    background: transparent;
-    border: 3px solid #a81f6b;
+    background: #000;
     color: #fff;
     font-size: 14px;
     box-sizing: border-box;
 }
+.sourcebadge.src-robin   { color: #d93e94; }
+.sourcebadge.src-ldap    { color: #6cb6ff; }
+.sourcebadge.src-entraid { color: #7ee787; }
 
 /* Sit the badge just past the desk-number badge on each mirrored plate. */
-.leftnameplate .robinbadge { left: 168px; }
-.rightnameplate .robinbadge { right: 168px; }
+.leftnameplate .sourcebadge { left: 168px; }
+.rightnameplate .sourcebadge { right: 168px; }
 
-/* Footer action row on sticky nameplates: copy, optional report and the Robin
+/* Footer action row on sticky nameplates: copy, optional report and the source
    badge share one flex row next to the desk-number badge. The row is anchored
    at the inner edge and the buttons flow outward, mirrored per plate side. */
 .nameplate_actions {
@@ -1275,7 +1278,7 @@ pre, code, kbd, samp, tt { font-family: inherit; }
 }
 
 /* Inside the action row the badge is a normal flex item, not absolute. */
-.nameplate_actions .robinbadge {
+.nameplate_actions .sourcebadge {
     position: static;
     bottom: auto;
     left: auto;
@@ -2537,14 +2540,6 @@ input.cmn-toggle-round-flat:checked + label:after {
  opacity: 1.0;
  position: absolute;
  z-index: 99;
-}
-
-/* Robin live-occupancy overlay: pink tint via class so it survives the
-   inline-style reset done by resetColors(). Two classes outrank the
-   single-class desk-type colors; the search highlighter's inline style
-   still wins while a match is active. */
-.deskball.robin {
- background-color: #a81f6b;
 }
 
 /* Health highlight: desks flagged by the consistency check (duplicate names)

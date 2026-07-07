@@ -27,7 +27,10 @@ type deskItem struct {
 	Color    string    `json:"color"`
 	Parsed   string    `json:"parsed"`
 	Booked   string    `json:"booked"`
-	Robin    string    `json:"robin,omitempty"`
+	// Source identifies the directory a desk occupancy came from: "ldap",
+	// "entraid" or "robin". Empty for manually placed / non-directory desks.
+	// Drives the harmonized (blue) ball color and the per-source name badge.
+	Source   string    `json:"source,omitempty"`
 	// Config* preserve the underlying STORED desk configuration on synthetic
 	// overlay items (e.g. a Robin-occupied desk is shown as "occupied" with the
 	// live occupant in Empl). The editor uses these to edit the real item instead
@@ -168,7 +171,7 @@ func (app *App) buildMapDesks(mapName, date, search string, vips []VIP, bookings
 					Map: mapName, ID: d.ID, Desktype: "occupied", X: d.X, Y: d.Y,
 					Dsk: d.Desknumber, Empl: rs.Name, Avtr: avtr, Dept: d.Department,
 					Phone: rs.Phone, Mail: rs.Mail, Title: rs.Title, Mobil: rs.Mobile,
-					Booked: booked, Robin: "1", HasAvatar: avatarByUser[strings.ToLower(rs.Userid)],
+					Booked: booked, Source: "robin", HasAvatar: avatarByUser[strings.ToLower(rs.Userid)],
 					ConfigType: d.Desktype, ConfigEmpl: d.Employee, ConfigAvtr: d.Avatar,
 				}
 				app.appendIfMatch(&items, item, search, rs.Name)
@@ -231,7 +234,7 @@ func (app *App) buildMapDesks(mapName, date, search string, vips []VIP, bookings
 					Dsk: d.Desknumber, Empl: d.Employee, Avtr: u.Userid, Dept: d.Department,
 					Fname: u.Givenname, Lname: u.Surname, Phone: u.Telephonenumber, Mail: u.Mail,
 					Title: u.Description, Mobil: u.Mobile, Color: color, Parsed: parsed, Booked: booked,
-					HasAvatar: u.HasAvatar,
+					HasAvatar: u.HasAvatar, Source: "ldap",
 				}
 				app.appendIfMatch(&items, item, search, fullname)
 			}

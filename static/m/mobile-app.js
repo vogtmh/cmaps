@@ -444,7 +444,7 @@
       }
 
       var dot = document.createElement('div');
-      dot.className = 'm_desk ' + info.type + (d.robin == 1 ? ' robin' : '');
+      dot.className = 'm_desk ' + info.type;
       dot.style.left = x + 'px';
       dot.style.top = y + 'px';
       dot.style.width = sizePx + 'px';
