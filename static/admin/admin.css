@@ -846,6 +846,24 @@
 .dash-health-item-list { color: var(--sy-muted); font-size: 12px; line-height: 1.5; margin: 0 0 10px 16px; padding: 0; }
 .dash-health-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 
+/* Ignore-list (health whitelist) management */
+.dash-whitelist-bar { margin-top: 10px; display: flex; justify-content: flex-end; }
+.dash-whitelist-group { margin-bottom: 16px; }
+.dash-whitelist-group:last-child { margin-bottom: 0; }
+.dash-whitelist-title { font-size: 13px; font-weight: 700; margin: 0 0 8px; }
+.dash-whitelist-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border: 1px solid var(--sy-border);
+  border-radius: 8px;
+  padding: 8px 12px;
+  margin-bottom: 8px;
+}
+.dash-whitelist-row:last-child { margin-bottom: 0; }
+.dash-whitelist-name { font-size: 14px; word-break: break-word; }
+
 /* ── Desks tab: per-map occupancy cards ──────────────────── */
 .desk-grid {
   display: grid;

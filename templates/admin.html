@@ -114,6 +114,9 @@
       <div class="sync-col">
         <div id="dashHealthLdap" class="sync-card dash-fade"></div>
         <div id="dashHealthDesks" class="sync-card dash-fade"></div>
+        <div class="dash-whitelist-bar">
+          <button type="button" class="sync-btn sync-btn-sm" onclick="openWhitelistModal()">Manage ignore list&hellip;</button>
+        </div>
       </div>
       {{end}}
     </div>
@@ -121,10 +124,29 @@
   {{if gt .PermHealth 0}}
   <form id="updateWhitelist" name="updateWhitelist" action="?tab=dashboard" method="post">
     <input type="hidden" name="tab" value="dashboard">
-    <input type="hidden" id="ignoreHealthName" name="ignoreHealthName" value="a">
-    <input type="hidden" id="ignoreHealthType" name="ignoreHealthType" value="a">
+    <input type="hidden" id="ignoreHealthName" name="ignoreHealthName" value="">
+    <input type="hidden" id="ignoreHealthType" name="ignoreHealthType" value="">
+    <input type="hidden" id="deleteWhitelistName" name="deleteWhitelistName" value="">
+    <input type="hidden" id="deleteWhitelistType" name="deleteWhitelistType" value="">
     <input type="submit" value="No" style="display:none;">
   </form>
+
+  <!-- Whitelist (ignore list) modal (wrapped in .sync-wrap so the --sy-* theme vars apply) -->
+  <div class="sync-wrap">
+    <div id="whitelistOverlay" class="sync-modal">
+      <div class="sync-modal-box">
+        <div class="sync-modal-head">
+          <h2>Health check ignore list</h2>
+          <button type="button" class="sync-btn sync-btn-sm" onclick="closeWhitelistModal()">Close</button>
+        </div>
+        <div class="sync-modal-content">
+          <p class="sync-card-hint">Entries listed here are excluded from the LDAP and desk consistency
+            checks. Remove an entry to have the corresponding office or desk name reported again.</p>
+          <div id="whitelistBody"></div>
+        </div>
+      </div>
+    </div>
+  </div>
   {{end}}
   <script>
     updateDashboard();

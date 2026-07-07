@@ -116,9 +116,89 @@ function submitWhitelist(WLtype, WLtext) {
   console.log('add to whitelist: '+WLtext+', '+WLtype);
   document.getElementById("ignoreHealthType").value = WLtype;
   document.getElementById("ignoreHealthName").value = WLtext;
+  // Clear the delete fields so this submission is treated as an add.
+  document.getElementById("deleteWhitelistType").value = "";
+  document.getElementById("deleteWhitelistName").value = "";
   // Use trigger() (not the native .submit()) so the delegated AJAX submit
   // handler runs instead of a full page reload.
   $('#updateWhitelist').trigger('submit');
+}
+
+// removeWhitelist deletes an entry from the health-check ignore list. It reuses
+// the same hidden form as submitWhitelist but populates the delete fields, which
+// the server checks before the add fields.
+function removeWhitelist(WLtype, WLtext) {
+  console.log('remove from whitelist: '+WLtext+', '+WLtype);
+  document.getElementById("ignoreHealthType").value = "";
+  document.getElementById("ignoreHealthName").value = "";
+  document.getElementById("deleteWhitelistType").value = WLtype;
+  document.getElementById("deleteWhitelistName").value = WLtext;
+  $('#updateWhitelist').trigger('submit');
+}
+
+// openWhitelistModal shows the ignore-list modal and loads the current entries.
+function openWhitelistModal() {
+  var el = document.getElementById('whitelistOverlay');
+  if (el) { el.style.display = 'block'; }
+  loadWhitelist();
+}
+
+// closeWhitelistModal hides the ignore-list modal.
+function closeWhitelistModal() {
+  var el = document.getElementById('whitelistOverlay');
+  if (el) { el.style.display = 'none'; }
+}
+
+// loadWhitelist fetches the current ignore-list entries (from the same system
+// health endpoint the dashboard already uses) and renders them for editing.
+function loadWhitelist() {
+  var body = document.getElementById('whitelistBody');
+  if (body) { body.innerHTML = '<div class="dash-health-empty">Loading&hellip;</div>'; }
+  $.ajax({
+    url: '../rest/system?healthdetails=1',
+    async: true,
+    type: 'get',
+    dataType: 'JSON',
+    success: function (result) {
+      renderWhitelist(result.ignoredLdap || [], result.ignoredDesks || []);
+    },
+    error: function () {
+      if (body) { body.innerHTML = '<div class="dash-health-empty">Could not load the ignore list.</div>'; }
+    }
+  });
+}
+
+// renderWhitelist builds the ignore-list modal contents: two grouped sections
+// (LDAP offices and desk names) with a Remove button per entry.
+function renderWhitelist(ldap, desks) {
+  var body = document.getElementById('whitelistBody');
+  if (!body) { return; }
+  var html = '';
+  html += whitelistSection('Ignored LDAP offices', 'ldap', ldap);
+  html += whitelistSection('Ignored desk names', 'desks', desks);
+  if (!ldap.length && !desks.length) {
+    html = '<div class="dash-health-empty">The ignore list is empty.</div>';
+  }
+  body.innerHTML = html;
+}
+
+// whitelistSection renders one titled group of ignore-list entries.
+function whitelistSection(title, type, entries) {
+  var rows = '';
+  if (!entries.length) {
+    rows = '<div class="dash-health-empty">None.</div>';
+  } else {
+    for (var i = 0; i < entries.length; i++) {
+      var name = entries[i];
+      rows += '<div class="dash-whitelist-row">'
+        + '<span class="dash-whitelist-name">' + healthEsc(name) + '</span>'
+        + '<a href="javascript:{}" class="sync-btn sync-btn-sm" onclick="removeWhitelist('
+        + healthJsArg(type) + ',' + healthJsArg(name) + ')">Remove</a>'
+        + '</div>';
+    }
+  }
+  return '<div class="dash-whitelist-group"><h3 class="dash-whitelist-title">' + healthEsc(title)
+    + '</h3>' + rows + '</div>';
 }
 
 // healthEsc escapes a string for safe insertion as HTML text/attribute content.

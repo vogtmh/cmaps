@@ -1323,6 +1323,34 @@ func (db *DB) AddWhitelist(e WhitelistEntry) error {
 	})
 }
 
+// DeleteWhitelist removes every whitelist entry matching the given type and
+// text (there may be duplicates). Keys are collected first and deleted after
+// the cursor scan, since bbolt forbids mutating a bucket during iteration.
+func (db *DB) DeleteWhitelist(e WhitelistEntry) error {
+	return db.bolt.Update(func(tx *bolt.Tx) error {
+		bkt := tx.Bucket(bucketWhitelist)
+		var toDelete [][]byte
+		c := bkt.Cursor()
+		for k, v := c.First(); k != nil; k, v = c.Next() {
+			var entry WhitelistEntry
+			if err := json.Unmarshal(v, &entry); err != nil {
+				continue
+			}
+			if entry.Type == e.Type && entry.Text == e.Text {
+				key := make([]byte, len(k))
+				copy(key, k)
+				toDelete = append(toDelete, key)
+			}
+		}
+		for _, k := range toDelete {
+			if err := bkt.Delete(k); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
 // --- LDAP sources (config_ldap) ---
 
 func (db *DB) ListLdapSources() ([]LdapSource, error) {

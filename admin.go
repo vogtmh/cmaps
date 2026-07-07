@@ -288,10 +288,20 @@ func (app *App) handleAdminPost(w http.ResponseWriter, r *http.Request, sess Ses
 
 	switch tab {
 	case "dashboard":
+		if app.permLevel(sess, "health") < 1 {
+			return ""
+		}
+		if delName := r.FormValue("deleteWhitelistName"); delName != "" {
+			delType := r.FormValue("deleteWhitelistType")
+			_ = app.db.DeleteWhitelist(WhitelistEntry{Type: delType, Text: delName})
+			_ = app.db.AuditLog("Health", sess.Username, "Whitelist entry removed ("+delType+": "+delName+")")
+			return "Whitelist entry removed."
+		}
 		name := r.FormValue("ignoreHealthName")
 		typ := r.FormValue("ignoreHealthType")
 		if name != "" && typ != "" {
 			_ = app.db.AddWhitelist(WhitelistEntry{Type: typ, Text: name})
+			_ = app.db.AuditLog("Health", sess.Username, "Whitelist entry added ("+typ+": "+name+")")
 			return "Whitelist updated."
 		}
 
