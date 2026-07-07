@@ -151,6 +151,22 @@ func (s *SessionStore) Delete(token string) {
 	s.mu.Unlock()
 }
 
+// Remap rewrites the Username of every stored session using fn, which returns
+// the new username and whether it changed. It is used by the identifier
+// migration so admins who are already signed in (e.g. via SAML) are not logged
+// out when their map-admin record is re-keyed: permLevel() looks the user up by
+// session Username, so the in-memory sessions must follow the rename.
+func (s *SessionStore) Remap(fn func(username string) (string, bool)) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for token, sess := range s.sessions {
+		if newName, ok := fn(sess.Username); ok && newName != sess.Username {
+			sess.Username = newName
+			s.sessions[token] = sess
+		}
+	}
+}
+
 const sessionCookie = "cmaps_session"
 
 // currentSession returns the Session for the request, if authenticated.

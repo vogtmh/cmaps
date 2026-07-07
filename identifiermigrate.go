@@ -669,6 +669,13 @@ func (app *App) runIdentifierApply(target string) {
 		prog.logf("Map admins: %d re-keyed.", n)
 	}
 
+	// Keep already-authenticated admins signed in: their map-admin record was
+	// just re-keyed, so any active session (notably SAML users, who cannot fall
+	// back to the local admin password) must follow the rename — otherwise
+	// permLevel() can no longer find their user and they are 403'd out, which
+	// stalls the progress poll even though the migration finishes fine.
+	app.sessions.Remap(plan.mapUsername)
+
 	// Avatar files: rename <old>.jpg -> <new>.jpg (disk is only touched now).
 	entries, _ := os.ReadDir(app.cfg.dataPath("avatarcache"))
 	prog.beginPhase(len(entries), "Renaming avatars")
