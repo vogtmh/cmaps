@@ -107,6 +107,30 @@ func (app *App) handleRestUpdate(w http.ResponseWriter, r *http.Request) {
 		status, info, data = strconv.Itoa(id), desknumber, employee
 		_ = app.db.AuditLog("Desks", user, "ID "+status+" updated: Dsk="+desknumber+" Empl="+employee)
 
+	case "move":
+		// Repositioning an existing desk (drag on the map). ONLY the coordinates
+		// change; every other field is preserved from the stored record. A desk
+		// occupied via an overlay (Robin/LDAP) is rendered with the transient
+		// occupant's name/avatar and a synthetic desktype, so writing those back
+		// on a move would bake the occupant into the desk (e.g. turn an addesk
+		// into a localdesk named after whoever happened to sit there). Loading
+		// the stored desk and touching only X/Y avoids that entirely — same
+		// approach as the batch/auto-align update op.
+		if mapName == "" || get("id") == "" || get("x") == "" || get("y") == "" {
+			http.Error(w, "parameters missing", http.StatusBadRequest)
+			return
+		}
+		existing, found, _ := app.db.GetDesk(mapName, id)
+		if !found {
+			http.Error(w, "desk not found", http.StatusNotFound)
+			return
+		}
+		existing.X = x
+		existing.Y = y
+		_ = app.db.PutDesk(existing)
+		status, info, data = strconv.Itoa(id), existing.Desknumber, "moved"
+		_ = app.db.AuditLog("Desks", user, "ID "+status+" moved")
+
 	case "delete":
 		if mapName == "" || get("id") == "" {
 			http.Error(w, "parameters missing", http.StatusBadRequest)

@@ -943,23 +943,20 @@ function dragElement(elmnt, deskType) {
       //console.log('Item has been moved');
       attr = result_old.desks.find(o => Object.entries(o).find(([k, value]) => k === 'id' && value === elmnt.id) !== undefined);
       itemid = attr.id;
-      itemdesktype = attr.desktype;
       itemx = parseInt(attr.x)+Math.round(diffItemX*itemscale);
       itemy = parseInt(attr.y)+Math.round(diffItemY*itemscale);
       // Floor markers are locked to the rail X regardless of horizontal drag.
       if (deskType === 'floor') { itemx = FLOOR_RAIL_X; }
-      itemdsk = attr.dsk;
-      itemempl = attr.empl;
-      itemavtr = attr.avtr;
-      itemdept = attr.dept;
-      if (itemavtr == '') {itemavtr = '-'}
-      if (itemdept == '') {itemdept = '- none -'}
 
+      // A move must NOT resend desktype/employee/avatar: for a desk occupied via
+      // an overlay (Robin/LDAP) those hold the transient occupant, and writing
+      // them back would bake that person into the stored desk. mode=move only
+      // repositions the stored record, preserving every other field server-side.
       $.ajax({
         url: 'rest/update',
         async: true, 
         type: 'get',
-        data: {token: token, mode: 'update', map: mapname, id: itemid, desktype: itemdesktype, x: itemx, y:itemy, desknumber:itemdsk, employee:itemempl, avatar: itemavtr, department: itemdept, user: username},
+        data: {token: token, mode: 'move', map: mapname, id: itemid, x: itemx, y:itemy, user: username},
         dataType: 'JSON',
         success: function(result){
           updateDesks();
