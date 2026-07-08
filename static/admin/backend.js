@@ -149,6 +149,48 @@ function closeWhitelistModal() {
   if (el) { el.style.display = 'none'; }
 }
 
+// openSourceSeats shows the popup listing every person a directory source
+// effectively seats right now (under the current priority/dedup/assign
+// settings), ordered by name. Opened from the "Seats filled" count in the
+// Sync > General priority list.
+function openSourceSeats(ref) {
+  var overlay = document.getElementById('sourceSeatsOverlay');
+  var title = document.getElementById('sourceSeatsTitle');
+  var body = document.getElementById('sourceSeatsBody');
+  if (!overlay || !body) { return; }
+  if (title) { title.textContent = 'Assigned seats'; }
+  body.innerHTML = '<div class="sync-empty">Loading&hellip;</div>';
+  overlay.style.display = 'block';
+  $.ajax({
+    url: '../rest/sourceseats?ref=' + encodeURIComponent(ref),
+    type: 'get',
+    dataType: 'json',
+    success: function (data) {
+      if (title) { title.textContent = 'Assigned seats \u2014 ' + (data.description || ref) + ' (' + data.count + ')'; }
+      if (!data.seats || !data.seats.length) {
+        body.innerHTML = '<div class="sync-empty">This source does not effectively fill any seat right now.</div>';
+        return;
+      }
+      var html = '<table class="sync-table"><thead><tr><th>Name</th><th>Map</th><th>Desk</th></tr></thead><tbody>';
+      for (var i = 0; i < data.seats.length; i++) {
+        var s = data.seats[i];
+        html += '<tr><td>' + esc(s.name || '\u2014') + '</td><td>' + esc(s.map) + '</td><td><span class="sync-badge sync-badge-ok">' + esc(s.desk) + '</span></td></tr>';
+      }
+      html += '</tbody></table>';
+      body.innerHTML = html;
+    },
+    error: function () {
+      body.innerHTML = '<div class="sync-empty">Could not load the assigned seats.</div>';
+    }
+  });
+}
+
+// closeSourceSeats hides the assigned-seats popup.
+function closeSourceSeats() {
+  var overlay = document.getElementById('sourceSeatsOverlay');
+  if (overlay) { overlay.style.display = 'none'; }
+}
+
 // loadWhitelist fetches the current ignore-list entries (from the same system
 // health endpoint the dashboard already uses) and renders them for editing.
 function loadWhitelist() {

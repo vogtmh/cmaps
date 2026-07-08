@@ -73,6 +73,7 @@ func (app *App) registerRESTRoutes(mux *http.ServeMux) {
 	rest("/rest/ldap/sync", app.handleRestLdapSync)
 	rest("/rest/ldap/progress", app.handleRestLdapProgress)
 	rest("/rest/ldap/test", app.handleRestLdapTest)
+	rest("/rest/sourceseats", app.handleRestSourceSeats)
 	rest("/rest/entra/sync", app.handleRestEntraSync)
 	rest("/rest/entra/progress", app.handleRestEntraProgress)
 	rest("/rest/entra/test", app.handleRestEntraTest)

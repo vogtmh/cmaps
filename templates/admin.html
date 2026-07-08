@@ -636,7 +636,7 @@
             </td>
             <td>{{.Description}}</td>
             <td>{{if .Disabled}}<span class="sync-badge sync-badge-warn">Disabled</span>{{else}}<span class="sync-badge sync-badge-ok">Enabled</span>{{end}}</td>
-            <td class="sync-td-min" style="text-align:center;font-weight:600;">{{if .Assign}}{{.PopulatedSeats}}{{else}}<span class="sync-status-text">&mdash;</span>{{end}}</td>
+            <td class="sync-td-min" style="text-align:center;font-weight:600;">{{if .Assign}}{{if .PopulatedSeats}}<a href="#" onclick="openSourceSeats('{{.Ref}}');return false;" title="Show the people this source fills">{{.PopulatedSeats}}</a>{{else}}0{{end}}{{else}}<span class="sync-status-text">&mdash;</span>{{end}}</td>
             <td class="sync-td-min" style="text-align:center;">
               <form action="?tab=ldap&amp;sub=general" method="post" style="margin:0;">
                 <input type="hidden" name="tab" value="ldap">
@@ -664,6 +664,20 @@
       {{else}}
       <div class="sync-empty">No directory sources configured yet. Add an LDAP or EntraID connection, or set up Robin.</div>
       {{end}}
+    </div>
+    <!-- Effectively-assigned-seats popup (wrapped in .sync-wrap so the --sy-* theme vars apply) -->
+    <div class="sync-wrap">
+      <div id="sourceSeatsOverlay" class="sync-modal">
+        <div class="sync-modal-box">
+          <div class="sync-modal-head">
+            <h2 id="sourceSeatsTitle">Assigned seats</h2>
+            <button type="button" class="sync-btn sync-btn-sm" onclick="closeSourceSeats()">Close</button>
+          </div>
+          <div class="sync-modal-content">
+            <div id="sourceSeatsBody"></div>
+          </div>
+        </div>
+      </div>
     </div>
     {{end}}
     <div class="sync-card" id="identifierSelectCard" data-current="{{.IdentifierMode}}">

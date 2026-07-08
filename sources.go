@@ -2,6 +2,8 @@ package main
 
 import (
 	"fmt"
+	"net/http"
+	"sort"
 	"strings"
 )
 
@@ -423,5 +425,82 @@ func (app *App) sourceSeatCounts() map[string]int {
 		}
 	}
 	return counts
+}
+
+// sourceSeat is one effectively assigned seat, for the "seats filled" popup.
+type sourceSeat struct {
+	Name string `json:"name"`
+	Map  string `json:"map"`
+	Desk string `json:"desk"`
+}
+
+// sourceSeatDetails returns, per source ref, the people that source effectively
+// seats across all published maps (same engine used to render the maps), sorted
+// by name. Powers the popup opened from the admin priority list's seat count.
+func (app *App) sourceSeatDetails() map[string][]sourceSeat {
+	out := map[string][]sourceSeat{}
+	avatarIdx := app.buildAvatarIndex()
+	maps, _ := app.db.ListMaps()
+	for _, m := range maps {
+		if m.Published == "no" || m.Mapname == "overview" {
+			continue
+		}
+		desks, _ := app.db.ListDesks(m.Mapname)
+		occupancy := app.assignMapOccupancy(m.Mapname, desks, avatarIdx)
+		for _, occ := range occupancy {
+			for _, o := range occ {
+				name := o.name
+				if name == "" {
+					name = strings.TrimSpace(o.fname + " " + o.lname)
+				}
+				if name == "" {
+					name = o.mail
+				}
+				out[o.sourceRef] = append(out[o.sourceRef], sourceSeat{Name: name, Map: m.Mapname, Desk: o.desknumber})
+			}
+		}
+	}
+	for ref := range out {
+		s := out[ref]
+		sort.Slice(s, func(i, j int) bool {
+			ni, nj := strings.ToLower(s[i].Name), strings.ToLower(s[j].Name)
+			if ni != nj {
+				return ni < nj
+			}
+			if s[i].Map != s[j].Map {
+				return s[i].Map < s[j].Map
+			}
+			return s[i].Desk < s[j].Desk
+		})
+	}
+	return out
+}
+
+// handleRestSourceSeats serves /rest/sourceseats?ref=<ref>, returning the people
+// a single source effectively seats right now, sorted by name.
+func (app *App) handleRestSourceSeats(w http.ResponseWriter, r *http.Request) {
+	sess, ok := app.currentSession(r)
+	if !ok || app.permLevel(sess, "ldap") < 1 {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	ref := r.URL.Query().Get("ref")
+	seats := app.sourceSeatDetails()[ref]
+	if seats == nil {
+		seats = []sourceSeat{}
+	}
+	desc := ref
+	for _, s := range app.listUnifiedSources() {
+		if s.Ref == ref {
+			desc = s.Description
+			break
+		}
+	}
+	writeJSON(w, struct {
+		Ref         string       `json:"ref"`
+		Description string       `json:"description"`
+		Count       int          `json:"count"`
+		Seats       []sourceSeat `json:"seats"`
+	}{Ref: ref, Description: desc, Count: len(seats), Seats: seats})
 }
 
