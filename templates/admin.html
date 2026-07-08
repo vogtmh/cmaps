@@ -606,6 +606,7 @@
             <th class="sync-td-min">Priority</th>
             <th class="sync-td-min">Order</th>
             <th>Type</th><th>Source</th><th>Sync</th>
+            <th class="sync-td-min">Seats filled</th>
             <th class="sync-td-min">Assign</th>
             <th class="sync-td-min">Keep duplicates</th>
           </tr>
@@ -635,6 +636,7 @@
             </td>
             <td>{{.Description}}</td>
             <td>{{if .Disabled}}<span class="sync-badge sync-badge-warn">Disabled</span>{{else}}<span class="sync-badge sync-badge-ok">Enabled</span>{{end}}</td>
+            <td class="sync-td-min" style="text-align:center;font-weight:600;">{{if .Assign}}{{.PopulatedSeats}}{{else}}<span class="sync-status-text">&mdash;</span>{{end}}</td>
             <td class="sync-td-min" style="text-align:center;">
               <form action="?tab=ldap&amp;sub=general" method="post" style="margin:0;">
                 <input type="hidden" name="tab" value="ldap">

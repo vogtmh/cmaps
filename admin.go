@@ -1160,6 +1160,14 @@ func (app *App) buildAdminData(r *http.Request, sess Session, tab, msg string) a
 		d.IdentifierMode = app.identifierMode()
 		d.LdapSources, _ = app.db.ListLdapSources()
 		d.UnifiedSources = app.listUnifiedSources()
+		// Effective seat counts under the current priority/dedup/assign settings,
+		// recomputed on every render so moving/toggling a source updates them.
+		if len(d.UnifiedSources) > 0 {
+			counts := app.sourceSeatCounts()
+			for i := range d.UnifiedSources {
+				d.UnifiedSources[i].PopulatedSeats = counts[d.UnifiedSources[i].Ref]
+			}
+		}
 		d.RobinSpaces, _ = app.db.ListRobinSpaces()
 		sort.Slice(d.RobinSpaces, func(i, j int) bool { return d.RobinSpaces[i].Spacename < d.RobinSpaces[j].Spacename })
 		d.RobinOrg = app.db.GetRobinSetting("robinOrganisation")

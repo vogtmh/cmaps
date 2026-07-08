@@ -44,6 +44,10 @@ type UnifiedSource struct {
 	Assign         bool // participates in desk assignment
 	KeepDuplicates bool
 	Priority       int // 1-based, for display only
+	// PopulatedSeats is how many desks this source effectively fills across all
+	// published maps under the CURRENT priority/dedup/assign settings. Filled in
+	// only for the admin display (see sourceSeatCounts); the engine ignores it.
+	PopulatedSeats int
 }
 
 var metaSourceOrder = []byte("directorySourceOrder")
@@ -224,6 +228,7 @@ func (app *App) defaultSourceOrder(liveRefs []string) []SourceRule {
 // LDAP/EntraID mirror shape and the Robin occupancy shape.
 type deskOccupant struct {
 	sourceType string // "ldap" | "entra" | "robin"
+	sourceRef  string // owning source ref ("ldap:<id>"/"entra:<id>"/"robin")
 	desknumber string // canonical desknumber (as stored on the desk)
 	userid     string
 	mail       string
@@ -301,6 +306,7 @@ func (app *App) sourceOccupancy(src UnifiedSource, mapName string, deskByNum map
 			}
 			out = append(out, deskOccupant{
 				sourceType: src.Type,
+				sourceRef:  src.Ref,
 				desknumber: d.Desknumber,
 				userid:     u.Userid,
 				mail:       u.Mail,
@@ -326,6 +332,7 @@ func (app *App) sourceOccupancy(src UnifiedSource, mapName string, deskByNum map
 			}
 			out = append(out, deskOccupant{
 				sourceType: "robin",
+				sourceRef:  src.Ref,
 				desknumber: d.Desknumber,
 				userid:     s.Userid,
 				mail:       s.Mail,
@@ -392,3 +399,29 @@ func (app *App) assignMapOccupancy(mapName string, desks []Desk, avatarByUser ma
 	}
 	return result
 }
+
+// sourceSeatCounts returns, per source ref, how many desks that source
+// effectively fills across all published maps under the current
+// priority/dedup/assign settings. It runs the same assignment engine used to
+// render the maps, so the numbers match exactly what appears on screen. Used by
+// the admin priority list; it is recomputed on every tab render (including after
+// a move/toggle), so the counts always reflect the latest order.
+func (app *App) sourceSeatCounts() map[string]int {
+	counts := map[string]int{}
+	avatarIdx := app.buildAvatarIndex()
+	maps, _ := app.db.ListMaps()
+	for _, m := range maps {
+		if m.Published == "no" || m.Mapname == "overview" {
+			continue
+		}
+		desks, _ := app.db.ListDesks(m.Mapname)
+		occupancy := app.assignMapOccupancy(m.Mapname, desks, avatarIdx)
+		for _, occ := range occupancy {
+			for _, o := range occ {
+				counts[o.sourceRef]++
+			}
+		}
+	}
+	return counts
+}
+
