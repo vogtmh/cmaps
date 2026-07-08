@@ -585,6 +585,85 @@
 
   {{if gt .PermAdminpanel 0}}
   <div id="syncsub_general" class="syncsub" style="display:none;">
+    {{if gt .PermLdap 1}}
+    <div class="sync-card">
+      <div class="sync-card-head">
+        <h2 class="sync-card-title">Directory sources &amp; priority</h2>
+      </div>
+      <p class="sync-card-hint">
+        Every configured directory source (each LDAP and EntraID connection, plus Robin) fills desks in
+        priority order &mdash; the source at the top wins first, then lower ones fill the seats that are still
+        free. This is decided while the map is drawn, so reordering takes effect immediately with no resync.
+        <b>Assign</b> lets a source place people on desks (turn it off to keep syncing the source but exclude it
+        from the map). <b>Keep duplicates</b> lets a lower-priority source show a person again on the same map
+        even when a higher-priority source already placed them elsewhere; it never overwrites a desk a
+        higher-priority source already owns.
+      </p>
+      {{if .UnifiedSources}}
+      <table class="sync-table">
+        <thead>
+          <tr>
+            <th class="sync-td-min">Priority</th>
+            <th class="sync-td-min">Order</th>
+            <th>Type</th><th>Source</th><th>Sync</th>
+            <th class="sync-td-min">Assign</th>
+            <th class="sync-td-min">Keep duplicates</th>
+          </tr>
+        </thead>
+        <tbody>
+        {{range .UnifiedSources}}
+          <tr>
+            <td class="sync-td-min" style="text-align:center;font-weight:600;">{{.Priority}}</td>
+            <td class="sync-td-min">
+              <div style="display:flex; gap:4px; justify-content:center;">
+                <form action="?tab=ldap&amp;sub=general" method="post" style="margin:0;">
+                  <input type="hidden" name="tab" value="ldap">
+                  <input type="hidden" name="moveSourceUp" value="{{.Ref}}">
+                  <button type="submit" class="sync-btn sync-btn-sm" title="Raise priority"{{if eq .Priority 1}} disabled{{end}}>&#9650;</button>
+                </form>
+                <form action="?tab=ldap&amp;sub=general" method="post" style="margin:0;">
+                  <input type="hidden" name="tab" value="ldap">
+                  <input type="hidden" name="moveSourceDown" value="{{.Ref}}">
+                  <button type="submit" class="sync-btn sync-btn-sm" title="Lower priority"{{if eq .Priority (len $.UnifiedSources)}} disabled{{end}}>&#9660;</button>
+                </form>
+              </div>
+            </td>
+            <td>
+              {{if eq .Type "ldap"}}<span class="sync-badge sync-badge-accent">LDAP</span>
+              {{else if eq .Type "entra"}}<span class="sync-badge sync-badge-accent">EntraID</span>
+              {{else}}<span class="sync-badge sync-badge-accent">Robin</span>{{end}}
+            </td>
+            <td>{{.Description}}</td>
+            <td>{{if .Disabled}}<span class="sync-badge sync-badge-warn">Disabled</span>{{else}}<span class="sync-badge sync-badge-ok">Enabled</span>{{end}}</td>
+            <td class="sync-td-min" style="text-align:center;">
+              <form action="?tab=ldap&amp;sub=general" method="post" style="margin:0;">
+                <input type="hidden" name="tab" value="ldap">
+                <input type="hidden" name="toggleSourceAssign" value="{{.Ref}}">
+                <label class="sync-toggle" title="Place this source's people on desks">
+                  <input type="checkbox" name="sourceAssign" value="1" {{if .Assign}}checked{{end}} onchange="submitAdminForm(this.form)">
+                  <span class="sync-toggle-slider"></span>
+                </label>
+              </form>
+            </td>
+            <td class="sync-td-min" style="text-align:center;">
+              <form action="?tab=ldap&amp;sub=general" method="post" style="margin:0;">
+                <input type="hidden" name="tab" value="ldap">
+                <input type="hidden" name="toggleSourceKeepDup" value="{{.Ref}}">
+                <label class="sync-toggle" title="Allow this source to show a person again on the same map">
+                  <input type="checkbox" name="sourceKeepDup" value="1" {{if .KeepDuplicates}}checked{{end}} onchange="submitAdminForm(this.form)"{{if not .Assign}} disabled{{end}}>
+                  <span class="sync-toggle-slider"></span>
+                </label>
+              </form>
+            </td>
+          </tr>
+        {{end}}
+        </tbody>
+      </table>
+      {{else}}
+      <div class="sync-empty">No directory sources configured yet. Add an LDAP or EntraID connection, or set up Robin.</div>
+      {{end}}
+    </div>
+    {{end}}
     <div class="sync-card" id="identifierSelectCard" data-current="{{.IdentifierMode}}">
       <div class="sync-card-head">
         <h2 class="sync-card-title">Employee identifier</h2>
@@ -1218,7 +1297,7 @@
       </div>
 
       <div id="robinRes_check" class="robin-rpanel" style="display:none;">
-        <p class="sync-card-hint" style="margin-top:0;">Compares the cached AD mirror with the cached Robin desk occupancy &mdash; no sync is triggered, this just shows how the two data sets overlap on the map. Current overlay mode: <strong>{{.RobinDeskMode}}</strong>.</p>
+        <p class="sync-card-hint" style="margin-top:0;">Compares the cached AD mirror with the cached Robin desk occupancy &mdash; no sync is triggered, this just shows how the two data sets overlap on the map. Display priority between sources is configured under <strong>Sync &rarr; General</strong>.</p>
         <div class="sync-summary">
           <div class="sync-summary-item"><span class="sync-summary-num" style="color:var(--sy-ok);">{{len .RobinAdSameDesk}}</span><span class="sync-summary-lbl">Same desk, same person</span></div>
           <div class="sync-summary-item"><span class="sync-summary-num" style="color:var(--sy-warn);">{{len .RobinAdDuplicates}}</span><span class="sync-summary-lbl">Same person, two desks</span></div>
@@ -1275,17 +1354,11 @@
         <input type="hidden" name="tab" value="ldap">
         <input type="hidden" name="saveRobinOptions" value="1">
         <div class="sync-field">
-          <label class="sync-label">Show Robin desk reservations</label>
-          <div style="display:flex; align-items:flex-start; gap:16px; flex-wrap:wrap;">
-            <select class="sync-select" name="robinDeskMode" id="robinDeskModeSelect" style="max-width:280px; flex:0 0 auto;" onchange="updateRobinDeskModeDesc()">
-              <option value="off"{{if eq .RobinDeskMode "off"}} selected{{end}}>Off</option>
-              <option value="sync"{{if eq .RobinDeskMode "sync"}} selected{{end}}>Sync only, don&rsquo;t display</option>
-              <option value="unused"{{if eq .RobinDeskMode "unused"}} selected{{end}}>Unused desks only</option>
-              <option value="all"{{if eq .RobinDeskMode "all"}} selected{{end}}>All desks</option>
-              <option value="allclear"{{if eq .RobinDeskMode "allclear"}} selected{{end}}>All desks and clear duplicates</option>
-            </select>
-            <p class="sync-card-hint" id="robinDeskModeDesc" style="flex:1 1 240px; min-width:240px; margin:0; align-self:center;">{{if eq .RobinDeskMode "sync"}}Keeps the occupancy cache fresh without overlaying anything, so you can switch to a display mode later without waiting for a sync.{{else if eq .RobinDeskMode "unused"}}Overlays only desks that have no assigned employee and no native booking.{{else if eq .RobinDeskMode "all"}}Overlays every desk that is occupied in Robin right now, on top of the native assignments.{{else if eq .RobinDeskMode "allclear"}}Like &ldquo;All desks&rdquo;, but also hides a person&rsquo;s AD-assigned desk when Robin has them booked on a different desk, so they never appear twice on the same map.{{else}}Robin desk occupancy is neither synced nor shown on the map.{{end}}</p>
+          <div class="sync-toggle-row">
+            <label class="sync-toggle"><input type="checkbox" name="robinDeskSync" value="1"{{if ne .RobinDeskMode "off"}} checked{{end}}><span class="sync-toggle-slider"></span></label>
+            <span class="sync-toggle-label">Sync Robin desk reservations</span>
           </div>
+          <p class="sync-card-hint" style="margin:6px 0 0;">Keeps a local cache of who is sitting where in Robin right now. Whether these reservations are shown on the map &mdash; and at what priority relative to LDAP/EntraID &mdash; is configured under <b>Sync &rarr; General</b>. Turn this off to stop polling desk occupancy entirely (meeting rooms are unaffected).</p>
         </div>
         <div class="sync-field" style="margin-top:14px;">
           <div class="sync-toggle-row">

@@ -60,7 +60,7 @@ func (app *App) handleRestDesks(w http.ResponseWriter, r *http.Request) {
 
 	vips, _ := app.db.ListVips()
 	bookings, _ := app.db.ListBookings()
-	ldap, _ := app.db.ListLdap()
+	avatarByUser := app.buildAvatarIndex()
 
 	out := struct {
 		Desks []deskItem `json:"desks"`
@@ -71,7 +71,7 @@ func (app *App) handleRestDesks(w http.ResponseWriter, r *http.Request) {
 		if date == "" {
 			date = app.db.MapToday(mapName)
 		}
-		out.Desks = append(out.Desks, app.buildMapDesks(mapName, date, search, vips, bookings, ldap)...)
+		out.Desks = append(out.Desks, app.buildMapDesks(mapName, date, search, vips, bookings, avatarByUser)...)
 		writeJSON(w, out)
 		return
 	}
@@ -86,41 +86,46 @@ func (app *App) handleRestDesks(w http.ResponseWriter, r *http.Request) {
 		if date == "" {
 			date = app.db.MapToday(m.Mapname)
 		}
-		out.Desks = append(out.Desks, app.buildMapDesks(m.Mapname, date, search, vips, bookings, ldap)...)
+		out.Desks = append(out.Desks, app.buildMapDesks(m.Mapname, date, search, vips, bookings, avatarByUser)...)
 	}
 	writeJSON(w, out)
 }
 
-// buildMapDesks expands one map's desks into output items, joining AD-mirrored
-// (addesk) desks against the LDAP mirror and applying VIP border colors.
-func (app *App) buildMapDesks(mapName, date, search string, vips []VIP, bookings []Booking, ldap []LdapUser) []deskItem {
+// buildAvatarIndex returns a lowercased-userid -> hasAvatar map spanning both
+// the LDAP and EntraID combined mirrors (where the sync sets the HasAvatar
+// flag). The per-source mirrors do not carry that flag, so occupancy from any
+// source resolves its avatar availability through this shared index.
+func (app *App) buildAvatarIndex() map[string]bool {
+	idx := map[string]bool{}
+	add := func(users []LdapUser) {
+		for _, u := range users {
+			if u.HasAvatar {
+				idx[strings.ToLower(strings.TrimSpace(u.Userid))] = true
+			}
+		}
+	}
+	ldap, _ := app.db.ListLdap()
+	add(ldap)
+	entra, _ := app.db.ListEntraLdap()
+	add(entra)
+	return idx
+}
+
+// buildMapDesks expands one map's desks into output items. Desk occupancy is
+// resolved by the unified, priority-ordered source engine (assignMapOccupancy):
+// each configured source (LDAP/EntraID configs and Robin) fills desks in
+// priority order, higher-priority sources own a desk outright and the per-source
+// "keep duplicates" flag decides whether a lower-priority source may show a
+// person again on the same map. VIP border colors and bookings are then applied.
+func (app *App) buildMapDesks(mapName, date, search string, vips []VIP, bookings []Booking, avatarByUser map[string]bool) []deskItem {
 	desks, _ := app.db.ListDesks(mapName)
 	var items []deskItem
 
-	// Robin live-occupancy overlay (kept fully separate from native booking).
-	// Empty unless the overlay is enabled and Robin reports occupied desks for
-	// this map; free desks are therefore never affected.
-	robinMode := app.db.GetRobinSetting("robinDeskMode")
-	robinStatus := map[string]RobinDeskStatus{}
-	if app.robinEnabled() && (robinMode == "all" || robinMode == "unused" || robinMode == "allclear") {
-		sts, _ := app.db.ListRobinDeskStatus(mapName)
-		for _, s := range sts {
-			robinStatus[strings.ToLower(strings.TrimSpace(s.Desknumber))] = s
-		}
-	}
-
-	// Per-user avatar availability (from the DB flag set during sync) so desks
-	// for people without a cached avatar can point at a single shared placeholder.
-	avatarByUser := map[string]bool{}
-	for _, u := range ldap {
-		if u.HasAvatar {
-			avatarByUser[strings.ToLower(u.Userid)] = true
-		}
-	}
+	occupancy := app.assignMapOccupancy(mapName, desks, avatarByUser)
 
 	for _, d := range desks {
 		// Booking lookup for this desk on the given date.
-		var booked string = "0"
+		var booked = "0"
 		var bd *bookData
 		for _, b := range bookings {
 			if b.Date == date && b.Map == mapName && b.Desk == d.Desknumber {
@@ -129,115 +134,65 @@ func (app *App) buildMapDesks(mapName, date, search string, vips []VIP, bookings
 			}
 		}
 
-		// Robin overlay: a desk occupied in Robin right now is shown as occupied,
-		// overriding its native state (including multi-user shared desks, which
-		// collapse to a single occupied item). "all" overlays any occupied desk;
-		// "unused" only overlays desks with no native occupant and no booking.
-		if rs, ok := robinStatus[strings.ToLower(strings.TrimSpace(d.Desknumber))]; ok {
-			show := robinMode == "all" || robinMode == "allclear"
-			if robinMode == "unused" {
-				hasUser := strings.TrimSpace(d.Employee) != ""
-				if d.Desktype == "addesk" {
-					hasUser = false
-					for _, u := range ldap {
-						if u.Office == d.Desknumber {
-							hasUser = true
-							break
-						}
-					}
-				}
-				show = !hasUser && booked == "0"
-			}
-			// If Robin reports the very same person who is already the AD-mirrored
-			// occupant of this desk, the overlay would be redundant — leave the
-			// native addesk untouched. A different Robin occupant still overrides.
-			if show && d.Desktype == "addesk" {
-				for _, u := range ldap {
-					if u.Office != d.Desknumber {
-						continue
-					}
-					if sameRobinPerson(rs, u) {
-						show = false
-						break
-					}
+		occ := occupancy[strings.ToLower(strings.TrimSpace(d.Desknumber))]
+		if len(occ) > 0 {
+			// All occupants of a desk come from the same (winning) source. A
+			// directory occupant (LDAP/EntraID, carries first/last name) renders
+			// as the native addesk/shareddesk; a Robin occupant (display name
+			// only) renders as an "occupied" overlay that preserves the desk's
+			// stored config for the editor.
+			directory := occ[0].sourceType == "ldap" || occ[0].sourceType == "entra"
+			desktype := "occupied"
+			if directory {
+				desktype = "addesk"
+				if len(occ) > 1 {
+					desktype = "shareddesk"
 				}
 			}
-			if show {
-				avtr := rs.Userid
+			for _, o := range occ {
+				avtr := o.userid
 				if avtr == "" {
 					avtr = "noavatar"
 				}
-				item := deskItem{
-					Map: mapName, ID: d.ID, Desktype: "occupied", X: d.X, Y: d.Y,
-					Dsk: d.Desknumber, Empl: rs.Name, Avtr: avtr, Dept: d.Department,
-					Phone: rs.Phone, Mail: rs.Mail, Title: rs.Title, Mobil: rs.Mobile,
-					Booked: booked, Source: "robin", HasAvatar: avatarByUser[strings.ToLower(rs.Userid)],
-					ConfigType: d.Desktype, ConfigEmpl: d.Employee, ConfigAvtr: d.Avatar,
-				}
-				app.appendIfMatch(&items, item, search, rs.Name)
-				continue
-			}
-		}
-
-		if d.Desktype == "addesk" {
-			// Collect up to 4 mirrored users seated at this desk.
-			var matches []LdapUser
-			for _, u := range ldap {
-				if u.Office == d.Desknumber {
-					matches = append(matches, u)
-					if len(matches) >= 4 {
-						break
-					}
-				}
-			}
-			// "All desks, clear duplicates": drop an AD placement when Robin has
-			// the same person booked on a *different* desk on this map, so they
-			// appear only at the Robin desk instead of on both.
-			if robinMode == "allclear" && len(matches) > 0 {
-				dn := strings.ToLower(strings.TrimSpace(d.Desknumber))
-				kept := matches[:0]
-				for _, u := range matches {
-					moved := false
-					for _, rs := range robinStatus {
-						if strings.ToLower(strings.TrimSpace(rs.Desknumber)) == dn {
-							continue
-						}
-						if sameRobinPerson(rs, u) {
-							moved = true
-							break
-						}
-					}
-					if !moved {
-						kept = append(kept, u)
-					}
-				}
-				matches = kept
-			}
-			if len(matches) == 0 {
-				item := deskItem{
-					Map: mapName, ID: d.ID, Desktype: "addesk", X: d.X, Y: d.Y,
-					Dsk: d.Desknumber, Empl: d.Employee, Avtr: d.Avatar, Dept: d.Department,
-					Booked: booked, HasAvatar: true,
-				}
-				app.appendIfMatch(&items, item, search, "")
-				continue
-			}
-			desktype := "addesk"
-			if len(matches) > 1 {
-				desktype = "shareddesk"
-			}
-			for _, u := range matches {
-				fullname := strings.TrimSpace(u.Givenname + " " + u.Surname)
-				color, parsed := vipColor(u.Description, vips)
+				fullname := strings.TrimSpace(o.fname + " " + o.lname)
 				item := deskItem{
 					Map: mapName, ID: d.ID, Desktype: desktype, X: d.X, Y: d.Y,
-					Dsk: d.Desknumber, Empl: d.Employee, Avtr: u.Userid, Dept: d.Department,
-					Fname: u.Givenname, Lname: u.Surname, Phone: u.Telephonenumber, Mail: u.Mail,
-					Title: u.Description, Mobil: u.Mobile, Color: color, Parsed: parsed, Booked: booked,
-					HasAvatar: u.HasAvatar, Source: "ldap",
+					Dsk: d.Desknumber, Avtr: avtr, Dept: d.Department,
+					Fname: o.fname, Lname: o.lname, Phone: o.phone, Mail: o.mail,
+					Title: o.title, Mobil: o.mobile, Booked: booked,
+					HasAvatar: o.hasAvatar, Source: sourceLabel(o.sourceType),
 				}
-				app.appendIfMatch(&items, item, search, fullname)
+				if directory {
+					item.Empl = d.Employee
+					item.Color, item.Parsed = vipColor(o.title, vips)
+				} else {
+					// Robin overlay: show the live occupant and keep the stored
+					// desk configuration so the editor edits the real item.
+					item.Empl = o.name
+					if item.Empl == "" {
+						item.Empl = fullname
+					}
+					item.ConfigType = d.Desktype
+					item.ConfigEmpl = d.Employee
+					item.ConfigAvtr = d.Avatar
+				}
+				searchName := o.name
+				if searchName == "" {
+					searchName = fullname
+				}
+				app.appendIfMatch(&items, item, search, searchName)
 			}
+			continue
+		}
+
+		// Empty AD-mirrored desk: keep the stored placeholder (renders as free).
+		if d.Desktype == "addesk" {
+			item := deskItem{
+				Map: mapName, ID: d.ID, Desktype: "addesk", X: d.X, Y: d.Y,
+				Dsk: d.Desknumber, Empl: d.Employee, Avtr: d.Avatar, Dept: d.Department,
+				Booked: booked, HasAvatar: true,
+			}
+			app.appendIfMatch(&items, item, search, "")
 			continue
 		}
 
@@ -255,6 +210,21 @@ func (app *App) buildMapDesks(mapName, date, search string, vips []VIP, bookings
 	}
 	return items
 }
+
+// sourceLabel maps an internal source type to the label the client uses for the
+// per-source name badge ("ldap"/"entraid"/"robin").
+func sourceLabel(sourceType string) string {
+	switch sourceType {
+	case "ldap":
+		return "ldap"
+	case "entra":
+		return "entraid"
+	case "robin":
+		return "robin"
+	}
+	return ""
+}
+
 
 // sameRobinPerson reports whether the Robin desk occupant is the same individual
 // as an AD-mirrored user, comparing the LDAP userid first and then the primary

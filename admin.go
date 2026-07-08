@@ -57,8 +57,8 @@ type RobinAdOverlap struct {
 
 // RobinAdDuplicate is one person the AD mirror seats at one desk while Robin
 // seats them at a different desk on the same map, which makes them appear twice
-// on that map. Rendered reflects whether the current robinDeskMode actually
-// overlays the Robin desk, i.e. whether the duplicate is visible right now.
+// on that map. Rendered reflects whether the unified priority engine actually
+// shows the Robin desk right now, i.e. whether the duplicate is visible.
 type RobinAdDuplicate struct {
 	Map       string
 	Name      string
@@ -124,6 +124,10 @@ type adminData struct {
 	LogoRegular             string
 	LogoHover               string
 	LdapSources             []LdapSource
+	// UnifiedSources is the ordered, priority-ranked list of every configured
+	// directory source (each LDAP/EntraID config plus Robin) shown in Sync >
+	// General, where the admin reorders priority and toggles assign / keep-dupes.
+	UnifiedSources          []UnifiedSource
 	RobinSpaces             []RobinSpace
 	RobinMapOptions         []string
 	RobinOrg                string
@@ -309,6 +313,42 @@ func (app *App) handleAdminPost(w http.ResponseWriter, r *http.Request, sess Ses
 		if app.permLevel(sess, "ldap") < 2 {
 			return ""
 		}
+		// Unified directory-source priority list (Sync > General): reorder and
+		// per-source toggles operate on the stored order, never touching the
+		// sources' own sync config, and require no resync (assignment is decided
+		// at render time).
+		if ref := r.FormValue("moveSourceUp"); ref != "" {
+			if app.moveSource(ref, -1) {
+				_ = app.db.AuditLog("LDAP", sess.Username, "Source priority raised ("+ref+")")
+			}
+			return "Source priority updated."
+		}
+		if ref := r.FormValue("moveSourceDown"); ref != "" {
+			if app.moveSource(ref, 1) {
+				_ = app.db.AuditLog("LDAP", sess.Username, "Source priority lowered ("+ref+")")
+			}
+			return "Source priority updated."
+		}
+		if ref := r.FormValue("toggleSourceAssign"); ref != "" {
+			on := r.FormValue("sourceAssign") == "1"
+			app.setSourceFlags(ref, &on, nil)
+			verb := "excluded from"
+			if on {
+				verb = "included in"
+			}
+			_ = app.db.AuditLog("LDAP", sess.Username, "Source "+verb+" desk assignment ("+ref+")")
+			return "Source assignment updated."
+		}
+		if ref := r.FormValue("toggleSourceKeepDup"); ref != "" {
+			keep := r.FormValue("sourceKeepDup") == "1"
+			app.setSourceFlags(ref, nil, &keep)
+			verb := "off"
+			if keep {
+				verb = "on"
+			}
+			_ = app.db.AuditLog("LDAP", sess.Username, "Source keep-duplicates "+verb+" ("+ref+")")
+			return "Source duplicate handling updated."
+		}
 		// Robin / meeting-room management lives on the LDAP tab.
 		if name := r.FormValue("deleteRobinSpace"); name != "" {
 			_ = app.db.DeleteRobinSpace(name)
@@ -442,11 +482,12 @@ func (app *App) handleAdminPost(w http.ResponseWriter, r *http.Request, sess Ses
 			return "Geocoding API key unchanged."
 		}
 		if r.FormValue("saveRobinOptions") != "" {
-			mode := strings.TrimSpace(r.FormValue("robinDeskMode"))
-			switch mode {
-			case "sync", "all", "unused", "allclear":
-			default:
-				mode = "off"
+			// Robin desk-occupancy is now either synced ("sync") or not ("off").
+			// Whether it is shown on the map and at what priority is decided by
+			// the unified source list (Sync > General), not here.
+			mode := "off"
+			if r.FormValue("robinDeskSync") == "1" {
+				mode = "sync"
 			}
 			_ = app.db.SetRobinSetting("robinDeskMode", mode)
 			_ = app.db.SetRobinSetting("robinStripPrefixEnabled", checkboxValue(r.FormValue("robinStripPrefixEnabled")))
@@ -1118,6 +1159,7 @@ func (app *App) buildAdminData(r *http.Request, sess Session, tab, msg string) a
 	case "ldap":
 		d.IdentifierMode = app.identifierMode()
 		d.LdapSources, _ = app.db.ListLdapSources()
+		d.UnifiedSources = app.listUnifiedSources()
 		d.RobinSpaces, _ = app.db.ListRobinSpaces()
 		sort.Slice(d.RobinSpaces, func(i, j int) bool { return d.RobinSpaces[i].Spacename < d.RobinSpaces[j].Spacename })
 		d.RobinOrg = app.db.GetRobinSetting("robinOrganisation")
@@ -1185,16 +1227,8 @@ func (app *App) buildAdminData(r *http.Request, sess Session, tab, msg string) a
 		// up twice. This only reads the two caches, mirroring buildMapDesks.
 		ldapUsers, _ := app.db.ListLdap()
 		robinDesks, _ := app.db.ListRobinDeskStatus("")
-		// AD occupants grouped by desk number, plus desk number -> map so an AD
-		// placement can be located on the same map as a Robin reservation.
-		adByDesk := map[string][]LdapUser{}
-		for _, u := range ldapUsers {
-			off := strings.TrimSpace(u.Office)
-			if off == "" {
-				continue
-			}
-			adByDesk[off] = append(adByDesk[off], u)
-		}
+		// desk number -> map so an AD placement can be located on the same map as
+		// a Robin reservation.
 		deskToMap := map[string]string{}
 		if allMaps, err := app.db.ListMaps(); err == nil {
 			for _, m := range allMaps {
@@ -1211,6 +1245,24 @@ func (app *App) buildAdminData(r *http.Request, sess Session, tab, msg string) a
 		}
 		seenSame := map[string]bool{}
 		seenDup := map[string]bool{}
+		// Whether a Robin reservation is actually shown on the map now depends on
+		// the unified priority engine, so ask it directly (per map, cached).
+		avatarIdx := app.buildAvatarIndex()
+		assignCache := map[string]map[string][]deskOccupant{}
+		robinShownAt := func(m, desknumber string) bool {
+			a, ok := assignCache[m]
+			if !ok {
+				desks, _ := app.db.ListDesks(m)
+				a = app.assignMapOccupancy(m, desks, avatarIdx)
+				assignCache[m] = a
+			}
+			for _, o := range a[strings.ToLower(strings.TrimSpace(desknumber))] {
+				if o.sourceType == "robin" {
+					return true
+				}
+			}
+			return false
+		}
 		for _, rs := range robinDesks {
 			rdesk := strings.TrimSpace(rs.Desknumber)
 			rmap := strings.TrimSpace(rs.Map)
@@ -1250,14 +1302,7 @@ func (app *App) buildAdminData(r *http.Request, sess Session, tab, msg string) a
 					continue
 				}
 				seenDup[key] = true
-				rendered := false
-				switch d.RobinDeskMode {
-				case "all":
-					rendered = true
-				case "unused":
-					// "unused" only overlays a desk with no AD occupant.
-					rendered = len(adByDesk[rdesk]) == 0
-				}
+				rendered := robinShownAt(rmap, rdesk)
 				d.RobinAdDuplicates = append(d.RobinAdDuplicates, RobinAdDuplicate{
 					Map: rmap, Name: name, Userid: uid,
 					AdDesk: adesk, RobinDesk: rdesk, Rendered: rendered,
