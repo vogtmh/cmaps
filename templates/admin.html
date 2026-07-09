@@ -1899,6 +1899,7 @@
                 <input type="hidden" name="tab" value="users">
                 <input type="hidden" name="changeRoleUser" value="{{.Username}}">
                 <select class="sync-select" name="changeRole" style="max-width:200px;" onchange="this.form.submit()">
+                  <option value="0" disabled{{if eq $curRole 0}} selected{{end}}>&mdash; no role assigned &mdash;</option>
                   {{range $.Roles}}<option value="{{.ID}}"{{if eq .ID $curRole}} selected{{end}}>{{.Rolename}}</option>{{end}}
                 </select>
               </form>
