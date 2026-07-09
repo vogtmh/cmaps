@@ -1698,32 +1698,98 @@ func (app *App) handleRestLdapDebug(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, app.SyncDebug())
 }
 
-// handleRestDirectorySearch returns directory users matching a query, for the
-// admin add-user autocomplete. Each result includes the resolved username
-// (DOMAIN\samaccountname) so the caller never has to know the samaccountname.
+// handleRestDirectorySearch returns users matching a query, for the admin
+// add-user autocomplete. It merges three sources so any admin candidate can be
+// found: SAML users (listed first, as they cannot otherwise be discovered),
+// then the LDAP directory, then Entra source mirrors (Entra may eventually
+// replace LDAP, so both are considered). Robin is intentionally excluded. Each
+// result includes the resolved username so the caller never has to know the
+// samaccountname, plus a "source" label for display.
 func (app *App) handleRestDirectorySearch(w http.ResponseWriter, r *http.Request) {
 	sess, ok := app.currentSession(r)
 	if !ok || app.permLevel(sess, "users") < 2 {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}
-	q := r.URL.Query().Get("q")
-	results, _ := app.db.SearchDirectory(q, 20)
+	q := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("q")))
 	domain := app.db.GetSetting("domain")
-	out := make([]map[string]string, 0, len(results))
-	for _, d := range results {
-		username := d.Userid
-		if domain != "" {
-			username = domain + "\\" + d.Userid
+
+	const maxResults = 25
+	out := make([]map[string]string, 0, maxResults)
+	seen := make(map[string]bool) // dedup by lowercased username
+
+	add := func(name, sam, username, mail, office, source string) {
+		key := strings.ToLower(strings.TrimSpace(username))
+		if key == "" || seen[key] || len(out) >= maxResults {
+			return
 		}
+		seen[key] = true
 		out = append(out, map[string]string{
-			"name":     d.DisplayName(),
-			"sam":      d.Userid,
+			"name":     name,
+			"sam":      sam,
 			"username": username,
-			"mail":     d.Mail,
-			"office":   d.Office,
+			"mail":     mail,
+			"office":   office,
+			"source":   source,
 		})
 	}
+	matches := func(hay string) bool {
+		return q == "" || strings.Contains(strings.ToLower(hay), q)
+	}
+	resolveUsername := func(userid string) string {
+		if domain != "" {
+			return domain + "\\" + userid
+		}
+		return userid
+	}
+
+	// 1. SAML users first: role 0 means a SAML-provisioned account that has not
+	// been granted a role yet and is invisible to every other source.
+	if users, err := app.db.ListUsers(); err == nil {
+		for _, u := range users {
+			if u.Role != 0 {
+				continue
+			}
+			name := strings.TrimSpace(u.Fullname)
+			if name == "" {
+				name = u.Username
+			}
+			if !matches(name + " " + u.Username + " " + u.Mail) {
+				continue
+			}
+			// The stored username is authoritative for SAML users so granting a
+			// role updates the existing record instead of creating a duplicate.
+			add(name, u.Username, u.Username, u.Mail, "", "SAML")
+		}
+	}
+
+	// 2. LDAP directory.
+	if results, err := app.db.SearchDirectory(q, maxResults); err == nil {
+		for _, d := range results {
+			add(d.DisplayName(), d.Userid, resolveUsername(d.Userid), d.Mail, d.Office, "LDAP")
+		}
+	}
+
+	// 3. Entra source mirrors (enabled sources only).
+	if srcs, err := app.db.ListEntraSources(); err == nil {
+		for _, src := range srcs {
+			if src.Disabled {
+				continue
+			}
+			mirror, _ := app.db.GetSourceMirror("entra", src.ID)
+			for _, u := range mirror {
+				name := strings.TrimSpace(u.Givenname + " " + u.Surname)
+				if name == "" {
+					name = u.Userid
+				}
+				if !matches(name + " " + u.Userid + " " + u.Mail) {
+					continue
+				}
+				add(name, u.Userid, resolveUsername(u.Userid), u.Mail, u.Office, "Entra")
+			}
+		}
+	}
+
 	writeJSON(w, out)
 }
 

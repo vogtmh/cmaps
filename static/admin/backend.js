@@ -2253,8 +2253,10 @@ function renderDirectoryResults(list) {
     var sub = [d.sam];
     if (d.office) sub.push(d.office);
     if (d.mail) sub.push(d.mail);
+    var src = d.source || '';
+    var badge = src ? '<span class="dir-src dir-src-' + esc(src.toLowerCase()) + '">' + esc(src) + '</span>' : '';
     html += '<div class="dir-item" onclick="pickDirectoryUser(' + i + ')">' +
-            '<span class="dir-name">' + esc(d.name) + '</span>' +
+            '<span class="dir-name">' + esc(d.name) + badge + '</span>' +
             '<span class="dir-sub">' + esc(sub.join(' · ')) + '</span></div>';
   }
   box.innerHTML = html;

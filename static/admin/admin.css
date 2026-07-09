@@ -575,6 +575,22 @@
 .dir-sub { font-size: 12px; color: var(--sy-muted); }
 .dir-item:hover .dir-sub { color: rgba(255,255,255,0.85); }
 .dir-empty { padding: 10px 12px; color: var(--sy-muted); font-size: 13px; }
+.dir-src {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 1px 7px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  border-radius: 10px;
+  vertical-align: middle;
+  color: #fff;
+}
+.dir-src-saml  { background: #8e44ad; }
+.dir-src-ldap  { background: #2980b9; }
+.dir-src-entra { background: #0a66c2; }
+.dir-item:hover .dir-src { box-shadow: 0 0 0 1px rgba(255,255,255,0.5); }
 
 /* ── VIP desk border categories (chips) ───────────────────── */
 .vip-cats {
