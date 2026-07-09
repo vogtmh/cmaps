@@ -14,13 +14,14 @@ import "strings"
 // always kept separately (the Mail field) for display and contact. samaccountname
 // identifiers are used verbatim (they never contain unsafe characters).
 
-// identifierMode returns the configured identifier mode, defaulting to
-// "samaccountname" (so existing installs, which have no setting, keep working).
+// identifierMode returns the configured identifier mode, defaulting to "mail"
+// for new installs. Installs created before this default changed are pinned to
+// "samaccountname" at startup (see DB.pinLegacyIdentifier), so they keep working.
 func (app *App) identifierMode() string {
-	if app.db.GetSetting("identifier") == "mail" {
-		return "mail"
+	if app.db.GetSetting("identifier") == "samaccountname" {
+		return "samaccountname"
 	}
-	return "samaccountname"
+	return "mail"
 }
 
 // avatarSafe replaces every character that is not a valid filename/URL path

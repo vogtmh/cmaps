@@ -592,7 +592,7 @@ function cancelEditLdap() {
 }
 
 function showSyncSub(name) {
-  var subs = ['general', 'ldap', 'entra', 'saml', 'robin', 'geo', 'database'];
+  var subs = ['general', 'ldap', 'entra', 'saml', 'robin', 'geo', 'database', 'demo'];
   // Fall back to the first available subsection if the requested one is not
   // rendered (e.g. the user lacks the matching permission).
   if (!document.getElementById('syncsub_' + name)) {

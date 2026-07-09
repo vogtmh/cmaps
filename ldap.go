@@ -309,6 +309,18 @@ func (app *App) fetchSourceDirectory(src LdapSource) ([]DirectoryUser, SourceDeb
 		SkipReasons: map[string]int{},
 	}
 
+	// The built-in demo source never talks to a real directory: it regenerates
+	// the bundled demo employees, so its sync can never fail. Avatars are ensured
+	// for the current identifier mode so a mode switch keeps the photos.
+	if src.Demo {
+		dir := app.demoDirectoryUsers()
+		app.ensureDemoAvatars(dir)
+		dbg.Connected = true
+		dbg.Bound = true
+		dbg.EntriesFound = len(dir)
+		return dir, dbg, nil
+	}
+
 	conn, err := dialLDAP(src)
 	if err != nil {
 		dbg.Error = err.Error()

@@ -181,6 +181,12 @@ type adminData struct {
 	InternalBooking         bool
 	IdentifierMode          string
 	GeoapifyConfigured      bool
+	// HasRealSource is true when a genuine directory source (non-demo LDAP,
+	// EntraID or Robin) is configured. When false, the Sync tab offers a "Demo
+	// data" subtab to create the built-in demo source. DemoSourceExists tracks
+	// whether the demo source is already present (button says "recreate").
+	HasRealSource    bool
+	DemoSourceExists bool
 }
 
 // commonTimezones is the curated timezone list offered when creating a map. The
@@ -312,6 +318,22 @@ func (app *App) handleAdminPost(w http.ResponseWriter, r *http.Request, sess Ses
 	case "ldap":
 		if app.permLevel(sess, "ldap") < 2 {
 			return ""
+		}
+		// Create/recreate the built-in demo data source (Sync > Demo subtab,
+		// offered when no real directory source is configured).
+		if r.FormValue("createDemoData") != "" {
+			if err := app.createDemoData(); err != nil {
+				return "Error creating demo data: " + err.Error()
+			}
+			_ = app.db.AuditLog("LDAP", sess.Username, "Demo data created from the admin panel")
+			return "Demo data created. The demo maps are now populated."
+		}
+		if r.FormValue("removeDemoData") != "" {
+			if err := app.removeDemoData(); err != nil {
+				return "Error removing demo data: " + err.Error()
+			}
+			_ = app.db.AuditLog("LDAP", sess.Username, "Demo data removed from the admin panel")
+			return "Demo data removed."
 		}
 		// Unified directory-source priority list (Sync > General): reorder and
 		// per-source toggles operate on the stored order, never touching the
@@ -1058,11 +1080,30 @@ func (app *App) nextLdapID() int {
 	srcs, _ := app.db.ListLdapSources()
 	max := 0
 	for _, s := range srcs {
+		if s.Demo {
+			continue // the demo source uses a reserved high ID; ignore it here
+		}
 		if s.ID > max {
 			max = s.ID
 		}
 	}
 	return max + 1
+}
+
+// hasRealSource reports whether at least one genuine directory source is
+// configured (any non-demo LDAP source, any EntraID source, or Robin). When
+// false, the admin panel offers the "create demo data" action.
+func (app *App) hasRealSource() bool {
+	ldaps, _ := app.db.ListLdapSources()
+	for _, s := range ldaps {
+		if !s.Demo {
+			return true
+		}
+	}
+	if entras, _ := app.db.ListEntraSources(); len(entras) > 0 {
+		return true
+	}
+	return app.robinConfigured()
 }
 
 func (app *App) nextEntraID() int {
@@ -1159,6 +1200,18 @@ func (app *App) buildAdminData(r *http.Request, sess Session, tab, msg string) a
 	case "ldap":
 		d.IdentifierMode = app.identifierMode()
 		d.LdapSources, _ = app.db.ListLdapSources()
+		// The demo source is a pseudo-LDAP source; keep it out of the editable
+		// LDAP connections table (it still appears in the unified priority list).
+		realSources := d.LdapSources[:0]
+		for _, s := range d.LdapSources {
+			if s.Demo {
+				d.DemoSourceExists = true
+				continue
+			}
+			realSources = append(realSources, s)
+		}
+		d.LdapSources = realSources
+		d.HasRealSource = app.hasRealSource()
 		d.UnifiedSources = app.listUnifiedSources()
 		// Effective seat counts under the current priority/dedup/assign settings,
 		// recomputed on every render so moving/toggling a source updates them.

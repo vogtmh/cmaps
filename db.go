@@ -302,6 +302,11 @@ type LdapSource struct {
 	// omitempty so existing sources (which predate this field) default to
 	// enabled, matching "enabled unless the user deactivates it".
 	Disabled bool `json:"disabled,omitempty"`
+	// Demo marks the built-in demo source. Its sync never connects to a real
+	// directory (see fetchSourceDirectory): it regenerates the bundled demo
+	// employees so the sync can never fail. It is otherwise a normal LDAP-type
+	// source in the priority list, filling the demo desks.
+	Demo bool `json:"demo,omitempty"`
 }
 
 // EntraSource is one Microsoft Entra ID app registration used as a directory
@@ -356,6 +361,7 @@ func openDB(path string) (*DB, error) {
 	db := &DB{bolt: bdb, loc: loc}
 	db.migrateRobinConfig()
 	db.removeObsoleteSettings()
+	db.pinLegacyIdentifier()
 	return db, nil
 }
 
@@ -379,6 +385,22 @@ func (db *DB) removeObsoleteSettings() {
 	for _, name := range []string{"teamsChannel", "avatarType"} {
 		_ = deleteKey(db, bucketSettings, []byte(name))
 	}
+}
+
+// pinLegacyIdentifier protects installs created before the identifier default
+// switched to "mail". Such installs have no explicit "identifier" setting and
+// rely on the old samaccountname default for their avatar filenames, map-admin
+// records, bookings and audit log. The first time we start up on an
+// already-configured install with no setting, pin it to samaccountname so the
+// new mail default only ever affects genuinely fresh installs.
+func (db *DB) pinLegacyIdentifier() {
+	if db.GetMeta("setup_done") != "1" {
+		return
+	}
+	if v, found, _ := getJSON[string](db, bucketSettings, []byte("identifier")); found && v != "" {
+		return
+	}
+	_ = putJSON(db, bucketSettings, []byte("identifier"), "samaccountname")
 }
 
 func (db *DB) Close() error { return db.bolt.Close() }

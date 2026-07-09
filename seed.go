@@ -25,6 +25,10 @@ func (app *App) seedDemoData() error {
 		"reportURL":    "",
 		"nomapText":    "",
 		"nomapLink":    "",
+		// New installs default to the e-mail identifier (supported by LDAP,
+		// EntraID and SAML SSO). The demo data carries both a samaccountname and
+		// a mail address, so the migration assistant can switch modes freely.
+		"identifier": "mail",
 	}
 	for k, v := range settings {
 		if err := db.SetSetting(k, v); err != nil {
@@ -65,11 +69,7 @@ func (app *App) seedDemoData() error {
 	if err := app.copySampleMap("mansion.png", "usa"); err != nil {
 		return err
 	}
-	maps := []MapInfo{
-		{Mapname: "overview", Itemscale: "1", Published: "yes", Country: "none", Timezone: "Europe/Berlin", Address: "none", MapX: 0, MapY: 0},
-		{Mapname: "germany", Itemscale: "2", Published: "yes", Country: "de", Timezone: "Europe/Berlin", Address: "CompanyMaps Demo GmbH<br/>Musterstraße 1<br/>12345 Musterstadt<br/>Germany", MapX: 760, MapY: 158},
-		{Mapname: "usa", Itemscale: "2", Published: "yes", Country: "us", Timezone: "America/New_York", Address: "CompanyMaps Demo Inc.<br/>123 Sample Street<br/>Anytown, CA 90210<br/>USA", MapX: 280, MapY: 250},
-	}
+	maps := demoMaps()
 	for _, m := range maps {
 		if err := db.PutMap(m); err != nil {
 			return fmt.Errorf("seed map %s: %w", m.Mapname, err)
@@ -78,45 +78,29 @@ func (app *App) seedDemoData() error {
 
 	// 6. Lay out each location from the mansion floor plan (fixtures + AD desk
 	// slots). Each location gets its own desk-number namespace ("DE-NN" /
-	// "US-NN") so LDAP-mirror matching stays per-map.
-	gerSlots, err := app.putMansionDesks("germany", "DE")
-	if err != nil {
+	// "US-NN") so directory matching stays per-map.
+	if _, err := app.putMansionDesks("germany", "DE"); err != nil {
 		return err
 	}
-	usSlots, err := app.putMansionDesks("usa", "US")
-	if err != nil {
-		return err
-	}
-
-	// Seat sample employees into the desk slots and wire them into the LDAP
-	// mirror. All but the last two slots on each map are occupied; two desks per
-	// map are shared by several people (a CompanyMaps desk holds up to four) so
-	// the shared-desk view is exercised. Every employee gets one of the bundled
-	// avatar photos (cycled).
-	var ldapUsers []LdapUser
-	seq := 0
-	ger, seq, err := app.seatEmployees(gerSlots, "DE", seq)
-	if err != nil {
-		return err
-	}
-	us, seq, err := app.seatEmployees(usSlots, "US", seq)
-	if err != nil {
-		return err
-	}
-	_ = seq
-	ldapUsers = append(ldapUsers, ger...)
-	ldapUsers = append(ldapUsers, us...)
-	if err := db.ReplaceLdap(ldapUsers); err != nil {
+	if _, err := app.putMansionDesks("usa", "US"); err != nil {
 		return err
 	}
 
-	// 8. A demo team built from the first few seeded employees.
+	// 7. Create the built-in demo directory source. It generates the sample
+	// employees, wires them into a self-contained source (whose sync never
+	// connects to a real directory and so can never fail) and registers it in
+	// the priority list so it fills the demo desks.
+	if err := app.seedDemoSource(); err != nil {
+		return err
+	}
+
+	// 8. A demo team built from the first few generated employees.
 	var members []string
-	for _, u := range ldapUsers {
+	for _, d := range app.demoDirectoryUsers() {
 		if len(members) >= 4 {
 			break
 		}
-		members = append(members, u.Givenname+" "+u.Surname)
+		members = append(members, d.Givenname+" "+d.Surname)
 	}
 	_ = db.PutTeam(Team{Teamname: "Demo Team", Members: strings.Join(members, "|")})
 
@@ -287,36 +271,177 @@ func seatCounts(n int) []int {
 	return counts
 }
 
-// seatEmployees creates LDAP-mirror users seated in the given desk slots, copying
-// a bundled avatar for each. startSeq is the running employee counter; the next
-// counter value is returned so callers can seat multiple maps without id clashes.
-func (app *App) seatEmployees(slots []string, region string, startSeq int) ([]LdapUser, int, error) {
-	seq := startSeq
-	var users []LdapUser
-	counts := seatCounts(len(slots))
-	for slotIdx, n := range counts {
-		for k := 0; k < n; k++ {
-			seq++
-			userid := fmt.Sprintf("DEMO%03d", seq)
-			if err := app.copySampleAvatar(fmt.Sprintf("%02d.jpg", (seq-1)%10+1), userid); err != nil {
-				return nil, seq, err
-			}
-			p := demoPerson(seq, region)
-			users = append(users, LdapUser{
-				Userid:          userid,
-				Givenname:       p.Given,
-				Surname:         p.Sur,
-				Telephonenumber: p.Phone,
-				Mail:            fmt.Sprintf("%s.%s%d@demo.companymaps.local", lower(p.Given), lower(p.Sur), seq),
-				Office:          slots[slotIdx],
-				Description:     p.Title,
-				Department:      p.Dept,
-				Mobile:          p.Mobile,
-				HasAvatar:       true,
-			})
+// demoMaps returns the map records for the two demo locations plus the overview.
+func demoMaps() []MapInfo {
+	return []MapInfo{
+		{Mapname: "overview", Itemscale: "1", Published: "yes", Country: "none", Timezone: "Europe/Berlin", Address: "none", MapX: 0, MapY: 0},
+		{Mapname: "germany", Itemscale: "2", Published: "yes", Country: "de", Timezone: "Europe/Berlin", Address: "CompanyMaps Demo GmbH<br/>Musterstraße 1<br/>12345 Musterstadt<br/>Germany", MapX: 760, MapY: 158},
+		{Mapname: "usa", Itemscale: "2", Published: "yes", Country: "us", Timezone: "America/New_York", Address: "CompanyMaps Demo Inc.<br/>123 Sample Street<br/>Anytown, CA 90210<br/>USA", MapX: 280, MapY: 250},
+	}
+}
+
+// demoSourceID is the reserved LdapSource ID for the built-in demo source. It is
+// deliberately high so it never collides with user-created sources (nextLdapID
+// also skips demo sources).
+const demoSourceID = 9001
+
+// demoSlots returns the AD-desk numbers of one demo location in layout order,
+// matching exactly what putMansionDesks assigns ("<prefix>-NN").
+func demoSlots(prefix string) []string {
+	var slots []string
+	for _, t := range mansionLayout {
+		if t.Desktype == "addesk" {
+			slots = append(slots, fmt.Sprintf("%s-%02d", prefix, len(slots)+1))
 		}
 	}
-	return users, seq, nil
+	return slots
+}
+
+// demoDirectoryUsers regenerates the demo directory deterministically. Every
+// person keeps BOTH a samaccountname (DEMOnnn) and a mail address, and their
+// active Userid is computed for the CURRENT identifier mode, so the demo works in
+// either mode and the identifier migration assistant can round-trip it.
+func (app *App) demoDirectoryUsers() []DirectoryUser {
+	var out []DirectoryUser
+	seq := 0
+	for _, loc := range []struct{ prefix, region string }{
+		{"DE", "DE"},
+		{"US", "US"},
+	} {
+		slots := demoSlots(loc.prefix)
+		counts := seatCounts(len(slots))
+		for slotIdx, n := range counts {
+			for k := 0; k < n; k++ {
+				seq++
+				sam := fmt.Sprintf("DEMO%03d", seq)
+				p := demoPerson(seq, loc.region)
+				mail := fmt.Sprintf("%s.%s%d@demo.companymaps.local", lower(p.Given), lower(p.Sur), seq)
+				out = append(out, DirectoryUser{
+					Userid:         app.userIdentifier(sam, mail),
+					Samaccountname: sam,
+					Givenname:      p.Given,
+					Surname:        p.Sur,
+					Mail:           mail,
+					Office:         slots[slotIdx],
+					Department:     p.Dept,
+					Title:          p.Title,
+					Phone:          p.Phone,
+					Mobile:         p.Mobile,
+				})
+			}
+		}
+	}
+	return out
+}
+
+// demoSeq parses the running number from a demo samaccountname ("DEMO007" -> 7).
+func demoSeq(sam string) int {
+	n := 0
+	fmt.Sscanf(sam, "DEMO%d", &n)
+	if n <= 0 {
+		n = 1
+	}
+	return n
+}
+
+// ensureDemoAvatars copies a bundled sample photo for every demo user that does
+// not already have a cached avatar under its active identifier. Best effort: any
+// copy error is ignored so a demo (re)sync can never fail on avatars.
+func (app *App) ensureDemoAvatars(dir []DirectoryUser) {
+	for _, d := range dir {
+		id := strings.TrimSpace(d.Userid)
+		if id == "" {
+			continue
+		}
+		if _, err := os.Stat(app.cfg.dataPath("avatarcache", id+".jpg")); err == nil {
+			continue
+		}
+		seq := demoSeq(d.Samaccountname)
+		_ = app.copySampleAvatar(fmt.Sprintf("%02d.jpg", (seq-1)%10+1), id)
+	}
+}
+
+// seedDemoSource (re)creates the built-in demo directory source: it regenerates
+// the demo people and avatars, stores the per-source directory + desk-placement
+// mirror the render engine reads, registers the source (idempotent, fixed ID)
+// and rebuilds the combined caches. Used by the initial demo setup and by the
+// admin "create demo data" button.
+func (app *App) seedDemoSource() error {
+	dir := app.demoDirectoryUsers()
+	app.ensureDemoAvatars(dir)
+	if err := app.db.PutLdapSource(LdapSource{
+		ID: demoSourceID, Description: "Demo data", Type: "DEMO", Demo: true, LastSync: "never",
+	}); err != nil {
+		return err
+	}
+	if err := app.db.PutSourceDir(demoSourceID, dir); err != nil {
+		return err
+	}
+	if err := app.db.PutSourceMirror("ldap", demoSourceID, deriveMirrorUsers(dir)); err != nil {
+		return err
+	}
+	if _, err := app.rebuildLdapMirror(false); err != nil {
+		return err
+	}
+	_ = app.db.AuditLog("LDAP", "System", "Demo data source created/refreshed")
+	return nil
+}
+
+// createDemoData (re)creates the two demo locations (maps + desks) and the demo
+// directory source. Used by the admin "create demo data" button when no real
+// directory source is configured; safe to run repeatedly (it overwrites the demo
+// maps/desks/people in place).
+func (app *App) createDemoData() error {
+	for _, d := range []string{"- none -", "Development", "Sales", "Marketing", "Finance", "HumanResources", "IT-Administration", "Support"} {
+		_ = app.db.AddDepartment(d)
+	}
+	if err := app.copySampleMap("overview.png", "overview"); err != nil {
+		return err
+	}
+	if err := app.copySampleMap("mansion.png", "germany"); err != nil {
+		return err
+	}
+	if err := app.copySampleMap("mansion.png", "usa"); err != nil {
+		return err
+	}
+	for _, m := range demoMaps() {
+		if err := app.db.PutMap(m); err != nil {
+			return err
+		}
+	}
+	if _, err := app.putMansionDesks("germany", "DE"); err != nil {
+		return err
+	}
+	if _, err := app.putMansionDesks("usa", "US"); err != nil {
+		return err
+	}
+	return app.seedDemoSource()
+}
+
+// removeDemoData deletes the built-in demo data: the demo directory source and
+// its caches, the two demo locations (maps + desks, the shared overview map is
+// kept) and the demo avatars. Used by the admin "remove demo data" button once a
+// real source is configured.
+func (app *App) removeDemoData() error {
+	_ = app.db.DeleteLdapSource(demoSourceID)
+	_ = app.db.DeleteSourceMirror("ldap", demoSourceID)
+	_ = app.db.DeleteSourceDir(demoSourceID)
+	for _, d := range app.demoDirectoryUsers() {
+		if id := strings.TrimSpace(d.Userid); id != "" {
+			_ = removeFileIfExists(app.cfg.dataPath("avatarcache", id+".jpg"))
+		}
+	}
+	for _, m := range []string{"germany", "usa"} {
+		if desks, _ := app.db.ListDesks(m); desks != nil {
+			for _, dk := range desks {
+				_ = app.db.DeleteDesk(m, dk.ID)
+			}
+		}
+		_ = app.db.DeleteMap(m)
+		_ = removeFileIfExists(app.cfg.dataPath("maps", m+".png"))
+	}
+	_, err := app.rebuildLdapMirror(false)
+	return err
 }
 
 // seedDefaultRoles installs the standard role set if no roles exist yet.

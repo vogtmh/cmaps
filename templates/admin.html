@@ -579,12 +579,31 @@
     {{if gt .PermAdminpanel 0}}
     <button type="button" class="sync-tab" id="syncnav_database" onclick="showSyncSub('database')"><span class="sync-navdot"></span>Database</button>
     {{end}}
+    {{if and (gt .PermLdap 1) (or (not .HasRealSource) .DemoSourceExists)}}
+    <button type="button" class="sync-tab" id="syncnav_demo" onclick="showSyncSub('demo')"><span class="sync-navdot"></span>Demo data</button>
+    {{end}}
     {{if .Message}}<span class="sync-msg" id="syncMsg">{{.Message}}</span>{{end}}
   </div>
   <div class="sync-pane">
 
   {{if gt .PermAdminpanel 0}}
   <div id="syncsub_general" class="syncsub" style="display:none;">
+    <div class="sync-card" id="identifierSelectCard" data-current="{{.IdentifierMode}}">
+      <div class="sync-card-head">
+        <h2 class="sync-card-title">Employee identifier</h2>
+        <span class="sync-badge sync-badge-accent" id="identifierBadge">{{if eq .IdentifierMode "mail"}}E-Mail{{else}}SAMAccountname{{end}}</span>
+      </div>
+      <p class="sync-card-hint">The identifier is the key used for avatar filenames, the audit log, map-admin
+        records, bookings and the changelog. Switching it runs a migration assistant that converts all existing
+        data to the new format (creating the new records/files first, then removing the old ones) and only then
+        activates the new setting. Run it on a backup first &mdash; you can migrate back and forth.</p>
+      <div class="sync-field" style="max-width:640px;">
+        <label class="sync-label">Identifier</label>
+        <label style="display:block; margin:4px 0;"><input type="radio" name="identifierMode" value="mail" onchange="identifierModeChanged()" {{if eq .IdentifierMode "mail"}}checked{{end}}> E-Mail <span class="sync-status-text">&mdash; supported by LDAP, EntraID and SAML SSO (default)</span></label>
+        <label style="display:block; margin:4px 0;"><input type="radio" name="identifierMode" value="samaccountname" onchange="identifierModeChanged()" {{if ne .IdentifierMode "mail"}}checked{{end}}> SAMAccountname <span class="sync-status-text">&mdash; only supported by LDAP</span></label>
+      </div>
+    </div>
+
     {{if gt .PermLdap 1}}
     <div class="sync-card">
       <div class="sync-card-head">
@@ -680,21 +699,6 @@
       </div>
     </div>
     {{end}}
-    <div class="sync-card" id="identifierSelectCard" data-current="{{.IdentifierMode}}">
-      <div class="sync-card-head">
-        <h2 class="sync-card-title">Employee identifier</h2>
-        <span class="sync-badge sync-badge-accent" id="identifierBadge">{{if eq .IdentifierMode "mail"}}E-Mail{{else}}SAMAccountname{{end}}</span>
-      </div>
-      <p class="sync-card-hint">The identifier is the key used for avatar filenames, the audit log, map-admin
-        records, bookings and the changelog. Switching it runs a migration assistant that converts all existing
-        data to the new format (creating the new records/files first, then removing the old ones) and only then
-        activates the new setting. Run it on a backup first &mdash; you can migrate back and forth.</p>
-      <div class="sync-field" style="max-width:640px;">
-        <label class="sync-label">Identifier</label>
-        <label style="display:block; margin:4px 0;"><input type="radio" name="identifierMode" value="samaccountname" onchange="identifierModeChanged()" {{if ne .IdentifierMode "mail"}}checked{{end}}> SAMAccountname <span class="sync-status-text">&mdash; only supported by LDAP (default)</span></label>
-        <label style="display:block; margin:4px 0;"><input type="radio" name="identifierMode" value="mail" onchange="identifierModeChanged()" {{if eq .IdentifierMode "mail"}}checked{{end}}> E-Mail <span class="sync-status-text">&mdash; supported by LDAP, EntraID and SAML SSO</span></label>
-      </div>
-    </div>
 
     {{if gt .PermAdminpanel 1}}
     <div class="sync-card" id="identifierMigrateCard" style="display:none;">
@@ -1626,6 +1630,39 @@
         <button type="button" class="sync-btn sync-btn-sm" id="dbPrevBtn" onclick="dbPage(-1)">&larr; Prev</button>
         <span class="sync-status-text" id="dbPageInfo"></span>
         <button type="button" class="sync-btn sync-btn-sm" id="dbNextBtn" onclick="dbPage(1)">Next &rarr;</button>
+      </div>
+    </div>
+  </div>
+  {{end}}
+
+  {{if and (gt .PermLdap 1) (or (not .HasRealSource) .DemoSourceExists)}}
+  <div id="syncsub_demo" class="syncsub" style="display:none;">
+    <div class="sync-card">
+      <div class="sync-card-head">
+        <h2 class="sync-card-title">Demo data</h2>
+        {{if .DemoSourceExists}}<span class="sync-badge sync-badge-ok">Active</span>{{else}}<span class="sync-badge sync-badge-warn">Not created</span>{{end}}
+      </div>
+      <p class="sync-card-hint">No LDAP, EntraID or Robin source is configured yet, so the demo maps stay empty.
+        Create the built-in demo data to populate two sample locations (Germany &amp; USA) with example employees.
+        This adds a self-contained <b>demo directory source</b> whose sync never connects to anything and can
+        never fail. Once you configure a real source you can reorder or disable the demo source under
+        <b>Directory sources &amp; priority</b>, or remove it here. The demo data carries both a SAMAccountname
+        and an e-mail address, so you can freely try switching the employee identifier.</p>
+      <div class="sync-form-actions">
+        <form action="?tab=ldap&amp;sub=demo" method="post" style="margin:0;">
+          <input type="hidden" name="tab" value="ldap">
+          <input type="hidden" name="sub" value="demo">
+          <input type="hidden" name="createDemoData" value="1">
+          <button type="submit" class="sync-btn sync-btn-primary">{{if .DemoSourceExists}}Recreate demo data{{else}}Create demo data{{end}}</button>
+        </form>
+        {{if .DemoSourceExists}}
+        <form action="?tab=ldap&amp;sub=demo" method="post" style="margin:0;" onsubmit="return confirm('Remove all demo data? This deletes the demo source and the Germany &amp; USA demo maps, desks and avatars.');">
+          <input type="hidden" name="tab" value="ldap">
+          <input type="hidden" name="sub" value="demo">
+          <input type="hidden" name="removeDemoData" value="1">
+          <button type="submit" class="sync-btn sync-btn-danger">Remove demo data</button>
+        </form>
+        {{end}}
       </div>
     </div>
   </div>
