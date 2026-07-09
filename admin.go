@@ -1494,6 +1494,11 @@ func (app *App) buildAdminData(r *http.Request, sess Session, tab, msg string) a
 		}
 		users, _ := app.db.ListUsers()
 		for _, u := range users {
+			// The users tab lists admin users only. Role 0 means "no role
+			// assigned" (e.g. a freshly provisioned SAML user), so skip those.
+			if u.Role == 0 {
+				continue
+			}
 			name := roleName[u.Role]
 			if name == "" {
 				name = strconv.Itoa(u.Role)
