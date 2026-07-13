@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"companymaps/internal/integrations"
 	"companymaps/internal/integrations/geo"
+	"companymaps/internal/integrations/robin"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -142,7 +143,7 @@ type adminData struct {
 	NextLdapSync            string
 	NextEntraSync           string
 	NextRobinSync           string
-	RobinLastSync           RobinSyncResult
+	RobinLastSync           robin.RobinSyncResult
 	RobinHasSync            bool
 	RobinDeskMode           string
 	RobinStripPrefixEnabled bool
@@ -522,7 +523,7 @@ func (app *App) handleAdminPost(w http.ResponseWriter, r *http.Request, sess Ses
 			return "Robin options saved."
 		}
 		if r.FormValue("discoverRobin") != "" {
-			summary, err := app.reconcileRobinLocations()
+			summary, err := app.robin.ReconcileLocations()
 			if err != nil {
 				return "Discovery failed: " + err.Error()
 			}
@@ -530,7 +531,7 @@ func (app *App) handleAdminPost(w http.ResponseWriter, r *http.Request, sess Ses
 			return summary
 		}
 		if r.FormValue("runRobinSync") != "" {
-			res := app.RunRobinSyncStructured()
+			res := app.robin.RunSyncStructuredNow()
 			_ = app.db.AuditLog("LDAP", sess.Username, "Robin meeting sync run")
 			if res.Note != "" {
 				return res.Note
@@ -1105,7 +1106,7 @@ func (app *App) hasRealSource() bool {
 	if entras, _ := app.db.ListEntraSources(); len(entras) > 0 {
 		return true
 	}
-	return app.robinConfigured()
+	return app.robin.Configured()
 }
 
 func (app *App) nextEntraID() int {
@@ -1227,13 +1228,13 @@ func (app *App) buildAdminData(r *http.Request, sess Session, tab, msg string) a
 		sort.Slice(d.RobinSpaces, func(i, j int) bool { return d.RobinSpaces[i].Spacename < d.RobinSpaces[j].Spacename })
 		d.RobinOrg = app.db.GetRobinSetting("robinOrganisation")
 		d.RobinSet = app.db.GetRobinSetting("robintoken") != ""
-		d.RobinEnabled = app.robinEnabled()
+		d.RobinEnabled = app.robin.Enabled()
 		d.GeoapifySet = app.db.GetGeoSetting("geoapifyApiKey") != ""
 		d.GeoEnabled = app.geoEnabled()
 		d.GeoUsageMonth, d.GeoUsageCount = app.db.GetGeoUsage()
 		d.NextLdapSync = app.nextSyncLabel(app.getNextSync(&app.nextLdapSync), app.anyLdapSourceEnabled())
 		d.NextEntraSync = app.nextSyncLabel(app.getNextSync(&app.nextEntraSync), app.entraHasEnabledSource())
-		d.NextRobinSync = app.nextSyncLabel(app.getNextSync(&app.nextRobinSync), app.robinEnabled() && app.db.GetRobinSetting("robintoken") != "")
+		d.NextRobinSync = app.nextSyncLabel(app.robin.NextSync(), app.robin.Enabled() && app.db.GetRobinSetting("robintoken") != "")
 		// Build the map dropdown: published maps plus any value currently in use
 		// (so every row's selection stays selectable even if it isn't a real map yet).
 		mapSet := map[string]bool{}
@@ -1251,7 +1252,7 @@ func (app *App) buildAdminData(r *http.Request, sess Session, tab, msg string) a
 			d.RobinMapOptions = append(d.RobinMapOptions, name)
 		}
 		sort.Strings(d.RobinMapOptions)
-		d.RobinLastSync, d.RobinHasSync = app.LastRobinSyncResult()
+		d.RobinLastSync, d.RobinHasSync = app.robin.LastSyncResult()
 		d.RobinDeskMode = app.db.GetRobinSetting("robinDeskMode")
 		if d.RobinDeskMode == "" {
 			d.RobinDeskMode = "off"
@@ -1275,7 +1276,7 @@ func (app *App) buildAdminData(r *http.Request, sess Session, tab, msg string) a
 			}
 			return d.RobinDeskReservations[i].Desknumber < d.RobinDeskReservations[j].Desknumber
 		})
-		if dr, ok := app.LastRobinDeskSyncResult(); ok {
+		if dr, ok := app.robin.LastDeskSyncResult(); ok {
 			d.RobinDeskHasSync = true
 			d.RobinDeskLastSyncTime = dr.Time
 			d.RobinDeskCount = dr.Count
@@ -2053,7 +2054,7 @@ func (app *App) handleRestRobinTest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	_ = app.db.AuditLog("LDAP", sess.Username, "Robin credentials tested")
-	writeJSON(w, app.robinValidate())
+	writeJSON(w, app.robin.Validate())
 }
 
 // handleRestRobinSync starts a Robin meeting sync in the background (if one is
@@ -2064,11 +2065,11 @@ func (app *App) handleRestRobinSync(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}
-	if !app.robinEnabled() {
+	if !app.robin.Enabled() {
 		writeJSON(w, map[string]interface{}{"started": false, "message": "Robin integration is disabled."})
 		return
 	}
-	if !app.robinProg.Start(0, "Starting…") {
+	if !app.robin.Prog.Start(0, "Starting…") {
 		writeJSON(w, map[string]interface{}{"started": false, "running": true})
 		return
 	}
@@ -2076,20 +2077,20 @@ func (app *App) handleRestRobinSync(w http.ResponseWriter, r *http.Request) {
 	go func() {
 		defer func() {
 			if rec := recover(); rec != nil {
-				app.robinProg.Finish("", fmt.Sprintf("sync crashed: %v", rec))
+				app.robin.Prog.Finish("", fmt.Sprintf("sync crashed: %v", rec))
 			}
 		}()
-		res := app.runRobinSyncStructured(&app.robinProg)
+		res := app.robin.RunSyncStructured(&app.robin.Prog)
 		// Refresh the desk-reservation overlay in the same run (no-op unless the
 		// "Show Robin desk reservations" mode is enabled), exactly like the
 		// 5-minute scheduler does, so one button syncs everything.
-		app.robinProg.SetStage("Syncing desk reservations…")
-		app.pollRobinDeskOccupancy(&app.robinProg)
+		app.robin.Prog.SetStage("Syncing desk reservations…")
+		app.robin.PollDeskOccupancy(&app.robin.Prog)
 		if res.Note != "" {
-			app.robinProg.Finish(res.Note, "")
+			app.robin.Prog.Finish(res.Note, "")
 			return
 		}
-		app.robinProg.Finish(fmt.Sprintf("%d of %d room(s) matched a meeting desk.", res.MatchedRooms, res.TotalRooms), "")
+		app.robin.Prog.Finish(fmt.Sprintf("%d of %d room(s) matched a meeting desk.", res.MatchedRooms, res.TotalRooms), "")
 	}()
 	writeJSON(w, map[string]interface{}{"started": true})
 }
@@ -2101,7 +2102,7 @@ func (app *App) handleRestRobinProgress(w http.ResponseWriter, r *http.Request) 
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}
-	writeJSON(w, app.robinProg.Snapshot())
+	writeJSON(w, app.robin.Prog.Snapshot())
 }
 
 // handleRestGeoTest verifies the saved Geoapify API key by geocoding a single
@@ -2287,11 +2288,11 @@ func (app *App) handleRestRobinDeskTest(w http.ResponseWriter, r *http.Request) 
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}
-	if !app.robinEnabled() {
+	if !app.robin.Enabled() {
 		writeJSON(w, map[string]interface{}{"started": false, "message": "Robin integration is disabled."})
 		return
 	}
-	if !app.robinDeskProg.Start(0, "Starting…") {
+	if !app.robin.DeskProg.Start(0, "Starting…") {
 		writeJSON(w, map[string]interface{}{"started": false, "running": true})
 		return
 	}
@@ -2299,15 +2300,12 @@ func (app *App) handleRestRobinDeskTest(w http.ResponseWriter, r *http.Request) 
 	go func() {
 		defer func() {
 			if rec := recover(); rec != nil {
-				app.robinDeskProg.Finish("", fmt.Sprintf("diagnostic crashed: %v", rec))
+				app.robin.DeskProg.Finish("", fmt.Sprintf("diagnostic crashed: %v", rec))
 			}
 		}()
-		_, files, res := app.runRobinDeskDump(&app.robinDeskProg)
-		app.robinDumpMu.Lock()
-		app.robinDumpFiles = files
-		app.robinDumpTime = time.Now().Format("2006-01-02 15:04:05")
-		app.robinDumpMu.Unlock()
-		app.robinDeskProg.Finish(fmt.Sprintf("%d desk(s) occupied now matched (%d unmatched). %d JSON file(s) captured.",
+		_, files, res := app.robin.RunDeskDump(&app.robin.DeskProg)
+		app.robin.SetDump(files, time.Now().Format("2006-01-02 15:04:05"))
+		app.robin.DeskProg.Finish(fmt.Sprintf("%d desk(s) occupied now matched (%d unmatched). %d JSON file(s) captured.",
 			res.Matched, res.Unmatched, res.Files), "")
 	}()
 	writeJSON(w, map[string]interface{}{"started": true})
@@ -2320,7 +2318,7 @@ func (app *App) handleRestRobinDeskProgress(w http.ResponseWriter, r *http.Reque
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}
-	writeJSON(w, app.robinDeskProg.Snapshot())
+	writeJSON(w, app.robin.DeskProg.Snapshot())
 }
 
 // handleRestRobinDeskDump streams the most recently captured desk-data
@@ -2333,19 +2331,13 @@ func (app *App) handleRestRobinDeskDump(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	app.robinDumpMu.Lock()
-	files := app.robinDumpFiles
-	when := app.robinDumpTime
-	app.robinDumpMu.Unlock()
+	files, when := app.robin.Dump()
 
 	var logs []string
 	if len(files) == 0 {
-		logs, files = app.RunRobinDeskDump()
+		logs, files = app.robin.RunDeskDumpNow()
 		when = time.Now().Format("2006-01-02 15:04:05")
-		app.robinDumpMu.Lock()
-		app.robinDumpFiles = files
-		app.robinDumpTime = when
-		app.robinDumpMu.Unlock()
+		app.robin.SetDump(files, when)
 	}
 	_ = app.db.AuditLog("LDAP", sess.Username, "Robin desk-data diagnostic download")
 
@@ -2397,25 +2389,23 @@ func (app *App) handleRestRobinSuggestions(w http.ResponseWriter, r *http.Reques
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}
-	if !app.robinSuggestProg.Start(0, "Starting…") {
+	if !app.robin.SuggestProg.Start(0, "Starting…") {
 		writeJSON(w, map[string]interface{}{"started": false, "running": true})
 		return
 	}
 	go func() {
 		defer func() {
 			if rec := recover(); rec != nil {
-				app.robinSuggestProg.Finish("", fmt.Sprintf("scan crashed: %v", rec))
+				app.robin.SuggestProg.Finish("", fmt.Sprintf("scan crashed: %v", rec))
 			}
 		}()
-		suggestions, err := app.collectRobinStripSuggestions(&app.robinSuggestProg)
+		suggestions, err := app.robin.CollectStripSuggestions(&app.robin.SuggestProg)
 		if err != nil {
-			app.robinSuggestProg.Finish("", err.Error())
+			app.robin.SuggestProg.Finish("", err.Error())
 			return
 		}
-		app.robinSuggestMu.Lock()
-		app.robinSuggestResult = suggestions
-		app.robinSuggestMu.Unlock()
-		app.robinSuggestProg.Finish(fmt.Sprintf("%d suggestion(s) found.", len(suggestions)), "")
+		app.robin.SetSuggestResult(suggestions)
+		app.robin.SuggestProg.Finish(fmt.Sprintf("%d suggestion(s) found.", len(suggestions)), "")
 	}()
 	writeJSON(w, map[string]interface{}{"started": true})
 }
@@ -2428,11 +2418,9 @@ func (app *App) handleRestRobinSuggestionsProgress(w http.ResponseWriter, r *htt
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}
-	snap := app.robinSuggestProg.Snapshot()
+	snap := app.robin.SuggestProg.Snapshot()
 	if done, _ := snap["done"].(bool); done {
-		app.robinSuggestMu.Lock()
-		snap["suggestions"] = app.robinSuggestResult
-		app.robinSuggestMu.Unlock()
+		snap["suggestions"] = app.robin.SuggestResult()
 	}
 	writeJSON(w, snap)
 }
@@ -2461,7 +2449,7 @@ func (app *App) handleRestRobinStripAdd(w http.ResponseWriter, r *http.Request) 
 		writeJSON(w, map[string]interface{}{"error": "invalid type"})
 		return
 	}
-	existing := splitRobinList(app.db.GetRobinSetting(listKey))
+	existing := robin.SplitList(app.db.GetRobinSetting(listKey))
 	for _, e := range existing {
 		if e == pat {
 			writeJSON(w, map[string]interface{}{"ok": true, "already": true})

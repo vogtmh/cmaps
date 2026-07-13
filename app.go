@@ -4,6 +4,7 @@ import (
 	"companymaps/internal/auth"
 	"companymaps/internal/config"
 	"companymaps/internal/integrations/geo"
+	"companymaps/internal/integrations/robin"
 	"companymaps/internal/progress"
 
 	"html/template"
@@ -25,7 +26,6 @@ type App struct {
 	syncDebugMu sync.Mutex
 	syncDebug   ADSyncDebug
 
-	robinProg progress.Progress
 	ldapProg  progress.Progress
 	entraProg progress.Progress
 
@@ -33,23 +33,9 @@ type App struct {
 	// mail) so the admin Sync > General subtab can show a live progress bar + log.
 	migrateProg progress.Progress
 
-	// robinDeskProg tracks the background desk-data diagnostic so the admin Sync
-	// tab can show a live progress bar + log.
-	robinDeskProg progress.Progress
-
-	// robinSuggestProg tracks the background strip-pattern suggestion scan so the
-	// admin Sync tab can show a live progress bar. robinSuggestResult holds the
-	// suggestions from the most recent completed scan.
-	robinSuggestProg   progress.Progress
-	robinSuggestMu     sync.Mutex
-	robinSuggestResult []robinStripSuggestion
-
-	// robinDump caches the most recent desk-data diagnostic bundle so the admin
-	// "Download JSON bundle" button can export exactly what the last run captured
-	// without re-hitting the Robin API.
-	robinDumpMu    sync.Mutex
-	robinDumpFiles []robinDumpFile
-	robinDumpTime  string
+	// robin owns the Robin Powered integration: meeting/desk syncs, their
+	// progress trackers, the diagnostic dump cache and the scheduler state.
+	robin *robin.Service
 
 	// exportProg tracks the background build of a full data export so the admin
 	// Backup dialog can show a determinate progress bar. exportPath/exportName
@@ -63,13 +49,13 @@ type App struct {
 	// the progress/result pair polled by the admin Sync panel.
 	geo *geo.Service
 
-	// next*Sync hold the wall-clock time of the next scheduled automatic sync for
-	// each integration, surfaced in the admin Sync tab. In-memory only (they
-	// reset on restart, which is correct since the schedulers re-arm on boot).
+	// next*Sync hold the wall-clock time of the next scheduled automatic sync
+	// for the LDAP/Entra schedulers, surfaced in the admin Sync tab. In-memory
+	// only (they reset on restart, which is correct since the schedulers re-arm
+	// on boot). Robin's equivalent lives on robin.Service.
 	nextSyncMu    sync.Mutex
 	nextLdapSync  time.Time
 	nextEntraSync time.Time
-	nextRobinSync time.Time
 
 	// startTime is the process boot time, used to compute uptime on the dashboard.
 	startTime time.Time

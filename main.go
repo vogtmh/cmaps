@@ -4,6 +4,7 @@ import (
 	"companymaps/internal/auth/saml"
 	"companymaps/internal/config"
 	"companymaps/internal/integrations/geo"
+	"companymaps/internal/integrations/robin"
 	"companymaps/internal/store"
 	"embed"
 	"html/template"
@@ -93,6 +94,7 @@ func main() {
 		staticFS:  staticSub,
 		startTime: time.Now(),
 		geo:       &geo.Service{DB: db},
+		robin:     &robin.Service{DB: db},
 	}
 
 	// Backfill newer optional settings so they appear in the admin panel on
@@ -147,10 +149,10 @@ func main() {
 
 	// Background Robin meeting-room + desk-occupancy refresh every 5 minutes
 	// (first run 5 minutes after startup, no-op until Robin is configured).
-	app.StartRobinScheduler(5 * time.Minute)
+	app.robin.StartScheduler(5 * time.Minute)
 
 	// Background Robin location discovery (no-op until token + organisation set).
-	app.StartRobinLocationScheduler(1 * time.Hour)
+	app.robin.StartLocationScheduler(1 * time.Hour)
 
 	// Hourly connectivity tests for every sync integration (LDAP, EntraID, SAML,
 	// Robin), surfaced on the dashboard. First run shortly after boot.

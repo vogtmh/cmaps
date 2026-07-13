@@ -125,8 +125,8 @@ func (app *App) listUnifiedSources() []UnifiedSource {
 		live[ref] = liveInfo{"entra", s.ID, s.Description, s.Disabled}
 		liveRefs = append(liveRefs, ref)
 	}
-	if app.robinConfigured() {
-		live["robin"] = liveInfo{"robin", 0, "Robin", !app.robinEnabled()}
+	if app.robin.Configured() {
+		live["robin"] = liveInfo{"robin", 0, "Robin", !app.robin.Enabled()}
 		liveRefs = append(liveRefs, "robin")
 	}
 
@@ -297,7 +297,7 @@ func (app *App) sourceOccupancy(src UnifiedSource, mapName string, deskByNum map
 			})
 		}
 	case "robin":
-		if !app.robinEnabled() {
+		if !app.robin.Enabled() {
 			return nil
 		}
 		sts, _ := app.db.ListRobinDeskStatus(mapName)

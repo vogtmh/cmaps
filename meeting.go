@@ -11,8 +11,8 @@ func (app *App) handleRestMeeting(w http.ResponseWriter, r *http.Request) {
 	mapName := r.URL.Query().Get("map")
 	useCache := r.URL.Query().Get("usecache")
 
-	if useCache == "" && app.robinEnabled() && app.db.GetRobinSetting("robintoken") != "" {
-		app.refreshRobin(mapName)
+	if useCache == "" && app.robin.Enabled() && app.db.GetRobinSetting("robintoken") != "" {
+		app.robin.Refresh(mapName)
 	}
 
 	statuses, _ := app.db.ListMeetingStatus(mapName)

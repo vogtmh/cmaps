@@ -1,7 +1,8 @@
-package main
+package robin
 
 import (
 	"companymaps/internal/progress"
+	"companymaps/internal/store"
 
 	"encoding/json"
 	"fmt"
@@ -24,8 +25,8 @@ const robinSyncWorkers = 8
 const robinAPIBase = "https://api.robinpowered.com/v1.0"
 
 // robinClient performs an authenticated GET against the Robin API.
-func (app *App) robinGet(path string, out interface{}) error {
-	token := app.db.GetRobinSetting("robintoken")
+func (svc *Service) get(path string, out interface{}) error {
+	token := svc.DB.GetRobinSetting("robintoken")
 	if token == "" {
 		return fmt.Errorf("robin token not configured")
 	}
@@ -118,27 +119,27 @@ type robinEvents struct {
 
 // refreshRobin re-polls Robin for a single map. An empty mapName refreshes every
 // configured space. Multiple spaces may map to the same CompanyMaps map.
-func (app *App) refreshRobin(mapName string) {
-	spaces, _ := app.db.ListRobinSpaces()
+func (svc *Service) Refresh(mapName string) {
+	spaces, _ := svc.DB.ListRobinSpaces()
 	for _, s := range spaces {
 		if mapName != "" && s.MapName() != mapName {
 			continue
 		}
-		if err := app.pollRobinLocation(s.Spaceid, s.MapName()); err != nil {
+		if err := svc.pollRobinLocation(s.Spaceid, s.MapName()); err != nil {
 			log.Printf("robin poll %s: %v", s.Spacename, err)
 		}
 	}
 }
 
 // pollRobinLocation fetches every room in a Robin location and caches its status.
-// The RobinSpace.Spacename is used as the CompanyMaps map name.
-func (app *App) pollRobinLocation(locationID int, mapName string) error {
+// The store.RobinSpace.Spacename is used as the CompanyMaps map name.
+func (svc *Service) pollRobinLocation(locationID int, mapName string) error {
 	var list robinSpaceList
-	if err := app.robinGet(fmt.Sprintf("/locations/%d/spaces?page=1&per_page=200", locationID), &list); err != nil {
+	if err := svc.get(fmt.Sprintf("/locations/%d/spaces?page=1&per_page=200", locationID), &list); err != nil {
 		return err
 	}
 	for _, room := range list.Data {
-		if err := app.pollRobinRoom(room.ID, room.Name, mapName); err != nil {
+		if err := svc.pollRobinRoom(room.ID, room.Name, mapName); err != nil {
 			log.Printf("robin room %s/%s: %v", mapName, room.Name, err)
 		}
 	}
@@ -146,23 +147,23 @@ func (app *App) pollRobinLocation(locationID int, mapName string) error {
 }
 
 // pollRobinRoom caches state + current/next event for a single Robin room.
-func (app *App) pollRobinRoom(roomID int, roomName, mapName string) error {
+func (svc *Service) pollRobinRoom(roomID int, roomName, mapName string) error {
 	var state robinState
-	if err := app.robinGet(fmt.Sprintf("/spaces/%d/state", roomID), &state); err != nil {
+	if err := svc.get(fmt.Sprintf("/spaces/%d/state", roomID), &state); err != nil {
 		return err
 	}
 
 	after := time.Now().UTC().Add(-24 * time.Hour).Format("2006-01-02T15:04:05Z")
 	before := time.Now().UTC().Add(144 * time.Hour).Format("2006-01-02T15:04:05Z")
 	var events robinEvents
-	if err := app.robinGet(fmt.Sprintf("/spaces/%d/events?after=%s&before=%s&page=1&per_page=200", roomID, after, before), &events); err != nil {
+	if err := svc.get(fmt.Sprintf("/spaces/%d/events?after=%s&before=%s&page=1&per_page=200", roomID, after, before), &events); err != nil {
 		return err
 	}
 
 	ev := roomEventWindows(events)
-	deskid := app.findMeetingDeskID(mapName, roomName)
+	deskid := svc.findMeetingDeskID(mapName, roomName)
 
-	return app.db.PutMeetingStatus(MeetingStatus{
+	return svc.DB.PutMeetingStatus(store.MeetingStatus{
 		Map: mapName, Room: roomName, Availability: state.Data.Availability,
 		NowTitle: ev.nowTitle, NowStart: ev.nowStart, NowEnd: ev.nowEnd, NowTz: ev.nowTz,
 		NextTitle: ev.nextTitle, NextStart: ev.nextStart, NextEnd: ev.nextEnd, NextTz: ev.nextTz,
@@ -242,8 +243,8 @@ func roomEventWindows(events robinEvents) roomWindows {
 
 // findMeetingDeskID returns the desk ID of the meeting desk named roomName on a
 // given map, or "" when none exists.
-func (app *App) findMeetingDeskID(mapName, roomName string) string {
-	desks, _ := app.db.ListDesks(mapName)
+func (svc *Service) findMeetingDeskID(mapName, roomName string) string {
+	desks, _ := svc.DB.ListDesks(mapName)
 	for _, d := range desks {
 		if strings.EqualFold(d.Desktype, "meeting") && strings.EqualFold(d.Desknumber, roomName) {
 			return fmt.Sprintf("%d", d.ID)
@@ -265,28 +266,28 @@ func clampTitle(title, fallback string) string {
 // robinEnabled reports whether the Robin integration is switched on. It
 // defaults to enabled so existing installs keep working after an upgrade; the
 // admin toggle only stores the value "0" to disable it.
-func (app *App) robinEnabled() bool {
-	return app.db.GetRobinSetting("robinEnabled") != "0"
+func (svc *Service) Enabled() bool {
+	return svc.DB.GetRobinSetting("robinEnabled") != "0"
 }
 
 // StartRobinScheduler refreshes the Robin meeting cache on a fixed interval.
 // No-op while no Robin token is configured. The next scheduled run time is
 // recorded for the admin Sync tab even when a tick is skipped (disabled).
-func (app *App) StartRobinScheduler(interval time.Duration) {
+func (svc *Service) StartScheduler(interval time.Duration) {
 	go func() {
-		app.setNextSync(&app.nextRobinSync, time.Now().Add(interval))
+		svc.setNextSync(&svc.nextRobinSync, time.Now().Add(interval))
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
 		for range ticker.C {
-			if app.robinEnabled() && app.db.GetRobinSetting("robintoken") != "" {
+			if svc.Enabled() && svc.DB.GetRobinSetting("robintoken") != "" {
 				// A scheduled run also records the last-sync time and per-room
 				// match results so the admin Sync tab can show what happened.
-				app.RunRobinSyncStructured()
+				svc.RunSyncStructuredNow()
 				// Refresh the live desk-occupancy overlay cache (no-op unless the
 				// overlay is enabled). Kept separate from the meeting/booking data.
-				app.pollRobinDeskOccupancy(nil)
+				svc.PollDeskOccupancy(nil)
 			}
-			app.setNextSync(&app.nextRobinSync, time.Now().Add(interval))
+			svc.setNextSync(&svc.nextRobinSync, time.Now().Add(interval))
 		}
 	}()
 }
@@ -304,13 +305,13 @@ type robinLocationEntry struct {
 
 // robinListLocations fetches the organisation's locations from Robin so the
 // local mapping list can be reconciled against the source of truth.
-func (app *App) robinListLocations() ([]robinLocationEntry, error) {
-	org := strings.TrimSpace(app.db.GetRobinSetting("robinOrganisation"))
+func (svc *Service) ListLocations() ([]robinLocationEntry, error) {
+	org := strings.TrimSpace(svc.DB.GetRobinSetting("robinOrganisation"))
 	if org == "" {
 		return nil, fmt.Errorf("Robin organisation id is not configured")
 	}
 	var list robinLocationList
-	if err := app.robinGet(fmt.Sprintf("/organizations/%s/locations?page=1&per_page=200", org), &list); err != nil {
+	if err := svc.get(fmt.Sprintf("/organizations/%s/locations?page=1&per_page=200", org), &list); err != nil {
 		return nil, err
 	}
 	return list.Data, nil
@@ -322,18 +323,18 @@ func (app *App) robinListLocations() ([]robinLocationEntry, error) {
 // locations are re-keyed, and locations Robin no longer returns are removed.
 // Newly discovered locations appear unmapped for an admin to assign. Returns a
 // short human-readable summary.
-func (app *App) reconcileRobinLocations() (string, error) {
-	if app.db.GetRobinSetting("robintoken") == "" {
+func (svc *Service) ReconcileLocations() (string, error) {
+	if svc.DB.GetRobinSetting("robintoken") == "" {
 		return "", fmt.Errorf("Robin access token is not configured")
 	}
-	locs, err := app.robinListLocations()
+	locs, err := svc.ListLocations()
 	if err != nil {
 		return "", err
 	}
 
-	old, _ := app.db.ListRobinSpaces()
-	oldByID := make(map[int]RobinSpace)
-	oldByName := make(map[string]RobinSpace)
+	old, _ := svc.DB.ListRobinSpaces()
+	oldByID := make(map[int]store.RobinSpace)
+	oldByName := make(map[string]store.RobinSpace)
 	for _, o := range old {
 		oldByID[o.Spaceid] = o
 		oldByName[strings.ToLower(o.Spacename)] = o
@@ -353,7 +354,7 @@ func (app *App) reconcileRobinLocations() (string, error) {
 			mapname = ex.Mapname
 			if !strings.EqualFold(ex.Spacename, name) {
 				// Location was renamed in Robin: drop the stale key.
-				_ = app.db.DeleteRobinSpace(ex.Spacename)
+				_ = svc.DB.DeleteRobinSpace(ex.Spacename)
 				renamed++
 			}
 		} else if ex, ok := oldByName[name]; ok {
@@ -361,19 +362,19 @@ func (app *App) reconcileRobinLocations() (string, error) {
 		} else {
 			added++
 		}
-		_ = app.db.PutRobinSpace(RobinSpace{Spacename: name, Spaceid: loc.ID, Mapname: mapname})
+		_ = svc.DB.PutRobinSpace(store.RobinSpace{Spacename: name, Spaceid: loc.ID, Mapname: mapname})
 	}
 
 	var removed int
 	for _, o := range old {
 		if !discovered[o.Spaceid] {
-			_ = app.db.DeleteRobinSpace(o.Spacename)
+			_ = svc.DB.DeleteRobinSpace(o.Spacename)
 			removed++
 		}
 	}
 
 	// Count locations that still need a map assignment.
-	cur, _ := app.db.ListRobinSpaces()
+	cur, _ := svc.DB.ListRobinSpaces()
 	unmapped := 0
 	for _, s := range cur {
 		if strings.TrimSpace(s.Mapname) == "" {
@@ -381,7 +382,7 @@ func (app *App) reconcileRobinLocations() (string, error) {
 		}
 	}
 
-	_ = app.db.SetRobinSetting("robinLocLastDiscovery", time.Now().Format("2006-01-02 15:04:05"))
+	_ = svc.DB.SetRobinSetting("robinLocLastDiscovery", time.Now().Format("2006-01-02 15:04:05"))
 	summary := fmt.Sprintf("Discovered %d Robin location(s): %d new, %d renamed, %d removed. %d location(s) have no map assigned.",
 		len(locs), added, renamed, removed, unmapped)
 	return summary, nil
@@ -390,12 +391,12 @@ func (app *App) reconcileRobinLocations() (string, error) {
 // StartRobinLocationScheduler discovers Robin locations on a fixed interval and
 // once shortly after startup, so the local mapping list stays in sync with
 // Robin without manual maintenance. No-op while no token/organisation is set.
-func (app *App) StartRobinLocationScheduler(interval time.Duration) {
+func (svc *Service) StartLocationScheduler(interval time.Duration) {
 	go func() {
 		// Initial run shortly after startup (give the app time to settle).
 		time.Sleep(30 * time.Second)
-		if app.robinEnabled() && app.db.GetRobinSetting("robintoken") != "" && strings.TrimSpace(app.db.GetRobinSetting("robinOrganisation")) != "" {
-			if summary, err := app.reconcileRobinLocations(); err != nil {
+		if svc.Enabled() && svc.DB.GetRobinSetting("robintoken") != "" && strings.TrimSpace(svc.DB.GetRobinSetting("robinOrganisation")) != "" {
+			if summary, err := svc.ReconcileLocations(); err != nil {
 				log.Printf("robin location discovery: %v", err)
 			} else {
 				log.Printf("robin location discovery: %s", summary)
@@ -404,10 +405,10 @@ func (app *App) StartRobinLocationScheduler(interval time.Duration) {
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
 		for range ticker.C {
-			if !app.robinEnabled() || app.db.GetRobinSetting("robintoken") == "" || strings.TrimSpace(app.db.GetRobinSetting("robinOrganisation")) == "" {
+			if !svc.Enabled() || svc.DB.GetRobinSetting("robintoken") == "" || strings.TrimSpace(svc.DB.GetRobinSetting("robinOrganisation")) == "" {
 				continue
 			}
-			if _, err := app.reconcileRobinLocations(); err != nil {
+			if _, err := svc.ReconcileLocations(); err != nil {
 				log.Printf("robin location discovery: %v", err)
 			}
 		}
@@ -418,7 +419,7 @@ func (app *App) StartRobinLocationScheduler(interval time.Duration) {
 // configuration and returns a structured result (mirroring the SAML test) so an
 // admin can confirm the token/organisation work without running a sync. It makes
 // at most one GET (the organisation's locations list) and never writes anything.
-func (app *App) robinValidate() map[string]interface{} {
+func (svc *Service) Validate() map[string]interface{} {
 	type check struct {
 		Name   string `json:"name"`
 		Status string `json:"status"` // ok | warn | fail
@@ -430,14 +431,14 @@ func (app *App) robinValidate() map[string]interface{} {
 	}
 
 	// Integration switched on?
-	if app.robinEnabled() {
+	if svc.Enabled() {
 		add("Robin integration", "ok", "The integration is switched on.")
 	} else {
 		add("Robin integration", "warn", "Robin is currently disabled; syncing is paused.")
 	}
 
-	token := strings.TrimSpace(app.db.GetRobinSetting("robintoken"))
-	org := strings.TrimSpace(app.db.GetRobinSetting("robinOrganisation"))
+	token := strings.TrimSpace(svc.DB.GetRobinSetting("robintoken"))
+	org := strings.TrimSpace(svc.DB.GetRobinSetting("robinOrganisation"))
 
 	if token != "" {
 		add("Access token", "ok", "An access token is configured.")
@@ -454,7 +455,7 @@ func (app *App) robinValidate() map[string]interface{} {
 	// token and the organisation id in one read-only call — the same endpoint
 	// used to discover locations, so if this works, syncing can authenticate too.
 	if token != "" && org != "" {
-		if locs, err := app.robinListLocations(); err != nil {
+		if locs, err := svc.ListLocations(); err != nil {
 			add("API connection", "fail", "Robin rejected the request: "+err.Error())
 		} else {
 			add("API connection", "ok", fmt.Sprintf("Robin returned %d location(s).", len(locs)))
@@ -462,7 +463,7 @@ func (app *App) robinValidate() map[string]interface{} {
 	}
 
 	// Location → map mappings.
-	spaces, _ := app.db.ListRobinSpaces()
+	spaces, _ := svc.DB.ListRobinSpaces()
 	mapped := 0
 	for _, s := range spaces {
 		if strings.TrimSpace(s.Mapname) != "" {
@@ -491,22 +492,22 @@ func (app *App) robinValidate() map[string]interface{} {
 // RunRobinSyncVerbose performs a full Robin meeting sync while collecting a
 // human-readable log of every step. It is used by the admin "Test meeting sync"
 // button so an operator can see exactly what happens (and why nothing shows up).
-func (app *App) RunRobinSyncVerbose() []string {
+func (svc *Service) RunSyncVerbose() []string {
 	var logs []string
 	add := func(format string, args ...interface{}) {
 		logs = append(logs, fmt.Sprintf(format, args...))
 	}
 
-	if app.db.GetRobinSetting("robintoken") == "" {
+	if svc.DB.GetRobinSetting("robintoken") == "" {
 		add("ERROR: Robin access token is not configured. Enter it above and save first.")
 		return logs
 	}
 	add("Robin access token is configured.")
-	if org := app.db.GetRobinSetting("robinOrganisation"); org != "" {
+	if org := svc.DB.GetRobinSetting("robinOrganisation"); org != "" {
 		add("Robin organisation: %s", org)
 	}
 
-	spaces, _ := app.db.ListRobinSpaces()
+	spaces, _ := svc.DB.ListRobinSpaces()
 	add("Configured spaces (map name -> Robin location id): %d", len(spaces))
 	if len(spaces) == 0 {
 		add("No spaces configured. Add at least one mapping below before rooms can sync.")
@@ -522,13 +523,13 @@ func (app *App) RunRobinSyncVerbose() []string {
 			add("== Space \"%s\" (location id %d) ==", s.Spacename, s.Spaceid)
 		}
 		var list robinSpaceList
-		if err := app.robinGet(fmt.Sprintf("/locations/%d/spaces?page=1&per_page=200", s.Spaceid), &list); err != nil {
+		if err := svc.get(fmt.Sprintf("/locations/%d/spaces?page=1&per_page=200", s.Spaceid), &list); err != nil {
 			add("  ERROR fetching rooms for location %d: %v", s.Spaceid, err)
 			continue
 		}
 		add("  Robin returned %d room(s) for this location.", len(list.Data))
 		for _, room := range list.Data {
-			logs = append(logs, app.pollRobinRoomVerbose(room.ID, room.Name, s.MapName())...)
+			logs = append(logs, svc.pollRobinRoomVerbose(room.ID, room.Name, s.MapName())...)
 			totalRooms++
 		}
 	}
@@ -539,14 +540,14 @@ func (app *App) RunRobinSyncVerbose() []string {
 
 // pollRobinRoomVerbose caches a single room's status and returns a log of what
 // happened, mirroring pollRobinRoom but with diagnostics for the admin modal.
-func (app *App) pollRobinRoomVerbose(roomID int, roomName, mapName string) []string {
+func (svc *Service) pollRobinRoomVerbose(roomID int, roomName, mapName string) []string {
 	var logs []string
 	add := func(format string, args ...interface{}) {
 		logs = append(logs, "  "+fmt.Sprintf(format, args...))
 	}
 
 	var state robinState
-	if err := app.robinGet(fmt.Sprintf("/spaces/%d/state", roomID), &state); err != nil {
+	if err := svc.get(fmt.Sprintf("/spaces/%d/state", roomID), &state); err != nil {
 		add("Room \"%s\" (#%d): ERROR fetching state: %v", roomName, roomID, err)
 		return logs
 	}
@@ -555,7 +556,7 @@ func (app *App) pollRobinRoomVerbose(roomID int, roomName, mapName string) []str
 	after := time.Now().UTC().Add(-24 * time.Hour).Format("2006-01-02T15:04:05Z")
 	before := time.Now().UTC().Add(144 * time.Hour).Format("2006-01-02T15:04:05Z")
 	var events robinEvents
-	if err := app.robinGet(fmt.Sprintf("/spaces/%d/events?after=%s&before=%s&page=1&per_page=200", roomID, after, before), &events); err != nil {
+	if err := svc.get(fmt.Sprintf("/spaces/%d/events?after=%s&before=%s&page=1&per_page=200", roomID, after, before), &events); err != nil {
 		add("    ERROR fetching events: %v", err)
 		return logs
 	}
@@ -570,14 +571,14 @@ func (app *App) pollRobinRoomVerbose(roomID int, roomName, mapName string) []str
 		add("    next: %s (%s - %s)", ev.nextTitle, ev.nextStart, ev.nextEnd)
 	}
 
-	deskid := app.findMeetingDeskID(mapName, roomName)
+	deskid := svc.findMeetingDeskID(mapName, roomName)
 	if deskid == "" {
 		add("    no meeting desk named \"%s\" on map \"%s\" — status cached but not shown on the map.", roomName, mapName)
 	} else {
 		add("    matched meeting desk id %s on map \"%s\".", deskid, mapName)
 	}
 
-	if err := app.db.PutMeetingStatus(MeetingStatus{
+	if err := svc.DB.PutMeetingStatus(store.MeetingStatus{
 		Map: mapName, Room: roomName, Availability: state.Data.Availability,
 		NowTitle: ev.nowTitle, NowStart: ev.nowStart, NowEnd: ev.nowEnd, NowTz: ev.nowTz,
 		NextTitle: ev.nextTitle, NextStart: ev.nextStart, NextEnd: ev.nextEnd, NextTz: ev.nextTz,
@@ -628,34 +629,34 @@ type RobinSyncResult struct {
 // RunRobinSyncStructured performs a full Robin meeting sync, updates the meeting
 // cache, and records a structured per-room result (with match status and the
 // time of the run) so the admin Sync tab can show exactly what was synced.
-func (app *App) RunRobinSyncStructured() RobinSyncResult {
-	return app.runRobinSyncStructured(nil)
+func (svc *Service) RunSyncStructuredNow() RobinSyncResult {
+	return svc.RunSyncStructured(nil)
 }
 
 // runRobinSyncStructured is the worker behind RunRobinSyncStructured. When prog
 // is non-nil it reports determinate progress (room-by-room) and a live log so
 // the admin Sync tab can render a progress bar during the (often slow) sync.
-func (app *App) runRobinSyncStructured(prog *progress.Progress) RobinSyncResult {
+func (svc *Service) RunSyncStructured(prog *progress.Progress) RobinSyncResult {
 	res := RobinSyncResult{
 		Time: time.Now().Format("2006-01-02 15:04:05"),
-		Org:  app.db.GetRobinSetting("robinOrganisation"),
+		Org:  svc.DB.GetRobinSetting("robinOrganisation"),
 	}
-	if app.db.GetRobinSetting("robintoken") == "" {
+	if svc.DB.GetRobinSetting("robintoken") == "" {
 		res.Note = "Robin access token is not configured."
 		if prog != nil {
 			prog.Logf("Robin access token is not configured.")
 		}
-		app.saveRobinSyncResult(res)
+		svc.saveSyncResult(res)
 		return res
 	}
-	spaces, _ := app.db.ListRobinSpaces()
+	spaces, _ := svc.DB.ListRobinSpaces()
 	sort.Slice(spaces, func(i, j int) bool { return spaces[i].Spacename < spaces[j].Spacename })
 	if len(spaces) == 0 {
 		res.Note = "No Robin locations configured yet."
 		if prog != nil {
 			prog.Logf("No Robin locations configured yet.")
 		}
-		app.saveRobinSyncResult(res)
+		svc.saveSyncResult(res)
 		return res
 	}
 
@@ -674,7 +675,7 @@ func (app *App) runRobinSyncStructured(prog *progress.Progress) RobinSyncResult 
 	for _, s := range spaces {
 		loc := RobinSyncLocation{Spacename: s.Spacename, Mapname: s.MapName(), Spaceid: s.Spaceid}
 		var list robinSpaceList
-		if err := app.robinGet(fmt.Sprintf("/locations/%d/spaces?page=1&per_page=200", s.Spaceid), &list); err != nil {
+		if err := svc.get(fmt.Sprintf("/locations/%d/spaces?page=1&per_page=200", s.Spaceid), &list); err != nil {
 			loc.Err = err.Error()
 			if prog != nil {
 				prog.Logf("✗ %s (id %d): %s", s.Spacename, s.Spaceid, err.Error())
@@ -718,7 +719,7 @@ func (app *App) runRobinSyncStructured(prog *progress.Progress) RobinSyncResult 
 		go func() {
 			defer wg.Done()
 			for j := range jobCh {
-				r := app.pollRobinRoomStructured(j.room.ID, j.room.Name, j.mapnm)
+				r := svc.pollRobinRoomStructured(j.room.ID, j.room.Name, j.mapnm)
 				roomResults[j.li][j.ri] = r
 				if prog != nil {
 					switch {
@@ -752,17 +753,17 @@ func (app *App) runRobinSyncStructured(prog *progress.Progress) RobinSyncResult 
 		}
 		res.Locations = append(res.Locations, loc)
 	}
-	app.saveRobinSyncResult(res)
+	svc.saveSyncResult(res)
 	return res
 }
 
 // pollRobinRoomStructured caches a single room's status and returns a structured
 // summary of the outcome (mirrors pollRobinRoom).
-func (app *App) pollRobinRoomStructured(roomID int, roomName, mapName string) RobinSyncRoom {
+func (svc *Service) pollRobinRoomStructured(roomID int, roomName, mapName string) RobinSyncRoom {
 	r := RobinSyncRoom{Name: roomName, ID: roomID}
 
 	var state robinState
-	if err := app.robinGet(fmt.Sprintf("/spaces/%d/state", roomID), &state); err != nil {
+	if err := svc.get(fmt.Sprintf("/spaces/%d/state", roomID), &state); err != nil {
 		r.Err = err.Error()
 		return r
 	}
@@ -771,7 +772,7 @@ func (app *App) pollRobinRoomStructured(roomID int, roomName, mapName string) Ro
 	after := time.Now().UTC().Add(-24 * time.Hour).Format("2006-01-02T15:04:05Z")
 	before := time.Now().UTC().Add(144 * time.Hour).Format("2006-01-02T15:04:05Z")
 	var events robinEvents
-	if err := app.robinGet(fmt.Sprintf("/spaces/%d/events?after=%s&before=%s&page=1&per_page=200", roomID, after, before), &events); err != nil {
+	if err := svc.get(fmt.Sprintf("/spaces/%d/events?after=%s&before=%s&page=1&per_page=200", roomID, after, before), &events); err != nil {
 		r.Err = err.Error()
 		return r
 	}
@@ -784,11 +785,11 @@ func (app *App) pollRobinRoomStructured(roomID int, roomName, mapName string) Ro
 	r.NextStart = ev.nextStart
 	r.NextEnd = ev.nextEnd
 
-	deskid := app.findMeetingDeskID(mapName, roomName)
+	deskid := svc.findMeetingDeskID(mapName, roomName)
 	r.Deskid = deskid
 	r.Matched = deskid != ""
 
-	_ = app.db.PutMeetingStatus(MeetingStatus{
+	_ = svc.DB.PutMeetingStatus(store.MeetingStatus{
 		Map: mapName, Room: roomName, Availability: state.Data.Availability,
 		NowTitle: ev.nowTitle, NowStart: ev.nowStart, NowEnd: ev.nowEnd, NowTz: ev.nowTz,
 		NextTitle: ev.nextTitle, NextStart: ev.nextStart, NextEnd: ev.nextEnd, NextTz: ev.nextTz,
@@ -798,15 +799,15 @@ func (app *App) pollRobinRoomStructured(roomID int, roomName, mapName string) Ro
 }
 
 // saveRobinSyncResult persists the most recent structured sync result as JSON.
-func (app *App) saveRobinSyncResult(res RobinSyncResult) {
+func (svc *Service) saveSyncResult(res RobinSyncResult) {
 	if b, err := json.Marshal(res); err == nil {
-		_ = app.db.SetRobinSetting("robinLastSync", string(b))
+		_ = svc.DB.SetRobinSetting("robinLastSync", string(b))
 	}
 }
 
 // LastRobinSyncResult returns the most recently persisted sync result, if any.
-func (app *App) LastRobinSyncResult() (RobinSyncResult, bool) {
-	js := app.db.GetRobinSetting("robinLastSync")
+func (svc *Service) LastSyncResult() (RobinSyncResult, bool) {
+	js := svc.DB.GetRobinSetting("robinLastSync")
 	if js == "" {
 		return RobinSyncResult{}, false
 	}
@@ -828,15 +829,15 @@ type RobinDeskSyncResult struct {
 }
 
 // saveRobinDeskSyncResult persists the desk-sync summary as JSON.
-func (app *App) saveRobinDeskSyncResult(res RobinDeskSyncResult) {
+func (svc *Service) saveDeskSyncResult(res RobinDeskSyncResult) {
 	if b, err := json.Marshal(res); err == nil {
-		_ = app.db.SetRobinSetting("robinDeskLastSync", string(b))
+		_ = svc.DB.SetRobinSetting("robinDeskLastSync", string(b))
 	}
 }
 
 // LastRobinDeskSyncResult returns the most recently persisted desk-sync summary.
-func (app *App) LastRobinDeskSyncResult() (RobinDeskSyncResult, bool) {
-	js := app.db.GetRobinSetting("robinDeskLastSync")
+func (svc *Service) LastDeskSyncResult() (RobinDeskSyncResult, bool) {
+	js := svc.DB.GetRobinSetting("robinDeskLastSync")
 	if js == "" {
 		return RobinDeskSyncResult{}, false
 	}
@@ -856,8 +857,8 @@ func (app *App) LastRobinDeskSyncResult() (RobinDeskSyncResult, bool) {
 // from Robin so the captured JSON can be inspected later. "Today" is the time
 // window used for events and seat reservations.
 
-// robinDumpFile is a single captured raw-JSON response in the diagnostic bundle.
-type robinDumpFile struct {
+// DumpFile is a single captured raw-JSON response in the diagnostic bundle.
+type DumpFile struct {
 	Name string
 	Data []byte
 }
@@ -865,8 +866,8 @@ type robinDumpFile struct {
 // robinGetRaw performs an authenticated GET and returns the raw response body
 // (plus HTTP status) without unmarshalling, so the diagnostic can capture
 // exactly what Robin sent.
-func (app *App) robinGetRaw(path string) ([]byte, int, error) {
-	token := app.db.GetRobinSetting("robintoken")
+func (svc *Service) getRaw(path string) ([]byte, int, error) {
+	token := svc.DB.GetRobinSetting("robintoken")
 	if token == "" {
 		return nil, 0, fmt.Errorf("robin token not configured")
 	}
@@ -931,8 +932,8 @@ type RobinDeskDumpResult struct {
 }
 
 // RunRobinDeskDump runs the desk diagnostic without progress reporting.
-func (app *App) RunRobinDeskDump() ([]string, []robinDumpFile) {
-	logs, files, _ := app.runRobinDeskDump(nil)
+func (svc *Service) RunDeskDumpNow() ([]string, []DumpFile) {
+	logs, files, _ := svc.RunDeskDump(nil)
 	return logs, files
 }
 
@@ -947,8 +948,8 @@ func (app *App) RunRobinDeskDump() ([]string, []robinDumpFile) {
 // expensive raw-JSON captures and per-line logging are skipped, so the poller is
 // cheap.
 
-// robinStripCfg holds the seat-name strip configuration loaded once per run.
-type robinStripCfg struct {
+// stripCfg holds the seat-name strip configuration loaded once per run.
+type stripCfg struct {
 	stripPrefix bool
 	prefixes    []string
 	stripSuffix bool
@@ -956,16 +957,16 @@ type robinStripCfg struct {
 }
 
 // loadRobinStripCfg reads the strip-prefix/strip-suffix admin options.
-func (app *App) loadRobinStripCfg() robinStripCfg {
-	cfg := robinStripCfg{
-		stripPrefix: app.db.GetRobinSetting("robinStripPrefixEnabled") == "1",
-		stripSuffix: app.db.GetRobinSetting("robinStripSuffixEnabled") == "1",
+func (svc *Service) loadStripCfg() stripCfg {
+	cfg := stripCfg{
+		stripPrefix: svc.DB.GetRobinSetting("robinStripPrefixEnabled") == "1",
+		stripSuffix: svc.DB.GetRobinSetting("robinStripSuffixEnabled") == "1",
 	}
 	if cfg.stripPrefix {
-		cfg.prefixes = splitRobinList(app.db.GetRobinSetting("robinStripPrefixList"))
+		cfg.prefixes = SplitList(svc.DB.GetRobinSetting("robinStripPrefixList"))
 	}
 	if cfg.stripSuffix {
-		cfg.suffixes = splitRobinList(app.db.GetRobinSetting("robinStripSuffixList"))
+		cfg.suffixes = SplitList(svc.DB.GetRobinSetting("robinStripSuffixList"))
 	}
 	return cfg
 }
@@ -973,7 +974,7 @@ func (app *App) loadRobinStripCfg() robinStripCfg {
 // splitRobinList splits a textarea value into entries (one per line), preserving
 // internal/leading/trailing spaces literally (e.g. " / GER") while dropping
 // blank lines and trailing carriage returns from CRLF input.
-func splitRobinList(s string) []string {
+func SplitList(s string) []string {
 	var out []string
 	for _, line := range strings.Split(s, "\n") {
 		line = strings.TrimRight(line, "\r")
@@ -987,7 +988,7 @@ func splitRobinList(s string) []string {
 
 // normalizeSeatName applies the configured strip lists to a Robin seat name and
 // returns the lower-cased, trimmed key used to match a CompanyMaps desk number.
-func normalizeSeatName(name string, cfg robinStripCfg) string {
+func normalizeSeatName(name string, cfg stripCfg) string {
 	out := name
 	if cfg.stripPrefix {
 		for _, p := range cfg.prefixes {
@@ -1027,8 +1028,8 @@ type robinOccupant struct {
 // Robin's /users API is not used: it is forbidden for our access token, so it
 // can never resolve a name. When no AD match is found the raw email is kept as
 // the display name.
-func (app *App) resolveOccupant(email string, userID int, emailUser map[string]DirectoryUser) robinOccupant {
-	email = normalizeMail(email)
+func (svc *Service) resolveOccupant(email string, userID int, emailUser map[string]store.DirectoryUser) robinOccupant {
+	email = store.NormalizeMail(email)
 	occ := robinOccupant{Mail: email, UserID: userID}
 	if email != "" {
 		if u, ok := emailUser[strings.ToLower(email)]; ok {
@@ -1063,7 +1064,7 @@ func (app *App) resolveOccupant(email string, userID int, emailUser map[string]D
 // seat reservations active right now (one per occupied CompanyMaps desk). When
 // capture/logf are non-nil it also captures raw JSON and logs every step (for
 // the diagnostic). Counts are returned via RobinDeskDumpResult.
-func (app *App) collectRobinOccupancy(prog *progress.Progress, capture func(name string, raw []byte), logf func(format string, args ...interface{})) ([]RobinDeskStatus, RobinDeskDumpResult) {
+func (svc *Service) collectOccupancy(prog *progress.Progress, capture func(name string, raw []byte), logf func(format string, args ...interface{})) ([]store.RobinDeskStatus, RobinDeskDumpResult) {
 	add := func(format string, args ...interface{}) {
 		if logf != nil {
 			logf(format, args...)
@@ -1078,14 +1079,14 @@ func (app *App) collectRobinOccupancy(prog *progress.Progress, capture func(name
 		}
 	}
 	var res RobinDeskDumpResult
-	var statuses []RobinDeskStatus
+	var statuses []store.RobinDeskStatus
 
-	if app.db.GetRobinSetting("robintoken") == "" {
+	if svc.DB.GetRobinSetting("robintoken") == "" {
 		add("ERROR: Robin access token is not configured. Enter it on the Credentials card and save first.")
 		return statuses, res
 	}
 
-	stripCfg := app.loadRobinStripCfg()
+	stripCfg := svc.loadStripCfg()
 
 	// Today's window (local day → UTC), used for events and seat reservations.
 	now := time.Now()
@@ -1095,7 +1096,7 @@ func (app *App) collectRobinOccupancy(prog *progress.Progress, capture func(name
 	before := endLocal.UTC().Format("2006-01-02T15:04:05Z")
 	add("Window (today): %s → %s (UTC)", after, before)
 
-	spaces, _ := app.db.ListRobinSpaces()
+	spaces, _ := svc.DB.ListRobinSpaces()
 	sort.Slice(spaces, func(i, j int) bool { return spaces[i].Spacename < spaces[j].Spacename })
 	res.Locations = len(spaces)
 	add("Configured location(s): %d", len(spaces))
@@ -1109,8 +1110,8 @@ func (app *App) collectRobinOccupancy(prog *progress.Progress, capture func(name
 	// people without an office attribute still resolve. The primary mail and any
 	// AD proxyAddresses aliases (e.g. a legacy "spaeth@" before "first.last@")
 	// both map to the same person.
-	dir, _ := app.db.ListDirectory()
-	emailUser := make(map[string]DirectoryUser)
+	dir, _ := svc.DB.ListDirectory()
+	emailUser := make(map[string]store.DirectoryUser)
 	for _, u := range dir {
 		if u.Mail != "" {
 			emailUser[strings.ToLower(u.Mail)] = u
@@ -1125,14 +1126,14 @@ func (app *App) collectRobinOccupancy(prog *progress.Progress, capture func(name
 		}
 	}
 
-	// Desk lookups per CompanyMaps map (built lazily, reused across spaces).
-	deskByMap := make(map[string]map[string]Desk)
-	deskLookup := func(mapName string) map[string]Desk {
+	// store.Desk lookups per CompanyMaps map (built lazily, reused across spaces).
+	deskByMap := make(map[string]map[string]store.Desk)
+	deskLookup := func(mapName string) map[string]store.Desk {
 		if m, ok := deskByMap[mapName]; ok {
 			return m
 		}
-		m := make(map[string]Desk)
-		ds, _ := app.db.ListDesks(mapName)
+		m := make(map[string]store.Desk)
+		ds, _ := svc.DB.ListDesks(mapName)
 		for _, d := range ds {
 			m[strings.ToLower(strings.TrimSpace(d.Desknumber))] = d
 		}
@@ -1143,7 +1144,7 @@ func (app *App) collectRobinOccupancy(prog *progress.Progress, capture func(name
 	// Phase 1: fetch + capture every location's space list so the progress bar
 	// is determinate (one step per space).
 	type locWork struct {
-		s      RobinSpace
+		s      store.RobinSpace
 		dir    string
 		spaces []robinSpaceEntry
 	}
@@ -1154,7 +1155,7 @@ func (app *App) collectRobinOccupancy(prog *progress.Progress, capture func(name
 	}
 	for _, s := range spaces {
 		dir := fmt.Sprintf("location_%d_%s", s.Spaceid, sanitizeDumpSegment(s.Spacename))
-		rawSpaces, status, err := app.robinGetRaw(fmt.Sprintf("/locations/%d/spaces?page=1&per_page=200", s.Spaceid))
+		rawSpaces, status, err := svc.getRaw(fmt.Sprintf("/locations/%d/spaces?page=1&per_page=200", s.Spaceid))
 		cap(dir+"/spaces.json", rawSpaces)
 		if err != nil {
 			add("✗ %s (location id %d): ERROR fetching spaces (HTTP %d): %v", s.Spacename, s.Spaceid, status, err)
@@ -1182,10 +1183,10 @@ func (app *App) collectRobinOccupancy(prog *progress.Progress, capture func(name
 			// State + events are only needed for the diagnostic bundle, so skip
 			// the calls entirely when not capturing (the poller is cheap).
 			if capture != nil {
-				if raw, _, _ := app.robinGetRaw(fmt.Sprintf("/spaces/%d/state", sp.ID)); true {
+				if raw, _, _ := svc.getRaw(fmt.Sprintf("/spaces/%d/state", sp.ID)); true {
 					cap(base+"_state.json", raw)
 				}
-				if raw, _, _ := app.robinGetRaw(fmt.Sprintf("/spaces/%d/events?after=%s&before=%s&page=1&per_page=200", sp.ID, after, before)); true {
+				if raw, _, _ := svc.getRaw(fmt.Sprintf("/spaces/%d/events?after=%s&before=%s&page=1&per_page=200", sp.ID, after, before)); true {
 					cap(base+"_events.json", raw)
 				}
 			}
@@ -1194,7 +1195,7 @@ func (app *App) collectRobinOccupancy(prog *progress.Progress, capture func(name
 			seatName := make(map[int]string)
 			seatCount := 0
 			for page := 1; page <= 50; page++ {
-				raw, _, e := app.robinGetRaw(fmt.Sprintf("/spaces/%d/seats?page=%d&per_page=200", sp.ID, page))
+				raw, _, e := svc.getRaw(fmt.Sprintf("/spaces/%d/seats?page=%d&per_page=200", sp.ID, page))
 				cap(fmt.Sprintf("%s_seats_p%d.json", base, page), raw)
 				if e != nil {
 					break
@@ -1216,7 +1217,7 @@ func (app *App) collectRobinOccupancy(prog *progress.Progress, capture func(name
 			// Seat reservations for today (paginated).
 			var resvs []robinSeatResv
 			for page := 1; page <= 50; page++ {
-				raw, _, e := app.robinGetRaw(fmt.Sprintf("/reservations/seats?space_ids=%d&after=%s&before=%s&page=%d&per_page=200", sp.ID, after, before, page))
+				raw, _, e := svc.getRaw(fmt.Sprintf("/reservations/seats?space_ids=%d&after=%s&before=%s&page=%d&per_page=200", sp.ID, after, before, page))
 				cap(fmt.Sprintf("%s_reservations_p%d.json", base, page), raw)
 				if e != nil {
 					break
@@ -1244,7 +1245,7 @@ func (app *App) collectRobinOccupancy(prog *progress.Progress, capture func(name
 				res.OccupiedNow++
 
 				nm := seatName[rv.SeatID]
-				occ := app.resolveOccupant(rv.Reservee.Email, rv.Reservee.UserID, emailUser)
+				occ := svc.resolveOccupant(rv.Reservee.Email, rv.Reservee.UserID, emailUser)
 				who := occ.Name
 				if occ.Name != "" && occ.Mail != "" && !strings.EqualFold(occ.Name, occ.Mail) {
 					who = occ.Name + " <" + occ.Mail + ">"
@@ -1252,7 +1253,7 @@ func (app *App) collectRobinOccupancy(prog *progress.Progress, capture func(name
 
 				if d, matched := desks[normalizeSeatName(nm, stripCfg)]; matched {
 					res.Matched++
-					statuses = append(statuses, RobinDeskStatus{
+					statuses = append(statuses, store.RobinDeskStatus{
 						Map: s.MapName(), Desknumber: d.Desknumber,
 						Name: occ.Name, Userid: occ.Userid, Mail: occ.Mail,
 						Phone: occ.Phone, Title: occ.Title, Mobile: occ.Mobile,
@@ -1292,7 +1293,7 @@ func (app *App) collectRobinOccupancy(prog *progress.Progress, capture func(name
 // a CompanyMaps desk. When prog is non-nil it reports a determinate progress bar
 // (one step per Robin space) and a live log. Nothing is persisted to the meeting
 // cache, the booking feature, or the map.
-func (app *App) runRobinDeskDump(prog *progress.Progress) ([]string, []robinDumpFile, RobinDeskDumpResult) {
+func (svc *Service) RunDeskDump(prog *progress.Progress) ([]string, []DumpFile, RobinDeskDumpResult) {
 	var logs []string
 	add := func(format string, args ...interface{}) {
 		line := fmt.Sprintf(format, args...)
@@ -1301,12 +1302,12 @@ func (app *App) runRobinDeskDump(prog *progress.Progress) ([]string, []robinDump
 			prog.Logf("%s", line)
 		}
 	}
-	var files []robinDumpFile
+	var files []DumpFile
 	capture := func(name string, raw []byte) {
-		files = append(files, robinDumpFile{Name: name, Data: raw})
+		files = append(files, DumpFile{Name: name, Data: raw})
 	}
 
-	_, res := app.collectRobinOccupancy(prog, capture, add)
+	_, res := svc.collectOccupancy(prog, capture, add)
 	res.Files = len(files)
 	add("Captured %d raw JSON file(s). Use \"Download JSON bundle (zip)\" to export everything.", res.Files)
 	return logs, files, res
@@ -1316,20 +1317,20 @@ func (app *App) runRobinDeskDump(prog *progress.Progress) ([]string, []robinDump
 // the desk overlay. It is a no-op unless the overlay is enabled and a token is
 // configured. It never touches the meeting cache or the booking feature. When
 // prog is non-nil it reports determinate progress (one step per space).
-func (app *App) pollRobinDeskOccupancy(prog *progress.Progress) {
-	mode := app.db.GetRobinSetting("robinDeskMode")
+func (svc *Service) PollDeskOccupancy(prog *progress.Progress) {
+	mode := svc.DB.GetRobinSetting("robinDeskMode")
 	if mode == "" || mode == "off" {
 		return
 	}
-	if app.db.GetRobinSetting("robintoken") == "" {
+	if svc.DB.GetRobinSetting("robintoken") == "" {
 		return
 	}
-	statuses, _ := app.collectRobinOccupancy(prog, nil, nil)
-	if err := app.db.ReplaceRobinDeskStatus(statuses); err != nil {
+	statuses, _ := svc.collectOccupancy(prog, nil, nil)
+	if err := svc.DB.ReplaceRobinDeskStatus(statuses); err != nil {
 		log.Printf("robin desk occupancy: %v", err)
 		return
 	}
-	app.saveRobinDeskSyncResult(RobinDeskSyncResult{
+	svc.saveDeskSyncResult(RobinDeskSyncResult{
 		Time:  time.Now().Format("2006-01-02 15:04:05"),
 		Mode:  mode,
 		Count: len(statuses),
@@ -1338,9 +1339,9 @@ func (app *App) pollRobinDeskOccupancy(prog *progress.Progress) {
 
 // --- Robin strip-pattern suggestions ---
 
-// robinStripSuggestion is a proposed strip prefix/suffix that would make a Robin
+// StripSuggestion is a proposed strip prefix/suffix that would make a Robin
 // seat name match a CompanyMaps desk number exactly.
-type robinStripSuggestion struct {
+type StripSuggestion struct {
 	Sample  string `json:"sample"`  // full Robin seat name, e.g. "blabla / GER"
 	Type    string `json:"type"`    // "prefix" | "suffix"
 	Pattern string `json:"pattern"` // literal text to strip, e.g. " / GER"
@@ -1359,35 +1360,35 @@ func isStripSeparator(r rune) bool {
 // desk number exactly but with extra text on one side (and a separator at the
 // boundary). Seats that already match after the current strip config, and
 // patterns already configured, are skipped. Read-only: no API writes.
-func (app *App) collectRobinStripSuggestions(prog *progress.Progress) ([]robinStripSuggestion, error) {
-	if app.db.GetRobinSetting("robintoken") == "" {
+func (svc *Service) CollectStripSuggestions(prog *progress.Progress) ([]StripSuggestion, error) {
+	if svc.DB.GetRobinSetting("robintoken") == "" {
 		return nil, fmt.Errorf("Robin access token is not configured")
 	}
-	cfg := app.loadRobinStripCfg()
+	cfg := svc.loadStripCfg()
 
 	existingPrefix := map[string]bool{}
-	for _, p := range splitRobinList(app.db.GetRobinSetting("robinStripPrefixList")) {
+	for _, p := range SplitList(svc.DB.GetRobinSetting("robinStripPrefixList")) {
 		existingPrefix[p] = true
 	}
 	existingSuffix := map[string]bool{}
-	for _, s := range splitRobinList(app.db.GetRobinSetting("robinStripSuffixList")) {
+	for _, s := range SplitList(svc.DB.GetRobinSetting("robinStripSuffixList")) {
 		existingSuffix[s] = true
 	}
 
-	spaces, _ := app.db.ListRobinSpaces()
+	spaces, _ := svc.DB.ListRobinSpaces()
 	sort.Slice(spaces, func(i, j int) bool { return spaces[i].Spacename < spaces[j].Spacename })
 	if prog != nil {
 		prog.SetTotal(len(spaces))
 		prog.SetStage("Scanning locations…")
 	}
 
-	deskByMap := map[string]map[string]Desk{}
-	deskLookup := func(mapName string) map[string]Desk {
+	deskByMap := map[string]map[string]store.Desk{}
+	deskLookup := func(mapName string) map[string]store.Desk {
 		if m, ok := deskByMap[mapName]; ok {
 			return m
 		}
-		m := make(map[string]Desk)
-		ds, _ := app.db.ListDesks(mapName)
+		m := make(map[string]store.Desk)
+		ds, _ := svc.DB.ListDesks(mapName)
 		for _, d := range ds {
 			m[strings.ToLower(strings.TrimSpace(d.Desknumber))] = d
 		}
@@ -1396,14 +1397,14 @@ func (app *App) collectRobinStripSuggestions(prog *progress.Progress) ([]robinSt
 	}
 
 	type aggKey struct{ typ, pat string }
-	agg := map[aggKey]*robinStripSuggestion{}
+	agg := map[aggKey]*StripSuggestion{}
 	addAgg := func(typ, pat, sample string) {
 		k := aggKey{typ, pat}
 		if s, ok := agg[k]; ok {
 			s.Count++
 			return
 		}
-		agg[k] = &robinStripSuggestion{Sample: sample, Type: typ, Pattern: pat, Count: 1}
+		agg[k] = &StripSuggestion{Sample: sample, Type: typ, Pattern: pat, Count: 1}
 	}
 
 	for _, s := range spaces {
@@ -1414,7 +1415,7 @@ func (app *App) collectRobinStripSuggestions(prog *progress.Progress) ([]robinSt
 		if len(desks) == 0 {
 			continue
 		}
-		rawSpaces, _, err := app.robinGetRaw(fmt.Sprintf("/locations/%d/spaces?page=1&per_page=200", s.Spaceid))
+		rawSpaces, _, err := svc.getRaw(fmt.Sprintf("/locations/%d/spaces?page=1&per_page=200", s.Spaceid))
 		if err != nil {
 			continue
 		}
@@ -1424,7 +1425,7 @@ func (app *App) collectRobinStripSuggestions(prog *progress.Progress) ([]robinSt
 		}
 		for _, sp := range list.Data {
 			for page := 1; page <= 50; page++ {
-				raw, _, e := app.robinGetRaw(fmt.Sprintf("/spaces/%d/seats?page=%d&per_page=200", sp.ID, page))
+				raw, _, e := svc.getRaw(fmt.Sprintf("/spaces/%d/seats?page=%d&per_page=200", sp.ID, page))
 				if e != nil {
 					break
 				}
@@ -1446,7 +1447,7 @@ func (app *App) collectRobinStripSuggestions(prog *progress.Progress) ([]robinSt
 						if dk == "" || len(ltrim) <= len(dk) {
 							continue
 						}
-						// Desk at the start → extra text is a suffix.
+						// store.Desk at the start → extra text is a suffix.
 						if strings.HasPrefix(ltrim, dk) {
 							suffix := trimmed[len(dk):]
 							if suffix != "" && !existingSuffix[suffix] {
@@ -1455,7 +1456,7 @@ func (app *App) collectRobinStripSuggestions(prog *progress.Progress) ([]robinSt
 								}
 							}
 						}
-						// Desk at the end → extra text is a prefix.
+						// store.Desk at the end → extra text is a prefix.
 						if strings.HasSuffix(ltrim, dk) {
 							prefix := trimmed[:len(trimmed)-len(dk)]
 							if prefix != "" && !existingPrefix[prefix] {
@@ -1473,7 +1474,7 @@ func (app *App) collectRobinStripSuggestions(prog *progress.Progress) ([]robinSt
 		}
 	}
 
-	out := make([]robinStripSuggestion, 0, len(agg))
+	out := make([]StripSuggestion, 0, len(agg))
 	for _, s := range agg {
 		out = append(out, *s)
 	}

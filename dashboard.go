@@ -135,7 +135,7 @@ func (app *App) testEntraIntegration() intgHealthResult {
 }
 
 func (app *App) testRobinIntegration() intgHealthResult {
-	if !app.robinEnabled() {
+	if !app.robin.Enabled() {
 		return intgHealthResult{OK: false, Message: "Robin is disabled.", Checked: time.Now()}
 	}
 	token := strings.TrimSpace(app.db.GetRobinSetting("robintoken"))
@@ -143,7 +143,7 @@ func (app *App) testRobinIntegration() intgHealthResult {
 	if token == "" || org == "" {
 		return intgHealthResult{OK: false, Message: "Access token or organisation id not configured.", Checked: time.Now()}
 	}
-	locs, err := app.robinListLocations()
+	locs, err := app.robin.ListLocations()
 	if err != nil {
 		return intgHealthResult{OK: false, Message: "Robin API rejected the request: " + err.Error(), Checked: time.Now()}
 	}
@@ -359,9 +359,9 @@ func (app *App) dashboardIntegrations(health map[string]intgHealthResult) []map[
 
 	// Robin
 	robinToken := strings.TrimSpace(app.db.GetRobinSetting("robintoken"))
-	robinEnabled := app.robinEnabled() && robinToken != ""
+	robinEnabled := app.robin.Enabled() && robinToken != ""
 	robinLast := ""
-	if res, ok := app.LastRobinSyncResult(); ok {
+	if res, ok := app.robin.LastSyncResult(); ok {
 		robinLast = res.Time
 	}
 	robin := map[string]interface{}{
@@ -370,7 +370,7 @@ func (app *App) dashboardIntegrations(health map[string]intgHealthResult) []map[
 		"configured": robinToken != "",
 		"enabled":    robinEnabled,
 		"lastSync":   robinLast,
-		"nextSync":   app.nextSyncLabel(app.getNextSync(&app.nextRobinSync), robinEnabled),
+		"nextSync":   app.nextSyncLabel(app.robin.NextSync(), robinEnabled),
 	}
 	fill(robin, "robin")
 
