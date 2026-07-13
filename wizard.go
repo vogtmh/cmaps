@@ -139,7 +139,7 @@ func (app *App) handleSetupLdap(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Run an initial sync (best effort).
-	if n, err := app.RunADSync(); err != nil {
+	if n, err := app.dir.RunADSync(); err != nil {
 		http.Redirect(w, r, "/setup?error="+urlMsg("AD source saved but initial sync failed: "+err.Error()), http.StatusSeeOther)
 		return
 	} else {

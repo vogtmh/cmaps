@@ -3,6 +3,7 @@ package main
 import (
 	"companymaps/internal/auth/saml"
 	"companymaps/internal/config"
+	"companymaps/internal/directory"
 	"companymaps/internal/integrations/geo"
 	"companymaps/internal/integrations/robin"
 	"companymaps/internal/store"
@@ -95,7 +96,15 @@ func main() {
 		startTime: time.Now(),
 		geo:       &geo.Service{DB: db},
 		robin:     &robin.Service{DB: db},
+		dir: &directory.Syncer{
+			DB:        db,
+			AvatarDir: cfg.DataPath("avatarcache"),
+		},
 	}
+	// The demo source's employees + avatars are generated from data owned by
+	// the app layer, so they are injected after construction.
+	app.dir.DemoDirectory = app.demoDirectoryUsers
+	app.dir.EnsureDemoAvatars = app.ensureDemoAvatars
 
 	// Backfill newer optional settings so they appear in the admin panel on
 	// installations created before the setting existed.
@@ -113,7 +122,7 @@ func main() {
 	app.routes(mux)
 
 	// Migrate the legacy single EntraID connection into the multi-source model.
-	app.migrateEntraConfig()
+	app.dir.MigrateEntraConfig()
 
 	// Wrap the whole mux with gzip so text-based responses (HTML, JS, CSS, JSON
 	// desk/changes payloads) are compressed for clients that support it.
@@ -122,29 +131,29 @@ func main() {
 	// Background AD mirror refresh: first run 5 minutes after startup, then
 	// hourly (no-op while no AD source is enabled).
 	app.startPeriodicSync(firstSyncDelay, syncInterval,
-		app.anyLdapSourceEnabled,
+		app.dir.AnyLdapSourceEnabled,
 		func() {
-			if n, err := app.RunADSync(); err != nil {
+			if n, err := app.dir.RunADSync(); err != nil {
 				log.Printf("scheduled AD sync failed: %v", err)
 			} else {
 				log.Printf("scheduled AD sync: %d placements mirrored", n)
 			}
 		},
-		func(t time.Time) { app.setNextSync(&app.nextLdapSync, t) },
+		func(t time.Time) { app.dir.SetNextLdapSync(t) },
 	)
 
 	// Background EntraID (Microsoft Graph) mirror refresh: same cadence as AD
 	// (no-op until an EntraID app registration is enabled).
 	app.startPeriodicSync(firstSyncDelay, syncInterval,
-		app.entraHasEnabledSource,
+		app.dir.EntraHasEnabledSource,
 		func() {
-			if n, err := app.RunEntraSync(); err != nil {
+			if n, err := app.dir.RunEntraSync(); err != nil {
 				log.Printf("scheduled EntraID sync failed: %v", err)
 			} else {
 				log.Printf("scheduled EntraID sync: %d placements mirrored", n)
 			}
 		},
-		func(t time.Time) { app.setNextSync(&app.nextEntraSync, t) },
+		func(t time.Time) { app.dir.SetNextEntraSync(t) },
 	)
 
 	// Background Robin meeting-room + desk-occupancy refresh every 5 minutes

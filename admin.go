@@ -3,6 +3,7 @@ package main
 import (
 	"archive/zip"
 	"bytes"
+	"companymaps/internal/directory"
 	"companymaps/internal/integrations"
 	"companymaps/internal/integrations/geo"
 	"companymaps/internal/integrations/robin"
@@ -400,7 +401,7 @@ func (app *App) handleAdminPost(w http.ResponseWriter, r *http.Request, sess Ses
 				// have been seeded; before that the combined cache holds preserved
 				// pre-upgrade data that a rebuild from empty sources would wipe.
 				if app.db.GetMeta("entraSeeded") == "1" {
-					_, _ = app.rebuildEntraMirror()
+					_, _ = app.dir.RebuildEntraMirror()
 				}
 				_ = app.db.AuditLog("LDAP", sess.Username, "EntraID connection removed (id "+id+")")
 				return "EntraID connection removed."
@@ -560,7 +561,7 @@ func (app *App) handleAdminPost(w http.ResponseWriter, r *http.Request, sess Ses
 				// have been seeded; before that the combined cache holds preserved
 				// pre-upgrade data that a rebuild from empty sources would wipe.
 				if app.db.GetMeta("ldapSeeded") == "1" {
-					_, _ = app.rebuildLdapMirror(true)
+					_, _ = app.dir.RebuildLdapMirror(true)
 				}
 				_ = app.db.AuditLog("LDAP", sess.Username, "LDAP sync removed (id "+id+")")
 				return "LDAP source removed."
@@ -1232,8 +1233,8 @@ func (app *App) buildAdminData(r *http.Request, sess Session, tab, msg string) a
 		d.GeoapifySet = app.db.GetGeoSetting("geoapifyApiKey") != ""
 		d.GeoEnabled = app.geoEnabled()
 		d.GeoUsageMonth, d.GeoUsageCount = app.db.GetGeoUsage()
-		d.NextLdapSync = app.nextSyncLabel(app.getNextSync(&app.nextLdapSync), app.anyLdapSourceEnabled())
-		d.NextEntraSync = app.nextSyncLabel(app.getNextSync(&app.nextEntraSync), app.entraHasEnabledSource())
+		d.NextLdapSync = app.nextSyncLabel(app.dir.NextLdapSync(), app.dir.AnyLdapSourceEnabled())
+		d.NextEntraSync = app.nextSyncLabel(app.dir.NextEntraSync(), app.dir.EntraHasEnabledSource())
 		d.NextRobinSync = app.nextSyncLabel(app.robin.NextSync(), app.robin.Enabled() && app.db.GetRobinSetting("robintoken") != "")
 		// Build the map dropdown: published maps plus any value currently in use
 		// (so every row's selection stays selectable even if it isn't a real map yet).
@@ -1657,7 +1658,7 @@ func (app *App) handleRestLdap(w http.ResponseWriter, r *http.Request) {
 					// mirror built from just one source (which would drop the
 					// others until their next sync).
 					if app.db.GetMeta("ldapSeeded") != "1" {
-						count, err := app.RunADSync()
+						count, err := app.dir.RunADSync()
 						if err != nil {
 							http.Error(w, err.Error(), http.StatusInternalServerError)
 							return
@@ -1666,13 +1667,13 @@ func (app *App) handleRestLdap(w http.ResponseWriter, r *http.Request) {
 						writeJSON(w, map[string]interface{}{"status": "ok", "count": count, "lastSync": nowTimestamp()})
 						return
 					}
-					dir, dbg, err := app.fetchSourceDirectory(s)
-					users := deriveMirrorUsers(dir)
+					dir, dbg, err := app.dir.FetchSourceDirectory(s)
+					users := directory.DeriveMirrorUsers(dir)
 					dbg.Mirrored = len(users)
-					app.setSyncDebug(ADSyncDebug{
+					app.dir.SetSyncDebug(directory.ADSyncDebug{
 						When:    nowTimestamp(),
 						Total:   len(users),
-						Sources: []SourceDebug{dbg},
+						Sources: []directory.SourceDebug{dbg},
 					})
 					if err != nil {
 						http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -1682,7 +1683,7 @@ func (app *App) handleRestLdap(w http.ResponseWriter, r *http.Request) {
 					_ = app.db.PutSourceMirror("ldap", s.ID, users)
 					s.LastSync = nowTimestamp()
 					_ = app.db.PutLdapSource(s)
-					count, err := app.rebuildLdapMirror(true)
+					count, err := app.dir.RebuildLdapMirror(true)
 					if err != nil {
 						http.Error(w, err.Error(), http.StatusInternalServerError)
 						return
@@ -1697,7 +1698,7 @@ func (app *App) handleRestLdap(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	count, err := app.RunADSync()
+	count, err := app.dir.RunADSync()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -1730,7 +1731,7 @@ func (app *App) handleRestLdapTest(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, map[string]interface{}{"ok": false, "checks": []testCheck{{Name: "Connection", Status: "fail", Detail: "invalid LDAP id"}}})
 		return
 	}
-	writeJSON(w, app.ldapValidate(id))
+	writeJSON(w, app.dir.LdapValidate(id))
 }
 
 // handleRestLdapDebug returns diagnostics from the most recent AD sync so the
@@ -1741,7 +1742,7 @@ func (app *App) handleRestLdapDebug(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}
-	writeJSON(w, app.SyncDebug())
+	writeJSON(w, app.dir.SyncDebug())
 }
 
 // handleRestDirectorySearch returns users matching a query, for the admin
@@ -1857,7 +1858,7 @@ func (app *App) handleRestDirectoryMatch(w http.ResponseWriter, r *http.Request)
 		})
 		return
 	}
-	matched, updated := app.refreshAdminNames(dir)
+	matched, updated := app.dir.RefreshAdminNames(dir)
 	_ = app.db.AuditLog("Users", sess.Username, fmt.Sprintf("Matched names from directory (%d matched, %d updated)", matched, updated))
 	writeJSON(w, map[string]interface{}{
 		"matched":   matched,
@@ -2471,7 +2472,7 @@ func (app *App) handleRestLdapSync(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}
-	if !app.ldapProg.Start(0, "Starting…") {
+	if !app.dir.LdapProg.Start(0, "Starting…") {
 		writeJSON(w, map[string]interface{}{"started": false, "running": true})
 		return
 	}
@@ -2479,15 +2480,15 @@ func (app *App) handleRestLdapSync(w http.ResponseWriter, r *http.Request) {
 	go func() {
 		defer func() {
 			if rec := recover(); rec != nil {
-				app.ldapProg.Finish("", fmt.Sprintf("sync crashed: %v", rec))
+				app.dir.LdapProg.Finish("", fmt.Sprintf("sync crashed: %v", rec))
 			}
 		}()
-		count, err := app.runADSync(&app.ldapProg)
+		count, err := app.dir.RunADSyncProg(&app.dir.LdapProg)
 		if err != nil {
-			app.ldapProg.Finish("", err.Error())
+			app.dir.LdapProg.Finish("", err.Error())
 			return
 		}
-		app.ldapProg.Finish(fmt.Sprintf("Mirrored %d placement(s).", count), "")
+		app.dir.LdapProg.Finish(fmt.Sprintf("Mirrored %d placement(s).", count), "")
 	}()
 	writeJSON(w, map[string]interface{}{"started": true})
 }
@@ -2499,7 +2500,7 @@ func (app *App) handleRestLdapProgress(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}
-	writeJSON(w, app.ldapProg.Snapshot())
+	writeJSON(w, app.dir.LdapProg.Snapshot())
 }
 
 // handleAuditReimport is the superadmin-only one-time action that re-imports the

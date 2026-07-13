@@ -727,15 +727,15 @@ func (app *App) runIdentifierApply(target string) {
 	prog.Logf("Identifier setting is now: %s", target)
 
 	prog.SetStage("Re-syncing directory")
-	if app.anyLdapSourceEnabled() {
-		if _, err := app.RunADSync(); err != nil {
+	if app.dir.AnyLdapSourceEnabled() {
+		if _, err := app.dir.RunADSync(); err != nil {
 			prog.Logf("   ⚠ LDAP re-sync: %v", err)
 		} else {
 			prog.Logf("LDAP directory re-synced.")
 		}
 	}
-	if app.entraHasEnabledSource() {
-		if _, err := app.RunEntraSync(); err != nil {
+	if app.dir.EntraHasEnabledSource() {
+		if _, err := app.dir.RunEntraSync(); err != nil {
 			prog.Logf("   ⚠ EntraID re-sync: %v", err)
 		} else {
 			prog.Logf("EntraID directory re-synced.")

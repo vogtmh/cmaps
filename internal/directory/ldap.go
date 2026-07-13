@@ -1,7 +1,9 @@
-package main
+package directory
 
 import (
+	"companymaps/internal/integrations"
 	"companymaps/internal/progress"
+	"companymaps/internal/store"
 
 	"crypto/tls"
 	"fmt"
@@ -52,8 +54,8 @@ type ADSyncDebug struct {
 //
 // This is the Go port of tools/ldap_connector.php (CLI path). MS Teams
 // notifications from the original are intentionally dropped.
-func (app *App) RunADSync() (int, error) {
-	return app.runADSync(nil)
+func (s *Syncer) RunADSync() (int, error) {
+	return s.RunADSyncProg(nil)
 }
 
 // runADSync is the worker behind RunADSync. When prog is non-nil it reports
@@ -64,8 +66,8 @@ func (app *App) RunADSync() (int, error) {
 // per-source bucket, after which the shared combined caches are rebuilt from all
 // enabled sources (combine-on-write). This keeps a single failed/partial source
 // from wiping the others and lets a per-source "Sync now" refresh just that one.
-func (app *App) runADSync(prog *progress.Progress) (int, error) {
-	sources, err := app.db.ListLdapSources()
+func (s *Syncer) RunADSyncProg(prog *progress.Progress) (int, error) {
+	sources, err := s.DB.ListLdapSources()
 	if err != nil {
 		return 0, fmt.Errorf("loading AD sources: %w", err)
 	}
@@ -89,7 +91,7 @@ func (app *App) runADSync(prog *progress.Progress) (int, error) {
 		prog.Logf("Starting sync of %d source(s)…", len(sources))
 	}
 
-	now := time.Now().In(app.db.Location())
+	now := time.Now().In(s.DB.Location())
 	debug := ADSyncDebug{When: now.Format("2006-01-02 15:04:05")}
 
 	for _, src := range sources {
@@ -97,13 +99,13 @@ func (app *App) runADSync(prog *progress.Progress) (int, error) {
 			prog.SetStage("Syncing " + src.Description)
 			prog.Logf("→ %s: connecting to %s (%s)…", src.Description, src.Server, src.Type)
 		}
-		dirUsers, dbg, err := app.fetchSourceDirectory(src)
-		users := deriveMirrorUsers(dirUsers)
+		dirUsers, dbg, err := s.FetchSourceDirectory(src)
+		users := DeriveMirrorUsers(dirUsers)
 		dbg.Mirrored = len(users)
 		debug.Sources = append(debug.Sources, dbg)
 		if err != nil {
 			log.Printf("AD sync: source %q: %v", src.Description, err)
-			app.setSyncDebug(debug)
+			s.SetSyncDebug(debug)
 			if prog != nil {
 				prog.Logf("   ✗ %s: %s", src.Description, err.Error())
 				prog.Step("")
@@ -116,18 +118,18 @@ func (app *App) runADSync(prog *progress.Progress) (int, error) {
 		}
 
 		// Store this source's data in its own bucket (combine-on-write).
-		if err := app.db.PutSourceDir(src.ID, dirUsers); err != nil {
+		if err := s.DB.PutSourceDir(src.ID, dirUsers); err != nil {
 			log.Printf("AD sync: writing source directory for %q: %v", src.Description, err)
 		}
-		if err := app.db.PutSourceMirror("ldap", src.ID, users); err != nil {
+		if err := s.DB.PutSourceMirror("ldap", src.ID, users); err != nil {
 			log.Printf("AD sync: writing source mirror for %q: %v", src.Description, err)
 		}
 
 		src.LastSync = now.Format("2006-01-02 15:04:05")
-		if err := app.db.PutLdapSource(src); err != nil {
+		if err := s.DB.PutLdapSource(src); err != nil {
 			log.Printf("AD sync: updating LastSync for %q: %v", src.Description, err)
 		}
-		_ = app.db.AuditLog("LDAP", "System", src.Description+" has been synced.")
+		_ = s.DB.AuditLog("LDAP", "System", src.Description+" has been synced.")
 		if prog != nil {
 			prog.Step("")
 		}
@@ -136,15 +138,15 @@ func (app *App) runADSync(prog *progress.Progress) (int, error) {
 	// Recombine all per-source mirrors into the shared caches. The very first
 	// rebuild after a fresh install/upgrade suppresses changelog announcements so
 	// seeding does not flood the changelog with "new employee" entries.
-	announce := app.db.GetMeta("ldapSeeded") == "1"
-	count, err := app.rebuildLdapMirror(announce)
+	announce := s.DB.GetMeta("ldapSeeded") == "1"
+	count, err := s.RebuildLdapMirror(announce)
 	if err != nil {
 		return count, err
 	}
-	_ = app.db.SetMeta("ldapSeeded", "1")
+	_ = s.DB.SetMeta("ldapSeeded", "1")
 
 	debug.Total = count
-	app.setSyncDebug(debug)
+	s.SetSyncDebug(debug)
 	if prog != nil {
 		prog.Logf("Done. %d desk placement(s) from %d source(s).", count, len(sources))
 	}
@@ -157,18 +159,18 @@ func (app *App) runADSync(prog *progress.Progress) (int, error) {
 // against the current one and records employee/title/name changes in the
 // changelog; the first rebuild after a fresh install/upgrade passes
 // announce=false so seeding existing data produces no announcements.
-func (app *App) rebuildLdapMirror(announce bool) (int, error) {
-	sources, err := app.db.ListLdapSources()
+func (s *Syncer) RebuildLdapMirror(announce bool) (int, error) {
+	sources, err := s.DB.ListLdapSources()
 	if err != nil {
 		return 0, fmt.Errorf("loading AD sources: %w", err)
 	}
-	now := time.Now().In(app.db.Location())
+	now := time.Now().In(s.DB.Location())
 
 	// Snapshot the existing mirror (keyed by userid) for change detection.
-	var oldByID map[string]LdapUser
+	var oldByID map[string]store.LdapUser
 	if announce {
-		oldUsers, _ := app.db.ListLdap()
-		oldByID = make(map[string]LdapUser, len(oldUsers))
+		oldUsers, _ := s.DB.ListLdap()
+		oldByID = make(map[string]store.LdapUser, len(oldUsers))
 		for _, u := range oldUsers {
 			if _, ok := oldByID[u.Userid]; !ok {
 				oldByID[u.Userid] = u
@@ -176,8 +178,8 @@ func (app *App) rebuildLdapMirror(announce bool) (int, error) {
 		}
 	}
 
-	var combined []LdapUser
-	var allDir []DirectoryUser
+	var combined []store.LdapUser
+	var allDir []store.DirectoryUser
 	dirSeen := make(map[string]bool)
 	seen := make(map[string]bool)
 
@@ -185,8 +187,8 @@ func (app *App) rebuildLdapMirror(announce bool) (int, error) {
 		if src.Disabled {
 			continue
 		}
-		users, _ := app.db.GetSourceMirror("ldap", src.ID)
-		dirUsers, _ := app.db.GetSourceDir(src.ID)
+		users, _ := s.DB.GetSourceMirror("ldap", src.ID)
+		dirUsers, _ := s.DB.GetSourceDir(src.ID)
 
 		// Accumulate the full directory snapshot (deduplicated across sources).
 		for _, d := range dirUsers {
@@ -212,14 +214,14 @@ func (app *App) rebuildLdapMirror(announce bool) (int, error) {
 			fullname := strings.TrimSpace(u.Givenname + " " + u.Surname)
 			old, known := oldByID[u.Userid]
 			if !known {
-				app.logChange(now, fullname, u.Userid, "Employee", "none", u.Description)
+				s.logChange(now, fullname, u.Userid, "Employee", "none", u.Description)
 				continue
 			}
 			if old.Description != "" && old.Description != u.Description {
-				app.logChange(now, fullname, u.Userid, "Title", old.Description, u.Description)
+				s.logChange(now, fullname, u.Userid, "Title", old.Description, u.Description)
 			}
 			if old.Description != "" && old.Surname != u.Surname {
-				app.logChange(now, fullname, u.Userid, "Name", old.Surname, u.Surname)
+				s.logChange(now, fullname, u.Userid, "Name", old.Surname, u.Surname)
 			}
 		}
 	}
@@ -227,19 +229,19 @@ func (app *App) rebuildLdapMirror(announce bool) (int, error) {
 	// Flag which mirrored users have a cached avatar on disk so the client can
 	// point everyone without one at a single shared placeholder instead of
 	// requesting a unique (missing) image per person.
-	avatars := app.avatarFileSet()
+	avatars := s.AvatarFileSet()
 	for i := range combined {
 		combined[i].HasAvatar = avatars[strings.ToLower(combined[i].Userid)]
 	}
 
-	if err := app.db.ReplaceDirectory(allDir); err != nil {
+	if err := s.DB.ReplaceDirectory(allDir); err != nil {
 		log.Printf("AD sync: writing directory: %v", err)
 	}
-	if err := app.db.ReplaceLdap(combined); err != nil {
+	if err := s.DB.ReplaceLdap(combined); err != nil {
 		return len(combined), fmt.Errorf("writing mirror: %w", err)
 	}
 	// Refresh stored full names for existing admins from the fresh directory.
-	app.refreshAdminNames(allDir)
+	s.RefreshAdminNames(allDir)
 	return len(combined), nil
 }
 
@@ -247,15 +249,15 @@ func (app *App) rebuildLdapMirror(announce bool) (int, error) {
 // freshly fetched directory, so the Users tab shows live names even if the
 // directory is later cleared. Usernames are matched on samaccountname after
 // stripping any DOMAIN\ prefix.
-func (app *App) refreshAdminNames(dir []DirectoryUser) (matched, updated int) {
+func (s *Syncer) RefreshAdminNames(dir []store.DirectoryUser) (matched, updated int) {
 	if len(dir) == 0 {
 		return 0, 0
 	}
-	byID := make(map[string]DirectoryUser, len(dir))
+	byID := make(map[string]store.DirectoryUser, len(dir))
 	for _, d := range dir {
 		byID[strings.ToLower(d.Userid)] = d
 	}
-	users, err := app.db.ListUsers()
+	users, err := s.DB.ListUsers()
 	if err != nil {
 		return 0, 0
 	}
@@ -275,33 +277,21 @@ func (app *App) refreshAdminNames(dir []DirectoryUser) (matched, updated int) {
 			if d.Mail != "" {
 				u.Mail = d.Mail
 			}
-			_ = app.db.PutUser(u)
+			_ = s.DB.PutUser(u)
 			updated++
 		}
 	}
 	return matched, updated
 }
 
-// setSyncDebug stores the most recent sync diagnostics (concurrency-safe).
-func (app *App) setSyncDebug(d ADSyncDebug) {
-	app.syncDebugMu.Lock()
-	app.syncDebug = d
-	app.syncDebugMu.Unlock()
-}
-
-// SyncDebug returns the most recent sync diagnostics (concurrency-safe).
-func (app *App) SyncDebug() ADSyncDebug {
-	app.syncDebugMu.Lock()
-	defer app.syncDebugMu.Unlock()
-	return app.syncDebug
-}
+// The sync diagnostics accessors (SetSyncDebug / SyncDebug) live in syncer.go.
 
 // fetchSourceDirectory queries one AD source A-Z and returns EVERY enabled user
-// account it finds (regardless of the office attribute) as DirectoryUser records.
+// account it finds (regardless of the office attribute) as store.DirectoryUser records.
 // This full snapshot powers admin autocomplete and name resolution, and is the
 // local data the office-filtered mirror is derived from. Disabled accounts are
 // excluded via the userAccountControl bit filter.
-func (app *App) fetchSourceDirectory(src LdapSource) ([]DirectoryUser, SourceDebug, error) {
+func (s *Syncer) FetchSourceDirectory(src store.LdapSource) ([]store.DirectoryUser, SourceDebug, error) {
 	dbg := SourceDebug{
 		Description: src.Description,
 		Server:      src.Server,
@@ -315,15 +305,15 @@ func (app *App) fetchSourceDirectory(src LdapSource) ([]DirectoryUser, SourceDeb
 	// the bundled demo employees, so its sync can never fail. Avatars are ensured
 	// for the current identifier mode so a mode switch keeps the photos.
 	if src.Demo {
-		dir := app.demoDirectoryUsers()
-		app.ensureDemoAvatars(dir)
+		dir := s.DemoDirectory()
+		s.EnsureDemoAvatars(dir)
 		dbg.Connected = true
 		dbg.Bound = true
 		dbg.EntriesFound = len(dir)
 		return dir, dbg, nil
 	}
 
-	conn, err := dialLDAP(src)
+	conn, err := DialLDAP(src)
 	if err != nil {
 		dbg.Error = err.Error()
 		return nil, dbg, err
@@ -338,7 +328,7 @@ func (app *App) fetchSourceDirectory(src LdapSource) ([]DirectoryUser, SourceDeb
 	dbg.Bound = true
 
 	seen := map[string]bool{}
-	var out []DirectoryUser
+	var out []store.DirectoryUser
 	for letter := 'A'; letter <= 'Z'; letter++ {
 		// Every enabled person with a given name starting with this letter, no
 		// office requirement (the office filter now happens locally).
@@ -380,9 +370,9 @@ func (app *App) fetchSourceDirectory(src LdapSource) ([]DirectoryUser, SourceDeb
 			if title == "" {
 				title = "-"
 			}
-			mail := normalizeMail(e.GetEqualFoldAttributeValue("mail"))
-			out = append(out, DirectoryUser{
-				Userid:         app.userIdentifier(sam, mail),
+			mail := store.NormalizeMail(e.GetEqualFoldAttributeValue("mail"))
+			out = append(out, store.DirectoryUser{
+				Userid:         UserIdentifier(s.DB, sam, mail),
 				Samaccountname: sam,
 				Givenname:      e.GetEqualFoldAttributeValue("givenname"),
 				Surname:        e.GetEqualFoldAttributeValue("sn"),
@@ -392,7 +382,7 @@ func (app *App) fetchSourceDirectory(src LdapSource) ([]DirectoryUser, SourceDeb
 				Title:          title,
 				Phone:          e.GetEqualFoldAttributeValue("telephonenumber"),
 				Mobile:         e.GetEqualFoldAttributeValue("mobile"),
-				Aliases:        extractProxyAliases(e.GetEqualFoldAttributeValues("proxyAddresses"), mail),
+				Aliases:        ExtractProxyAliases(e.GetEqualFoldAttributeValues("proxyAddresses"), mail),
 			})
 		}
 	}
@@ -402,7 +392,7 @@ func (app *App) fetchSourceDirectory(src LdapSource) ([]DirectoryUser, SourceDeb
 // extractProxyAliases parses AD proxyAddresses ("SMTP:primary@x", "smtp:alias@x")
 // into a lowercased list of SMTP addresses other than the primary mail. Non-SMTP
 // schemes (sip:, x500:, etc.) and the primary address itself are dropped.
-func extractProxyAliases(proxies []string, primaryMail string) []string {
+func ExtractProxyAliases(proxies []string, primaryMail string) []string {
 	primary := strings.ToLower(strings.TrimSpace(primaryMail))
 	seen := map[string]bool{}
 	var out []string
@@ -424,9 +414,9 @@ func extractProxyAliases(proxies []string, primaryMail string) []string {
 // avatarFileSet returns the set of userids (lowercased) that currently have a
 // cached avatar image on disk. Used during sync to persist a per-user
 // "has avatar" flag.
-func (app *App) avatarFileSet() map[string]bool {
+func (s *Syncer) AvatarFileSet() map[string]bool {
 	set := map[string]bool{}
-	entries, err := os.ReadDir(app.cfg.DataPath("avatarcache"))
+	entries, err := os.ReadDir(s.AvatarDir)
 	if err != nil {
 		return set
 	}
@@ -446,8 +436,8 @@ func (app *App) avatarFileSet() map[string]bool {
 // snapshot, producing the office-filtered desk-placement mirror that the maps
 // and desks features consume. An office field may encode several desk places
 // separated by "|"; each becomes its own placement.
-func deriveMirrorUsers(dir []DirectoryUser) []LdapUser {
-	var out []LdapUser
+func DeriveMirrorUsers(dir []store.DirectoryUser) []store.LdapUser {
+	var out []store.LdapUser
 	for _, d := range dir {
 		office := d.Office
 		switch {
@@ -461,7 +451,7 @@ func deriveMirrorUsers(dir []DirectoryUser) []LdapUser {
 			continue
 		}
 
-		base := LdapUser{
+		base := store.LdapUser{
 			Userid:          d.Userid,
 			Samaccountname:  d.Samaccountname,
 			Givenname:       d.Givenname,
@@ -494,7 +484,7 @@ func deriveMirrorUsers(dir []DirectoryUser) []LdapUser {
 }
 
 // dialLDAP opens a connection to an AD source honouring its LDAP/LDAPS type.
-func dialLDAP(src LdapSource) (*ldap.Conn, error) {
+func DialLDAP(src store.LdapSource) (*ldap.Conn, error) {
 	switch strings.ToUpper(src.Type) {
 	case "LDAPS":
 		host := src.Server
@@ -525,14 +515,14 @@ func dialLDAP(src LdapSource) (*ldap.Conn, error) {
 // source and returns the {ok, checks} payload rendered by the admin test modal.
 // It dials the server, binds with the service account and confirms the search
 // base is reachable — without performing a full sync.
-func (app *App) ldapValidate(id int) map[string]interface{} {
-	var checks []testCheck
+func (s *Syncer) LdapValidate(id int) map[string]interface{} {
+	var checks []integrations.Check
 	add := func(name, status, detail string) {
-		checks = append(checks, testCheck{Name: name, Status: status, Detail: detail})
+		checks = append(checks, integrations.Check{Name: name, Status: status, Detail: detail})
 	}
 
-	srcs, _ := app.db.ListLdapSources()
-	var src *LdapSource
+	srcs, _ := s.DB.ListLdapSources()
+	var src *store.LdapSource
 	for i := range srcs {
 		if srcs[i].ID == id {
 			src = &srcs[i]
@@ -540,7 +530,7 @@ func (app *App) ldapValidate(id int) map[string]interface{} {
 		}
 	}
 	if src == nil {
-		return testResult([]testCheck{{Name: "Connection", Status: "fail", Detail: "LDAP connection not found."}})
+		return integrations.Result([]integrations.Check{{Name: "Connection", Status: "fail", Detail: "LDAP connection not found."}})
 	}
 
 	if src.Disabled {
@@ -549,17 +539,17 @@ func (app *App) ldapValidate(id int) map[string]interface{} {
 		add("Connection status", "ok", "This connection is enabled.")
 	}
 
-	conn, err := dialLDAP(*src)
+	conn, err := DialLDAP(*src)
 	if err != nil {
 		add("Server connection", "fail", "Could not connect to "+src.Server+": "+err.Error())
-		return testResult(checks)
+		return integrations.Result(checks)
 	}
 	defer conn.Close()
 	add("Server connection", "ok", "Connected to "+src.Server+" ("+strings.ToUpper(src.Type)+").")
 
 	if err := conn.Bind(src.LdapUser, src.LdapPass); err != nil {
 		add("Bind", "fail", "Authentication failed for "+src.LdapUser+": "+err.Error())
-		return testResult(checks)
+		return integrations.Result(checks)
 	}
 	add("Bind", "ok", "Authenticated as "+src.LdapUser+".")
 
@@ -581,12 +571,12 @@ func (app *App) ldapValidate(id int) map[string]interface{} {
 		add("Search base", "ok", "Search base \""+src.OU+"\" is reachable.")
 	}
 
-	return testResult(checks)
+	return integrations.Result(checks)
 }
 
 // logChange appends a row to the ldap changelog.
-func (app *App) logChange(now time.Time, name, avatar, changeType, oldVal, newVal string) {
-	_ = app.db.AddChangelog(ChangelogEntry{
+func (s *Syncer) logChange(now time.Time, name, avatar, changeType, oldVal, newVal string) {
+	_ = s.DB.AddChangelog(store.ChangelogEntry{
 		Year:     now.Year(),
 		Month:    int(now.Month()),
 		Day:      now.Day(),
@@ -602,8 +592,8 @@ func (app *App) logChange(now time.Time, name, avatar, changeType, oldVal, newVa
 
 // anyLdapSourceEnabled reports whether at least one non-disabled LDAP source is
 // configured (used to decide whether the scheduled AD sync should run).
-func (app *App) anyLdapSourceEnabled() bool {
-	sources, _ := app.db.ListLdapSources()
+func (s *Syncer) AnyLdapSourceEnabled() bool {
+	sources, _ := s.DB.ListLdapSources()
 	for _, s := range sources {
 		if !s.Disabled {
 			return true

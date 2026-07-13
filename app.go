@@ -3,6 +3,7 @@ package main
 import (
 	"companymaps/internal/auth"
 	"companymaps/internal/config"
+	"companymaps/internal/directory"
 	"companymaps/internal/integrations/geo"
 	"companymaps/internal/integrations/robin"
 	"companymaps/internal/progress"
@@ -23,11 +24,9 @@ type App struct {
 	staticFS   fs.FS
 	importProg ImportProgress
 
-	syncDebugMu sync.Mutex
-	syncDebug   ADSyncDebug
-
-	ldapProg  progress.Progress
-	entraProg progress.Progress
+	// dir owns the LDAP/EntraID directory-sync engine: progress trackers,
+	// sync diagnostics and the next scheduled run times.
+	dir *directory.Syncer
 
 	// migrateProg tracks the background identifier migration (samaccountname <->
 	// mail) so the admin Sync > General subtab can show a live progress bar + log.
@@ -49,14 +48,6 @@ type App struct {
 	// the progress/result pair polled by the admin Sync panel.
 	geo *geo.Service
 
-	// next*Sync hold the wall-clock time of the next scheduled automatic sync
-	// for the LDAP/Entra schedulers, surfaced in the admin Sync tab. In-memory
-	// only (they reset on restart, which is correct since the schedulers re-arm
-	// on boot). Robin's equivalent lives on robin.Service.
-	nextSyncMu    sync.Mutex
-	nextLdapSync  time.Time
-	nextEntraSync time.Time
-
 	// startTime is the process boot time, used to compute uptime on the dashboard.
 	startTime time.Time
 
@@ -66,20 +57,6 @@ type App struct {
 	// reference under the mutex and never mutate it in place.
 	intgHealthMu sync.Mutex
 	intgHealth   map[string]intgHealthResult
-}
-
-// setNextSync records the next scheduled sync time for one integration.
-func (app *App) setNextSync(dst *time.Time, t time.Time) {
-	app.nextSyncMu.Lock()
-	*dst = t
-	app.nextSyncMu.Unlock()
-}
-
-// getNextSync returns the next scheduled sync time for one integration.
-func (app *App) getNextSync(src *time.Time) time.Time {
-	app.nextSyncMu.Lock()
-	defer app.nextSyncMu.Unlock()
-	return *src
 }
 
 // Session management lives in internal/auth; these aliases keep the root

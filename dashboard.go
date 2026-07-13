@@ -85,7 +85,7 @@ func (app *App) testLdapIntegration() intgHealthResult {
 			continue
 		}
 		enabled++
-		res := app.ldapValidate(s.ID)
+		res := app.dir.LdapValidate(s.ID)
 		if ok, _ := res["ok"].(bool); ok {
 			okCount++
 		} else {
@@ -319,7 +319,7 @@ func (app *App) dashboardIntegrations(health map[string]intgHealthResult) []map[
 			ldapLast = s.LastSync
 		}
 	}
-	ldapEnabled := app.anyLdapSourceEnabled()
+	ldapEnabled := app.dir.AnyLdapSourceEnabled()
 	ldap := map[string]interface{}{
 		"key":        "ldap",
 		"name":       "LDAP / Active Directory",
@@ -327,13 +327,13 @@ func (app *App) dashboardIntegrations(health map[string]intgHealthResult) []map[
 		"enabled":    ldapEnabled,
 		"count":      len(ldapSrcs),
 		"lastSync":   ldapLast,
-		"nextSync":   app.nextSyncLabel(app.getNextSync(&app.nextLdapSync), ldapEnabled),
+		"nextSync":   app.nextSyncLabel(app.dir.NextLdapSync(), ldapEnabled),
 	}
 	fill(ldap, "ldap")
 
 	// EntraID
 	entraSrcs, _ := app.db.ListEntraSources()
-	entraEnabled := app.entraHasEnabledSource()
+	entraEnabled := app.dir.EntraHasEnabledSource()
 	entra := map[string]interface{}{
 		"key":        "entra",
 		"name":       "Microsoft EntraID",
@@ -341,7 +341,7 @@ func (app *App) dashboardIntegrations(health map[string]intgHealthResult) []map[
 		"enabled":    entraEnabled,
 		"count":      len(entraSrcs),
 		"lastSync":   app.db.GetEntraSetting("entraLastSync"),
-		"nextSync":   app.nextSyncLabel(app.getNextSync(&app.nextEntraSync), entraEnabled),
+		"nextSync":   app.nextSyncLabel(app.dir.NextEntraSync(), entraEnabled),
 	}
 	fill(entra, "entra")
 

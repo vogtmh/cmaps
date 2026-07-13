@@ -1,6 +1,7 @@
 package main
 
 import (
+	"companymaps/internal/directory"
 	"fmt"
 	"io/fs"
 	"os"
@@ -377,10 +378,10 @@ func (app *App) seedDemoSource() error {
 	if err := app.db.PutSourceDir(demoSourceID, dir); err != nil {
 		return err
 	}
-	if err := app.db.PutSourceMirror("ldap", demoSourceID, deriveMirrorUsers(dir)); err != nil {
+	if err := app.db.PutSourceMirror("ldap", demoSourceID, directory.DeriveMirrorUsers(dir)); err != nil {
 		return err
 	}
-	if _, err := app.rebuildLdapMirror(false); err != nil {
+	if _, err := app.dir.RebuildLdapMirror(false); err != nil {
 		return err
 	}
 	_ = app.db.AuditLog("LDAP", "System", "Demo data source created/refreshed")
@@ -440,7 +441,7 @@ func (app *App) removeDemoData() error {
 		_ = app.db.DeleteMap(m)
 		_ = removeFileIfExists(app.cfg.DataPath("maps", m+".png"))
 	}
-	_, err := app.rebuildLdapMirror(false)
+	_, err := app.dir.RebuildLdapMirror(false)
 	return err
 }
 
