@@ -1,0 +1,27 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          # Dependencies are vendored; no module download cache needed.
+          cache: false
+
+      - name: Vet
+        run: go vet -mod=vendor ./...
+
+      - name: Build
+        run: go build -mod=vendor ./...
+
+      - name: Test
+        run: go test -mod=vendor ./...
