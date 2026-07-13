@@ -99,7 +99,7 @@ func DeskKey(mapName string, id int) []byte {
 // LdapUser mirrors a row of the ldap-mirror table. Userid is the AD account id
 // (the old ipphone column) used for avatar filenames.
 type LdapUser struct {
-	Userid          string `json:"userid"`
+	Userid string `json:"userid"`
 	// Samaccountname is the raw AD account name, kept independently of Userid so
 	// the identifier can be switched between samaccountname and mail (and back).
 	Samaccountname  string `json:"samaccountname,omitempty"`
@@ -131,13 +131,13 @@ type DirectoryUser struct {
 	// configured identifier mode so migrations can round-trip.
 	Samaccountname string `json:"samaccountname,omitempty"`
 	Givenname      string `json:"givenname"`
-	Surname    string `json:"surname"`
-	Mail       string `json:"mail"`
-	Office     string `json:"office"`
-	Department string `json:"department"`
-	Title      string `json:"title"`
-	Phone      string `json:"phone"`
-	Mobile     string `json:"mobile"`
+	Surname        string `json:"surname"`
+	Mail           string `json:"mail"`
+	Office         string `json:"office"`
+	Department     string `json:"department"`
+	Title          string `json:"title"`
+	Phone          string `json:"phone"`
+	Mobile         string `json:"mobile"`
 	// Aliases are additional SMTP addresses (AD proxyAddresses) besides Mail.
 	Aliases []string `json:"aliases,omitempty"`
 }
