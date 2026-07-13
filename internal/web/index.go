@@ -1,0 +1,471 @@
+package web
+
+import (
+	"encoding/json"
+	"html/template"
+	"net/http"
+	"os"
+	"strconv"
+	"strings"
+	"time"
+)
+
+// floorButton is a floor selector entry in the header.
+type floorButton struct {
+	ID       int
+	Employee string
+}
+
+// mapLink is one entry in the location dropdown: Name is the map identifier
+// (used in the ?map= URL), Label is the user-facing display name.
+type mapLink struct {
+	Name  string
+	Label string
+}
+
+// indexData holds everything the index.html template needs. It reproduces the
+// server-side state the legacy index.php computed before handing off to the
+// JavaScript front-end.
+type indexData struct {
+	AppTitle           string
+	TargetScreenWidth  int
+	HalfWidth          int
+	Map                string
+	MapTitle           string
+	MapDefault         string
+	MapList            []string
+	OtherMaps          []mapLink
+	PlaceholderMaps    []mapLink
+	IsOverview         bool
+	WorldMap           bool
+	InternalBooking    bool
+	HasMapImage        bool   // detail map: whether the map image file exists
+	GeoapifyConfigured bool   // whether a Geoapify API key is set (enables the geocode button)
+	NomapText          string // optional custom placeholder text for maps without an image
+	NomapLink          string // optional link shown below the placeholder text
+	Itemscale          string
+	Autozoom           int
+	Zoom               int
+	ZoomIn             int
+	ZoomOut            int
+	ZoomScaled         string // zoom/100
+	ContentScale       string // zoom/100*autozoom
+	ContentLeft        string // LeftPos / ContentScale (for the zoom-based layout)
+	ContentTop         string // TopHeader / ContentScale (for the zoom-based layout)
+	LeftPos            int
+	Floors             []floorButton
+
+	NoDescription    bool
+	Desknumbers      bool
+	Shownames        bool
+	HighlightLeaders bool
+	Printmode        bool
+	NoAnimation      bool
+	DailyVisitors    bool
+	DisableSAML      bool
+	UserMode         string
+	UserModeColor    string
+	AnnounceCookie   int
+
+	LoggedIn  bool
+	Username  string
+	Fullname  string
+	Phone     string
+	Mail      string
+	PermDesks int
+	PermMaps  int
+	PermAdmin int
+	IsEditor  bool
+	Token     string
+	AvatarURL string
+
+	DepartmentsJSON     template.JS
+	ItemTypesJSON       template.JS
+	FlaggedDesksJSON    template.JS
+	HealthWhitelistJSON template.JS
+	LogoRegular         string
+	LogoHover           string
+	TeamsContact        string
+	Domain              string
+	ReportURL           string
+	Region              string
+	TzOffset            string
+
+	Findme    string
+	Teamlabel string
+
+	SAMLEnabled        bool
+	AllowLocalFallback bool
+}
+
+// renderIndex computes the page state and renders index.html.
+func (app *Server) renderIndex(w http.ResponseWriter, r *http.Request, sess Session, loggedIn bool) {
+	q := r.URL.Query()
+
+	mapDefault := "overview"
+	mapName := q.Get("map")
+	if mapName == "" {
+		if c, err := r.Cookie("map"); err == nil {
+			mapName = c.Value
+		}
+	}
+	if mapName == "" {
+		mapName = mapDefault
+	}
+	mapName = strings.ToLower(mapName)
+
+	// Build the published map list (always include "overview").
+	var mapList []string
+	maps, _ := app.db.ListMaps()
+	displayNames := make(map[string]string, len(maps))
+	hasOverview := false
+	for _, m := range maps {
+		if m.DisplayName != "" {
+			displayNames[m.Mapname] = m.DisplayName
+		}
+		if m.Published != "no" {
+			mapList = append(mapList, m.Mapname)
+		}
+		if m.Mapname == "overview" {
+			hasOverview = true
+		}
+	}
+	if !hasOverview {
+		mapList = append(mapList, "overview")
+	}
+	if !containsStr(mapList, mapName) {
+		mapName = mapDefault
+	}
+
+	// Persist the selected map in a cookie (matches legacy behaviour).
+	http.SetCookie(w, &http.Cookie{Name: "map", Value: mapName, Path: "/", SameSite: http.SameSiteLaxMode, Expires: time.Now().AddDate(5, 0, 0)})
+
+	otherMaps := make([]mapLink, 0, len(mapList))
+	placeholderMaps := make([]mapLink, 0)
+	for _, m := range mapList {
+		if m != mapName {
+			label := displayNames[m]
+			if label == "" {
+				label = ucfirst(m)
+			}
+			// A map is a placeholder when it has no floor-plan image on disk.
+			// This is the same signal the admin panel uses (os.Stat of the map
+			// PNG). The legacy "-nomap" identifier marker is still honoured for
+			// backward compatibility, but is no longer required.
+			isPlaceholder := false
+			if strings.Contains(strings.ToLower(m), "-nomap") {
+				label = stripNomap(label)
+				isPlaceholder = true
+			} else if m != "overview" {
+				if _, err := os.Stat(app.cfg.DataPath("maps", m+".png")); err != nil {
+					isPlaceholder = true
+				}
+			}
+			if isPlaceholder {
+				placeholderMaps = append(placeholderMaps, mapLink{Name: m, Label: label})
+			} else {
+				otherMaps = append(otherMaps, mapLink{Name: m, Label: label})
+			}
+		}
+	}
+
+	// Item scale for this map.
+	itemscale := "1"
+	if mi, found, _ := app.db.GetMap(mapName); found && mi.Itemscale != "" && mi.Itemscale != "0" {
+		itemscale = mi.Itemscale
+	}
+
+	// Zoom / autozoom / scroll position from cookies and query.
+	autozoom := cookieInt(r, "autozoom", 1)
+	zoom := cookieInt(r, "zoom", 100)
+	if z := q.Get("zoom"); z != "" {
+		if zi, err := strconv.Atoi(z); err == nil {
+			zoom = zi
+		}
+	}
+	if zoom < 10 {
+		zoom = 10
+	}
+	if zoom > 100 {
+		zoom = 100
+	}
+	http.SetCookie(w, &http.Cookie{Name: "zoom", Value: strconv.Itoa(zoom), Path: "/", Expires: time.Now().AddDate(5, 0, 0)})
+	leftPos := cookieInt(r, "LeftPos", 0)
+
+	targetWidth := 1600
+
+	// Detail (non-overview) maps may not have an image yet; in that case the
+	// front-end shows a placeholder instead of a broken image.
+	hasMapImage := true
+	if mapName != "overview" {
+		if _, err := os.Stat(app.cfg.DataPath("maps", mapName+".png")); err != nil {
+			hasMapImage = false
+		}
+	}
+
+	// Floor buttons for non-overview maps.
+	var floors []floorButton
+	if mapName != "overview" {
+		desks, _ := app.db.ListDesks(mapName)
+		for _, d := range desks {
+			if strings.EqualFold(d.Desktype, "floor") {
+				floors = append(floors, floorButton{ID: d.ID, Employee: d.Employee})
+			}
+		}
+	}
+
+	// Departments as a JSON object keyed by index (matches JSON_FORCE_OBJECT).
+	deptObj := map[string]string{}
+	depts, _ := app.db.ListDepartments()
+	for i, d := range depts {
+		deptObj[strconv.Itoa(i)] = d
+	}
+	deptJSON, _ := json.Marshal(deptObj)
+
+	// Admin-defined custom item types, keyed by id, for palette + marker rendering.
+	itemTypeObj := map[string]CustomItemType{}
+	itemTypes, _ := app.db.ListItemTypes()
+	for _, t := range itemTypes {
+		itemTypeObj[t.ID] = t
+	}
+	itemTypesJSON, _ := json.Marshal(itemTypeObj)
+
+	// Timezone region + offset.
+	region := "Europe/Berlin"
+	if mi, found, _ := app.db.GetMap(mapName); found && mi.Timezone != "" {
+		region = mi.Timezone
+	}
+	tzOffset := "0"
+	if loc, err := time.LoadLocation(region); err == nil {
+		_, off := time.Now().In(loc).Zone()
+		tzOffset = strconv.Itoa(off / 3600)
+	}
+
+	// Permissions.
+	permDesks := app.permLevel(sess, "desks")
+	permMaps := app.permLevel(sess, "maps")
+	permAdmin := app.permLevel(sess, "adminpanel")
+	isEditor := permDesks > 1
+
+	// Duplicate-desk highlight data for editors: IDs of desks on this map that
+	// share a (non-whitelisted) desk number, so the editor can spot and fix them.
+	flaggedDesks := []int{}
+	deskWhitelist := []string{}
+	if permDesks > 0 && mapName != "overview" {
+		groups, wl := app.duplicateDeskGroups()
+		deskWhitelist = wl
+		for _, g := range groups {
+			if g.Map != mapName {
+				continue
+			}
+			for _, d := range g.Members {
+				flaggedDesks = append(flaggedDesks, d.ID)
+			}
+		}
+	}
+	flaggedDesksJSON, _ := json.Marshal(flaggedDesks)
+	if deskWhitelist == nil {
+		deskWhitelist = []string{}
+	}
+	deskWhitelistJSON, _ := json.Marshal(deskWhitelist)
+
+	token := ""
+	if isEditor {
+		ymd := time.Now().Format("20060102")
+		rev := reverseStr(ymd)
+		a, _ := strconv.Atoi(rev)
+		b, _ := strconv.Atoi(ymd)
+		token = strconv.Itoa(a + b)
+	}
+
+	// Avatar.
+	avatarURL := "images/noavatar2.png"
+	if loggedIn {
+		userid := app.sessionUserID(sess)
+		if _, err := os.Stat(app.cfg.DataPath("avatarcache", userid+".jpg")); err == nil {
+			avatarURL = "avatarcache/" + userid + ".jpg?time=" + strconv.FormatInt(time.Now().Unix(), 10)
+		}
+	}
+
+	usermode := cookieStr(r, "setting_usermode", "edit")
+	usermodeColor := "#333"
+	if usermode == "user" {
+		usermodeColor = "orange"
+	}
+
+	// Content scale + zoom-based positioning. The map is laid out at a fixed
+	// design width and shown with CSS `zoom` (instead of transform:scale) so the
+	// browser re-rasterizes text at the final size and fonts stay crisp. Because
+	// `zoom` also scales an element's left/top offsets, we pre-divide them here.
+	contentScale := float64(zoom) / 100 * float64(autozoom)
+	if contentScale <= 0 {
+		contentScale = 1
+	}
+	contentLeft := float64(leftPos) / contentScale
+	contentTop := float64(69*autozoom) / contentScale
+
+	findme := q.Get("findme")
+	if xssCheck(findme) {
+		findme = ""
+	}
+
+	mapTitle := displayNames[mapName]
+	if mapTitle == "" {
+		mapTitle = ucfirst(mapName)
+	}
+
+	data := indexData{
+		AppTitle:           app.appTitle(),
+		TargetScreenWidth:  targetWidth,
+		HalfWidth:          targetWidth / 2,
+		Map:                mapName,
+		MapTitle:           mapTitle,
+		MapDefault:         mapDefault,
+		MapList:            mapList,
+		OtherMaps:          otherMaps,
+		PlaceholderMaps:    placeholderMaps,
+		IsOverview:         mapName == "overview",
+		WorldMap:           app.db.GetSetting("worldmap") == "1",
+		InternalBooking:    app.internalBookingEnabled(),
+		HasMapImage:        hasMapImage,
+		GeoapifyConfigured: app.db.GetGeoSetting("geoapifyApiKey") != "",
+		NomapText:          app.db.GetSetting("nomapText"),
+		NomapLink:          app.db.GetSetting("nomapLink"),
+		Itemscale:          itemscale,
+		Autozoom:           autozoom,
+		Zoom:               zoom,
+		ZoomIn:             zoom + 10,
+		ZoomOut:            zoom - 10,
+		ZoomScaled:         strconv.FormatFloat(float64(zoom)/100, 'f', -1, 64),
+		ContentScale:       strconv.FormatFloat(float64(zoom)/100*float64(autozoom), 'f', -1, 64),
+		ContentLeft:        strconv.FormatFloat(contentLeft, 'f', -1, 64),
+		ContentTop:         strconv.FormatFloat(contentTop, 'f', -1, 64),
+		LeftPos:            leftPos,
+		Floors:             floors,
+
+		NoDescription:    cookieBool(r, "setting_nodescription"),
+		Desknumbers:      cookieBool(r, "setting_desknumbers"),
+		Shownames:        cookieBool(r, "setting_shownames"),
+		HighlightLeaders: cookieBool(r, "setting_highlightleaders"),
+		Printmode:        cookieBool(r, "setting_printmode"),
+		NoAnimation:      cookieBool(r, "setting_noanimation"),
+		DailyVisitors:    cookieBool(r, "setting_dailyvisitors"),
+		DisableSAML:      cookieBool(r, "setting_saml"),
+		UserMode:         usermode,
+		UserModeColor:    usermodeColor,
+		AnnounceCookie:   cookieInt(r, "announcecookie", 0),
+
+		LoggedIn:  loggedIn,
+		Username:  sess.Username,
+		Fullname:  sess.Fullname,
+		Phone:     sess.Phone,
+		Mail:      sess.Mail,
+		PermDesks: permDesks,
+		PermMaps:  permMaps,
+		PermAdmin: permAdmin,
+		IsEditor:  isEditor,
+		Token:     token,
+		AvatarURL: avatarURL,
+
+		DepartmentsJSON:     template.JS(deptJSON),
+		ItemTypesJSON:       template.JS(itemTypesJSON),
+		FlaggedDesksJSON:    template.JS(flaggedDesksJSON),
+		HealthWhitelistJSON: template.JS(deskWhitelistJSON),
+		LogoRegular:         app.settingOr("logo_regular", "/static/images/cmaps-regular.png"),
+		LogoHover:           app.settingOr("logo_hover", "/static/images/cmaps-hover.png"),
+		TeamsContact:        app.db.GetSetting("teamsContact"),
+		Domain:              app.db.GetSetting("domain"),
+		ReportURL:           app.db.GetSetting("reportURL"),
+		Region:              region,
+		TzOffset:            tzOffset,
+
+		Findme:    findme,
+		Teamlabel: q.Get("teamlabel"),
+
+		SAMLEnabled:        app.cfg.SAML.Enabled,
+		AllowLocalFallback: app.cfg.SAML.AllowLocalPasswordFallback,
+	}
+
+	app.render(w, "index.html", data)
+}
+
+// settingOr returns a DB setting or a default when empty.
+func (app *Server) settingOr(key, def string) string {
+	if v := app.db.GetSetting(key); v != "" {
+		return v
+	}
+	return def
+}
+
+func cookieInt(r *http.Request, name string, def int) int {
+	c, err := r.Cookie(name)
+	if err != nil {
+		return def
+	}
+	v, err := strconv.Atoi(c.Value)
+	if err != nil {
+		return def
+	}
+	return v
+}
+
+func cookieBool(r *http.Request, name string) bool {
+	c, err := r.Cookie(name)
+	return err == nil && c.Value == "1"
+}
+
+func cookieStr(r *http.Request, name, def string) string {
+	c, err := r.Cookie(name)
+	if err != nil || c.Value == "" {
+		return def
+	}
+	return c.Value
+}
+
+func containsStr(s []string, v string) bool {
+	for _, x := range s {
+		if x == v {
+			return true
+		}
+	}
+	return false
+}
+
+func ucfirst(s string) string {
+	if s == "" {
+		return s
+	}
+	return strings.ToUpper(s[:1]) + s[1:]
+}
+
+// stripNomap removes the "-nomap" placeholder marker (any case) from a label.
+func stripNomap(s string) string {
+	lower := strings.ToLower(s)
+	for {
+		i := strings.Index(lower, "-nomap")
+		if i < 0 {
+			break
+		}
+		s = s[:i] + s[i+len("-nomap"):]
+		lower = lower[:i] + lower[i+len("-nomap"):]
+	}
+	return strings.TrimSpace(s)
+}
+
+func reverseStr(s string) string {
+	r := []rune(s)
+	for i, j := 0, len(r)-1; i < j; i, j = i+1, j-1 {
+		r[i], r[j] = r[j], r[i]
+	}
+	return string(r)
+}
+
+// xssCheck mirrors the legacy search-box blacklist.
+func xssCheck(s string) bool {
+	for _, bad := range []string{"<", ">", "[", "]", "&amp;", "&lt;", "&gt;", "&quot;", "&#x27;", "&#x2F;"} {
+		if strings.Contains(strings.ToLower(s), bad) {
+			return true
+		}
+	}
+	return false
+}
