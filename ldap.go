@@ -1,6 +1,8 @@
 package main
 
 import (
+	"companymaps/internal/progress"
+
 	"crypto/tls"
 	"fmt"
 	"log"
@@ -62,7 +64,7 @@ func (app *App) RunADSync() (int, error) {
 // per-source bucket, after which the shared combined caches are rebuilt from all
 // enabled sources (combine-on-write). This keeps a single failed/partial source
 // from wiping the others and lets a per-source "Sync now" refresh just that one.
-func (app *App) runADSync(prog *syncProgress) (int, error) {
+func (app *App) runADSync(prog *progress.Progress) (int, error) {
 	sources, err := app.db.ListLdapSources()
 	if err != nil {
 		return 0, fmt.Errorf("loading AD sources: %w", err)
@@ -83,8 +85,8 @@ func (app *App) runADSync(prog *syncProgress) (int, error) {
 		return 0, fmt.Errorf("no enabled AD sources configured")
 	}
 	if prog != nil {
-		prog.setTotal(len(sources))
-		prog.logf("Starting sync of %d source(s)…", len(sources))
+		prog.SetTotal(len(sources))
+		prog.Logf("Starting sync of %d source(s)…", len(sources))
 	}
 
 	now := time.Now().In(app.db.loc)
@@ -92,8 +94,8 @@ func (app *App) runADSync(prog *syncProgress) (int, error) {
 
 	for _, src := range sources {
 		if prog != nil {
-			prog.setStage("Syncing " + src.Description)
-			prog.logf("→ %s: connecting to %s (%s)…", src.Description, src.Server, src.Type)
+			prog.SetStage("Syncing " + src.Description)
+			prog.Logf("→ %s: connecting to %s (%s)…", src.Description, src.Server, src.Type)
 		}
 		dirUsers, dbg, err := app.fetchSourceDirectory(src)
 		users := deriveMirrorUsers(dirUsers)
@@ -103,13 +105,13 @@ func (app *App) runADSync(prog *syncProgress) (int, error) {
 			log.Printf("AD sync: source %q: %v", src.Description, err)
 			app.setSyncDebug(debug)
 			if prog != nil {
-				prog.logf("   ✗ %s: %s", src.Description, err.Error())
-				prog.step("")
+				prog.Logf("   ✗ %s: %s", src.Description, err.Error())
+				prog.Step("")
 			}
 			return 0, fmt.Errorf("source %q: %w", src.Description, err)
 		}
 		if prog != nil {
-			prog.logf("   connected=%v bound=%v · directory: %d · desk placements: %d",
+			prog.Logf("   connected=%v bound=%v · directory: %d · desk placements: %d",
 				dbg.Connected, dbg.Bound, dbg.EntriesFound, dbg.Mirrored)
 		}
 
@@ -127,7 +129,7 @@ func (app *App) runADSync(prog *syncProgress) (int, error) {
 		}
 		_ = app.db.AuditLog("LDAP", "System", src.Description+" has been synced.")
 		if prog != nil {
-			prog.step("")
+			prog.Step("")
 		}
 	}
 
@@ -144,7 +146,7 @@ func (app *App) runADSync(prog *syncProgress) (int, error) {
 	debug.Total = count
 	app.setSyncDebug(debug)
 	if prog != nil {
-		prog.logf("Done. %d desk placement(s) from %d source(s).", count, len(sources))
+		prog.Logf("Done. %d desk placement(s) from %d source(s).", count, len(sources))
 	}
 	return count, nil
 }

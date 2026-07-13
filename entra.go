@@ -1,6 +1,8 @@
 package main
 
 import (
+	"companymaps/internal/progress"
+
 	"crypto"
 	"crypto/rand"
 	"crypto/rsa"
@@ -332,13 +334,13 @@ func (app *App) graphUserToDirectory(u entraGraphUser) DirectoryUser {
 		Samaccountname: sam,
 		Givenname:      strings.TrimSpace(u.GivenName),
 		Surname:        strings.TrimSpace(u.Surname),
-		Mail:       mail,
-		Office:     strings.TrimSpace(u.OfficeLocation),
-		Department: strings.TrimSpace(u.Department),
-		Title:      title,
-		Phone:      phone,
-		Mobile:     strings.TrimSpace(u.MobilePhone),
-		Aliases:    extractProxyAliases(u.ProxyAddresses, mail),
+		Mail:           mail,
+		Office:         strings.TrimSpace(u.OfficeLocation),
+		Department:     strings.TrimSpace(u.Department),
+		Title:          title,
+		Phone:          phone,
+		Mobile:         strings.TrimSpace(u.MobilePhone),
+		Aliases:        extractProxyAliases(u.ProxyAddresses, mail),
 	}
 }
 
@@ -439,7 +441,7 @@ func (app *App) RunEntraSync() (int, error) {
 // office-filtered desk-placement mirror for each and stores it in that source's
 // own bucket, then rebuilds the combined EntraID mirror from all enabled
 // sources (combine-on-write), so a single-source sync never wipes the others.
-func (app *App) runEntraSync(prog *syncProgress) (int, error) {
+func (app *App) runEntraSync(prog *progress.Progress) (int, error) {
 	sources, err := app.db.ListEntraSources()
 	if err != nil {
 		return 0, fmt.Errorf("loading EntraID sources: %w", err)
@@ -455,30 +457,30 @@ func (app *App) runEntraSync(prog *syncProgress) (int, error) {
 		return 0, fmt.Errorf("no enabled EntraID sources configured")
 	}
 	if prog != nil {
-		prog.setTotal(len(sources))
-		prog.logf("Starting sync of %d EntraID source(s)…", len(sources))
+		prog.SetTotal(len(sources))
+		prog.Logf("Starting sync of %d EntraID source(s)…", len(sources))
 	}
 
 	now := time.Now().Format("2006-01-02 15:04:05")
 
 	for _, src := range sources {
 		if prog != nil {
-			prog.setStage("Syncing " + src.Description)
-			prog.logf("→ %s: connecting to Microsoft Graph…", src.Description)
+			prog.SetStage("Syncing " + src.Description)
+			prog.Logf("→ %s: connecting to Microsoft Graph…", src.Description)
 		}
 		client, err := newEntraClient(src)
 		if err != nil {
 			if prog != nil {
-				prog.logf("   ✗ %s: %s", src.Description, err.Error())
-				prog.step("")
+				prog.Logf("   ✗ %s: %s", src.Description, err.Error())
+				prog.Step("")
 			}
 			return 0, fmt.Errorf("source %q: %w", src.Description, err)
 		}
 		users, err := client.listUsers()
 		if err != nil {
 			if prog != nil {
-				prog.logf("   ✗ %s: %s", src.Description, err.Error())
-				prog.step("")
+				prog.Logf("   ✗ %s: %s", src.Description, err.Error())
+				prog.Step("")
 			}
 			return 0, fmt.Errorf("source %q: graph list users: %w", src.Description, err)
 		}
@@ -500,8 +502,8 @@ func (app *App) runEntraSync(prog *syncProgress) (int, error) {
 			log.Printf("EntraID sync: updating LastSync for %q: %v", src.Description, err)
 		}
 		if prog != nil {
-			prog.logf("   %d user(s), %d desk placement(s).", len(dir), len(mirror))
-			prog.step("")
+			prog.Logf("   %d user(s), %d desk placement(s).", len(dir), len(mirror))
+			prog.Step("")
 		}
 	}
 
@@ -512,7 +514,7 @@ func (app *App) runEntraSync(prog *syncProgress) (int, error) {
 	_ = app.db.SetMeta("entraSeeded", "1")
 	_ = app.db.SetEntraSetting("entraLastSync", now)
 	if prog != nil {
-		prog.logf("Done. %d desk placement(s) from %d source(s).", count, len(sources))
+		prog.Logf("Done. %d desk placement(s) from %d source(s).", count, len(sources))
 	}
 	return count, nil
 }
@@ -559,7 +561,7 @@ func (app *App) handleRestEntraSync(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, map[string]interface{}{"started": false, "error": "No enabled EntraID connection."})
 		return
 	}
-	if !app.entraProg.start(0, "Starting…") {
+	if !app.entraProg.Start(0, "Starting…") {
 		writeJSON(w, map[string]interface{}{"started": false, "running": true})
 		return
 	}
@@ -567,15 +569,15 @@ func (app *App) handleRestEntraSync(w http.ResponseWriter, r *http.Request) {
 	go func() {
 		defer func() {
 			if rec := recover(); rec != nil {
-				app.entraProg.finish("", fmt.Sprintf("sync crashed: %v", rec))
+				app.entraProg.Finish("", fmt.Sprintf("sync crashed: %v", rec))
 			}
 		}()
 		count, err := app.runEntraSync(&app.entraProg)
 		if err != nil {
-			app.entraProg.finish("", err.Error())
+			app.entraProg.Finish("", err.Error())
 			return
 		}
-		app.entraProg.finish(fmt.Sprintf("Mirrored %d placement(s).", count), "")
+		app.entraProg.Finish(fmt.Sprintf("Mirrored %d placement(s).", count), "")
 	}()
 	writeJSON(w, map[string]interface{}{"started": true})
 }
@@ -587,7 +589,7 @@ func (app *App) handleRestEntraProgress(w http.ResponseWriter, r *http.Request) 
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}
-	writeJSON(w, app.entraProg.snapshot())
+	writeJSON(w, app.entraProg.Snapshot())
 }
 
 // handleRestEntraTest validates one EntraID source's credentials by acquiring a

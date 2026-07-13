@@ -1,6 +1,8 @@
 package main
 
 import (
+	"companymaps/internal/progress"
+
 	"encoding/json"
 	"fmt"
 	"io"
@@ -633,7 +635,7 @@ func (app *App) RunRobinSyncStructured() RobinSyncResult {
 // runRobinSyncStructured is the worker behind RunRobinSyncStructured. When prog
 // is non-nil it reports determinate progress (room-by-room) and a live log so
 // the admin Sync tab can render a progress bar during the (often slow) sync.
-func (app *App) runRobinSyncStructured(prog *syncProgress) RobinSyncResult {
+func (app *App) runRobinSyncStructured(prog *progress.Progress) RobinSyncResult {
 	res := RobinSyncResult{
 		Time: time.Now().Format("2006-01-02 15:04:05"),
 		Org:  app.db.GetRobinSetting("robinOrganisation"),
@@ -641,7 +643,7 @@ func (app *App) runRobinSyncStructured(prog *syncProgress) RobinSyncResult {
 	if app.db.GetRobinSetting("robintoken") == "" {
 		res.Note = "Robin access token is not configured."
 		if prog != nil {
-			prog.logf("Robin access token is not configured.")
+			prog.Logf("Robin access token is not configured.")
 		}
 		app.saveRobinSyncResult(res)
 		return res
@@ -651,7 +653,7 @@ func (app *App) runRobinSyncStructured(prog *syncProgress) RobinSyncResult {
 	if len(spaces) == 0 {
 		res.Note = "No Robin locations configured yet."
 		if prog != nil {
-			prog.logf("No Robin locations configured yet.")
+			prog.Logf("No Robin locations configured yet.")
 		}
 		app.saveRobinSyncResult(res)
 		return res
@@ -666,8 +668,8 @@ func (app *App) runRobinSyncStructured(prog *syncProgress) RobinSyncResult {
 	var work []locRooms
 	totalRooms := 0
 	if prog != nil {
-		prog.setStage("Fetching locations…")
-		prog.logf("Found %d configured location(s). Fetching room lists…", len(spaces))
+		prog.SetStage("Fetching locations…")
+		prog.Logf("Found %d configured location(s). Fetching room lists…", len(spaces))
 	}
 	for _, s := range spaces {
 		loc := RobinSyncLocation{Spacename: s.Spacename, Mapname: s.MapName(), Spaceid: s.Spaceid}
@@ -675,20 +677,20 @@ func (app *App) runRobinSyncStructured(prog *syncProgress) RobinSyncResult {
 		if err := app.robinGet(fmt.Sprintf("/locations/%d/spaces?page=1&per_page=200", s.Spaceid), &list); err != nil {
 			loc.Err = err.Error()
 			if prog != nil {
-				prog.logf("✗ %s (id %d): %s", s.Spacename, s.Spaceid, err.Error())
+				prog.Logf("✗ %s (id %d): %s", s.Spacename, s.Spaceid, err.Error())
 			}
 			work = append(work, locRooms{loc: loc})
 			continue
 		}
 		if prog != nil {
-			prog.logf("• %s → %s (id %d): %d room(s)", s.Spacename, s.MapName(), s.Spaceid, len(list.Data))
+			prog.Logf("• %s → %s (id %d): %d room(s)", s.Spacename, s.MapName(), s.Spaceid, len(list.Data))
 		}
 		totalRooms += len(list.Data)
 		work = append(work, locRooms{loc: loc, rooms: list.Data})
 	}
 	if prog != nil {
-		prog.setTotal(totalRooms)
-		prog.setStage("Polling rooms…")
+		prog.SetTotal(totalRooms)
+		prog.SetStage("Polling rooms…")
 	}
 
 	// Phase 2: poll each room (the slow part: two API calls per room). Rooms are
@@ -721,13 +723,13 @@ func (app *App) runRobinSyncStructured(prog *syncProgress) RobinSyncResult {
 				if prog != nil {
 					switch {
 					case r.Err != "":
-						prog.logf("    ✗ %s: %s", j.room.Name, r.Err)
+						prog.Logf("    ✗ %s: %s", j.room.Name, r.Err)
 					case r.Matched:
-						prog.logf("    ✓ %s → desk %s (%s)", j.room.Name, r.Deskid, r.Availability)
+						prog.Logf("    ✓ %s → desk %s (%s)", j.room.Name, r.Deskid, r.Availability)
 					default:
-						prog.logf("    – %s: no matching desk (%s)", j.room.Name, r.Availability)
+						prog.Logf("    – %s: no matching desk (%s)", j.room.Name, r.Availability)
 					}
-					prog.step("")
+					prog.Step("")
 				}
 			}
 		}()
@@ -1061,7 +1063,7 @@ func (app *App) resolveOccupant(email string, userID int, emailUser map[string]D
 // seat reservations active right now (one per occupied CompanyMaps desk). When
 // capture/logf are non-nil it also captures raw JSON and logs every step (for
 // the diagnostic). Counts are returned via RobinDeskDumpResult.
-func (app *App) collectRobinOccupancy(prog *syncProgress, capture func(name string, raw []byte), logf func(format string, args ...interface{})) ([]RobinDeskStatus, RobinDeskDumpResult) {
+func (app *App) collectRobinOccupancy(prog *progress.Progress, capture func(name string, raw []byte), logf func(format string, args ...interface{})) ([]RobinDeskStatus, RobinDeskDumpResult) {
 	add := func(format string, args ...interface{}) {
 		if logf != nil {
 			logf(format, args...)
@@ -1148,7 +1150,7 @@ func (app *App) collectRobinOccupancy(prog *syncProgress, capture func(name stri
 	var work []locWork
 	totalSpaces := 0
 	if prog != nil {
-		prog.setStage("Fetching locations…")
+		prog.SetStage("Fetching locations…")
 	}
 	for _, s := range spaces {
 		dir := fmt.Sprintf("location_%d_%s", s.Spaceid, sanitizeDumpSegment(s.Spacename))
@@ -1165,7 +1167,7 @@ func (app *App) collectRobinOccupancy(prog *syncProgress, capture func(name stri
 		work = append(work, locWork{s: s, dir: dir, spaces: list.Data})
 	}
 	if prog != nil {
-		prog.beginPhase(totalSpaces, "Polling spaces…")
+		prog.BeginPhase(totalSpaces, "Polling spaces…")
 	}
 
 	for _, lw := range work {
@@ -1274,7 +1276,7 @@ func (app *App) collectRobinOccupancy(prog *syncProgress, capture func(name stri
 			}
 
 			if prog != nil {
-				prog.step("")
+				prog.Step("")
 			}
 		}
 	}
@@ -1290,13 +1292,13 @@ func (app *App) collectRobinOccupancy(prog *syncProgress, capture func(name stri
 // a CompanyMaps desk. When prog is non-nil it reports a determinate progress bar
 // (one step per Robin space) and a live log. Nothing is persisted to the meeting
 // cache, the booking feature, or the map.
-func (app *App) runRobinDeskDump(prog *syncProgress) ([]string, []robinDumpFile, RobinDeskDumpResult) {
+func (app *App) runRobinDeskDump(prog *progress.Progress) ([]string, []robinDumpFile, RobinDeskDumpResult) {
 	var logs []string
 	add := func(format string, args ...interface{}) {
 		line := fmt.Sprintf(format, args...)
 		logs = append(logs, line)
 		if prog != nil {
-			prog.logf("%s", line)
+			prog.Logf("%s", line)
 		}
 	}
 	var files []robinDumpFile
@@ -1314,7 +1316,7 @@ func (app *App) runRobinDeskDump(prog *syncProgress) ([]string, []robinDumpFile,
 // the desk overlay. It is a no-op unless the overlay is enabled and a token is
 // configured. It never touches the meeting cache or the booking feature. When
 // prog is non-nil it reports determinate progress (one step per space).
-func (app *App) pollRobinDeskOccupancy(prog *syncProgress) {
+func (app *App) pollRobinDeskOccupancy(prog *progress.Progress) {
 	mode := app.db.GetRobinSetting("robinDeskMode")
 	if mode == "" || mode == "off" {
 		return
@@ -1357,7 +1359,7 @@ func isStripSeparator(r rune) bool {
 // desk number exactly but with extra text on one side (and a separator at the
 // boundary). Seats that already match after the current strip config, and
 // patterns already configured, are skipped. Read-only: no API writes.
-func (app *App) collectRobinStripSuggestions(prog *syncProgress) ([]robinStripSuggestion, error) {
+func (app *App) collectRobinStripSuggestions(prog *progress.Progress) ([]robinStripSuggestion, error) {
 	if app.db.GetRobinSetting("robintoken") == "" {
 		return nil, fmt.Errorf("Robin access token is not configured")
 	}
@@ -1375,8 +1377,8 @@ func (app *App) collectRobinStripSuggestions(prog *syncProgress) ([]robinStripSu
 	spaces, _ := app.db.ListRobinSpaces()
 	sort.Slice(spaces, func(i, j int) bool { return spaces[i].Spacename < spaces[j].Spacename })
 	if prog != nil {
-		prog.setTotal(len(spaces))
-		prog.setStage("Scanning locations…")
+		prog.SetTotal(len(spaces))
+		prog.SetStage("Scanning locations…")
 	}
 
 	deskByMap := map[string]map[string]Desk{}
@@ -1406,7 +1408,7 @@ func (app *App) collectRobinStripSuggestions(prog *syncProgress) ([]robinStripSu
 
 	for _, s := range spaces {
 		if prog != nil {
-			prog.step("Scanning " + s.Spacename + "…")
+			prog.Step("Scanning " + s.Spacename + "…")
 		}
 		desks := deskLookup(s.MapName())
 		if len(desks) == 0 {

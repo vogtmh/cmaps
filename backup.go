@@ -57,21 +57,21 @@ func (app *App) handleRestExportStart(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}
-	if !app.exportProg.start(0, "Preparing…") {
+	if !app.exportProg.Start(0, "Preparing…") {
 		writeJSON(w, map[string]interface{}{"started": false, "running": true})
 		return
 	}
 	go func() {
 		defer func() {
 			if rec := recover(); rec != nil {
-				app.exportProg.finish("", fmt.Sprintf("export crashed: %v", rec))
+				app.exportProg.Finish("", fmt.Sprintf("export crashed: %v", rec))
 			}
 		}()
 		if err := app.buildExport(); err != nil {
-			app.exportProg.finish("", err.Error())
+			app.exportProg.Finish("", err.Error())
 			return
 		}
-		app.exportProg.finish("Export ready.", "")
+		app.exportProg.Finish("Export ready.", "")
 	}()
 	_ = app.db.AuditLog("Settings", sess.Username, "Data export started")
 	writeJSON(w, map[string]interface{}{"started": true})
@@ -84,7 +84,7 @@ func (app *App) handleRestExportProgress(w http.ResponseWriter, r *http.Request)
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}
-	writeJSON(w, app.exportProg.snapshot())
+	writeJSON(w, app.exportProg.Snapshot())
 }
 
 // handleRestExportDownload streams the most recently built export zip and then
@@ -149,7 +149,7 @@ func (app *App) buildExport() error {
 	for _, dir := range backupAssetDirs {
 		total += countFiles(app.cfg.dataPath(dir))
 	}
-	app.exportProg.beginPhase(total, "Snapshotting database…")
+	app.exportProg.BeginPhase(total, "Snapshotting database…")
 
 	tmp, err := os.CreateTemp("", "cmaps-export-*.zip")
 	if err != nil {
@@ -200,7 +200,7 @@ func (app *App) buildExport() error {
 		_ = closeAndRemove(tmp, zw, tmpPath)
 		return fmt.Errorf("db snapshot: %w", err)
 	}
-	app.exportProg.step("Adding files…")
+	app.exportProg.Step("Adding files…")
 
 	// Asset directories — copied file by file, preserving the dir/<name> layout.
 	for _, dir := range backupAssetDirs {
@@ -226,7 +226,7 @@ func (app *App) buildExport() error {
 			}
 			_, _ = io.Copy(fw, src)
 			_ = src.Close()
-			app.exportProg.step("")
+			app.exportProg.Step("")
 			return nil
 		})
 		if err != nil {

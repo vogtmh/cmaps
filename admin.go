@@ -2076,7 +2076,7 @@ func (app *App) handleRestRobinSync(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, map[string]interface{}{"started": false, "message": "Robin integration is disabled."})
 		return
 	}
-	if !app.robinProg.start(0, "Starting…") {
+	if !app.robinProg.Start(0, "Starting…") {
 		writeJSON(w, map[string]interface{}{"started": false, "running": true})
 		return
 	}
@@ -2084,20 +2084,20 @@ func (app *App) handleRestRobinSync(w http.ResponseWriter, r *http.Request) {
 	go func() {
 		defer func() {
 			if rec := recover(); rec != nil {
-				app.robinProg.finish("", fmt.Sprintf("sync crashed: %v", rec))
+				app.robinProg.Finish("", fmt.Sprintf("sync crashed: %v", rec))
 			}
 		}()
 		res := app.runRobinSyncStructured(&app.robinProg)
 		// Refresh the desk-reservation overlay in the same run (no-op unless the
 		// "Show Robin desk reservations" mode is enabled), exactly like the
 		// 5-minute scheduler does, so one button syncs everything.
-		app.robinProg.setStage("Syncing desk reservations…")
+		app.robinProg.SetStage("Syncing desk reservations…")
 		app.pollRobinDeskOccupancy(&app.robinProg)
 		if res.Note != "" {
-			app.robinProg.finish(res.Note, "")
+			app.robinProg.Finish(res.Note, "")
 			return
 		}
-		app.robinProg.finish(fmt.Sprintf("%d of %d room(s) matched a meeting desk.", res.MatchedRooms, res.TotalRooms), "")
+		app.robinProg.Finish(fmt.Sprintf("%d of %d room(s) matched a meeting desk.", res.MatchedRooms, res.TotalRooms), "")
 	}()
 	writeJSON(w, map[string]interface{}{"started": true})
 }
@@ -2109,7 +2109,7 @@ func (app *App) handleRestRobinProgress(w http.ResponseWriter, r *http.Request) 
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}
-	writeJSON(w, app.robinProg.snapshot())
+	writeJSON(w, app.robinProg.Snapshot())
 }
 
 // handleRestGeoTest verifies the saved Geoapify API key by geocoding a single
@@ -2181,14 +2181,14 @@ func (app *App) handleRestGeoSync(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, map[string]interface{}{"ok": false, "message": "No Geoapify API key configured. Save a key first."})
 		return
 	}
-	if !app.geoProg.start(0, "Starting…") {
+	if !app.geoProg.Start(0, "Starting…") {
 		writeJSON(w, map[string]interface{}{"ok": false, "started": false, "running": true, "message": "A geocode sync is already running."})
 		return
 	}
 	go func() {
 		defer func() {
 			if rec := recover(); rec != nil {
-				app.geoProg.finish("", fmt.Sprintf("sync crashed: %v", rec))
+				app.geoProg.Finish("", fmt.Sprintf("sync crashed: %v", rec))
 			}
 		}()
 		res := app.RunGeoapifySync(&app.geoProg)
@@ -2196,7 +2196,7 @@ func (app *App) handleRestGeoSync(w http.ResponseWriter, r *http.Request) {
 		app.geoResult = res
 		app.geoMu.Unlock()
 		_ = app.db.AuditLog("LDAP", sess.Username, fmt.Sprintf("Geoapify batch sync (%d updated, %d skipped, %d failed)", res.Updated, res.Skipped, res.Failed))
-		app.geoProg.finish(fmt.Sprintf("%d updated, %d skipped, %d failed.", res.Updated, res.Skipped, res.Failed), "")
+		app.geoProg.Finish(fmt.Sprintf("%d updated, %d skipped, %d failed.", res.Updated, res.Skipped, res.Failed), "")
 	}()
 	writeJSON(w, map[string]interface{}{"ok": true, "started": true})
 }
@@ -2209,7 +2209,7 @@ func (app *App) handleRestGeoProgress(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}
-	snap := app.geoProg.snapshot()
+	snap := app.geoProg.Snapshot()
 	if done, _ := snap["done"].(bool); done {
 		app.geoMu.Lock()
 		snap["result"] = app.geoResult
@@ -2304,7 +2304,7 @@ func (app *App) handleRestRobinDeskTest(w http.ResponseWriter, r *http.Request) 
 		writeJSON(w, map[string]interface{}{"started": false, "message": "Robin integration is disabled."})
 		return
 	}
-	if !app.robinDeskProg.start(0, "Starting…") {
+	if !app.robinDeskProg.Start(0, "Starting…") {
 		writeJSON(w, map[string]interface{}{"started": false, "running": true})
 		return
 	}
@@ -2312,7 +2312,7 @@ func (app *App) handleRestRobinDeskTest(w http.ResponseWriter, r *http.Request) 
 	go func() {
 		defer func() {
 			if rec := recover(); rec != nil {
-				app.robinDeskProg.finish("", fmt.Sprintf("diagnostic crashed: %v", rec))
+				app.robinDeskProg.Finish("", fmt.Sprintf("diagnostic crashed: %v", rec))
 			}
 		}()
 		_, files, res := app.runRobinDeskDump(&app.robinDeskProg)
@@ -2320,7 +2320,7 @@ func (app *App) handleRestRobinDeskTest(w http.ResponseWriter, r *http.Request) 
 		app.robinDumpFiles = files
 		app.robinDumpTime = time.Now().Format("2006-01-02 15:04:05")
 		app.robinDumpMu.Unlock()
-		app.robinDeskProg.finish(fmt.Sprintf("%d desk(s) occupied now matched (%d unmatched). %d JSON file(s) captured.",
+		app.robinDeskProg.Finish(fmt.Sprintf("%d desk(s) occupied now matched (%d unmatched). %d JSON file(s) captured.",
 			res.Matched, res.Unmatched, res.Files), "")
 	}()
 	writeJSON(w, map[string]interface{}{"started": true})
@@ -2333,7 +2333,7 @@ func (app *App) handleRestRobinDeskProgress(w http.ResponseWriter, r *http.Reque
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}
-	writeJSON(w, app.robinDeskProg.snapshot())
+	writeJSON(w, app.robinDeskProg.Snapshot())
 }
 
 // handleRestRobinDeskDump streams the most recently captured desk-data
@@ -2410,25 +2410,25 @@ func (app *App) handleRestRobinSuggestions(w http.ResponseWriter, r *http.Reques
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}
-	if !app.robinSuggestProg.start(0, "Starting…") {
+	if !app.robinSuggestProg.Start(0, "Starting…") {
 		writeJSON(w, map[string]interface{}{"started": false, "running": true})
 		return
 	}
 	go func() {
 		defer func() {
 			if rec := recover(); rec != nil {
-				app.robinSuggestProg.finish("", fmt.Sprintf("scan crashed: %v", rec))
+				app.robinSuggestProg.Finish("", fmt.Sprintf("scan crashed: %v", rec))
 			}
 		}()
 		suggestions, err := app.collectRobinStripSuggestions(&app.robinSuggestProg)
 		if err != nil {
-			app.robinSuggestProg.finish("", err.Error())
+			app.robinSuggestProg.Finish("", err.Error())
 			return
 		}
 		app.robinSuggestMu.Lock()
 		app.robinSuggestResult = suggestions
 		app.robinSuggestMu.Unlock()
-		app.robinSuggestProg.finish(fmt.Sprintf("%d suggestion(s) found.", len(suggestions)), "")
+		app.robinSuggestProg.Finish(fmt.Sprintf("%d suggestion(s) found.", len(suggestions)), "")
 	}()
 	writeJSON(w, map[string]interface{}{"started": true})
 }
@@ -2441,7 +2441,7 @@ func (app *App) handleRestRobinSuggestionsProgress(w http.ResponseWriter, r *htt
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}
-	snap := app.robinSuggestProg.snapshot()
+	snap := app.robinSuggestProg.Snapshot()
 	if done, _ := snap["done"].(bool); done {
 		app.robinSuggestMu.Lock()
 		snap["suggestions"] = app.robinSuggestResult
@@ -2496,7 +2496,7 @@ func (app *App) handleRestLdapSync(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}
-	if !app.ldapProg.start(0, "Starting…") {
+	if !app.ldapProg.Start(0, "Starting…") {
 		writeJSON(w, map[string]interface{}{"started": false, "running": true})
 		return
 	}
@@ -2504,15 +2504,15 @@ func (app *App) handleRestLdapSync(w http.ResponseWriter, r *http.Request) {
 	go func() {
 		defer func() {
 			if rec := recover(); rec != nil {
-				app.ldapProg.finish("", fmt.Sprintf("sync crashed: %v", rec))
+				app.ldapProg.Finish("", fmt.Sprintf("sync crashed: %v", rec))
 			}
 		}()
 		count, err := app.runADSync(&app.ldapProg)
 		if err != nil {
-			app.ldapProg.finish("", err.Error())
+			app.ldapProg.Finish("", err.Error())
 			return
 		}
-		app.ldapProg.finish(fmt.Sprintf("Mirrored %d placement(s).", count), "")
+		app.ldapProg.Finish(fmt.Sprintf("Mirrored %d placement(s).", count), "")
 	}()
 	writeJSON(w, map[string]interface{}{"started": true})
 }
@@ -2524,7 +2524,7 @@ func (app *App) handleRestLdapProgress(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}
-	writeJSON(w, app.ldapProg.snapshot())
+	writeJSON(w, app.ldapProg.Snapshot())
 }
 
 // handleAuditReimport is the superadmin-only one-time action that re-imports the

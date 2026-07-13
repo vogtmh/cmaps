@@ -1,6 +1,8 @@
 package main
 
 import (
+	"companymaps/internal/progress"
+
 	"context"
 	"encoding/json"
 	"fmt"
@@ -192,7 +194,7 @@ type GeoSyncResult struct {
 // (it is the world map itself, not a physical location). This is only ever
 // invoked manually from the admin Sync panel — there is no scheduler. Progress
 // is reported through prog so the admin panel can show a live progress bar.
-func (app *App) RunGeoapifySync(prog *syncProgress) GeoSyncResult {
+func (app *App) RunGeoapifySync(prog *progress.Progress) GeoSyncResult {
 	var res GeoSyncResult
 	apiKey := app.db.GetGeoSetting("geoapifyApiKey")
 
@@ -206,7 +208,7 @@ func (app *App) RunGeoapifySync(prog *syncProgress) GeoSyncResult {
 				total++
 			}
 		}
-		prog.beginPhase(total, "Geocoding locations…")
+		prog.BeginPhase(total, "Geocoding locations…")
 	}
 	for _, m := range maps {
 		if m.Mapname == "overview" {
@@ -221,8 +223,8 @@ func (app *App) RunGeoapifySync(prog *syncProgress) GeoSyncResult {
 			res.Skipped++
 			res.Results = append(res.Results, row)
 			if prog != nil {
-				prog.step("")
-				prog.logf("%s: skipped (no address)", m.Mapname)
+				prog.Step("")
+				prog.Logf("%s: skipped (no address)", m.Mapname)
 			}
 			continue
 		}
@@ -239,8 +241,8 @@ func (app *App) RunGeoapifySync(prog *syncProgress) GeoSyncResult {
 			res.Failed++
 			res.Results = append(res.Results, row)
 			if prog != nil {
-				prog.step("")
-				prog.logf("%s: failed (%s)", m.Mapname, err.Error())
+				prog.Step("")
+				prog.Logf("%s: failed (%s)", m.Mapname, err.Error())
 			}
 			continue
 		}
@@ -253,8 +255,8 @@ func (app *App) RunGeoapifySync(prog *syncProgress) GeoSyncResult {
 			res.Failed++
 			res.Results = append(res.Results, row)
 			if prog != nil {
-				prog.step("")
-				prog.logf("%s: could not save (%s)", m.Mapname, err.Error())
+				prog.Step("")
+				prog.Logf("%s: could not save (%s)", m.Mapname, err.Error())
 			}
 			continue
 		}
@@ -265,8 +267,8 @@ func (app *App) RunGeoapifySync(prog *syncProgress) GeoSyncResult {
 		res.Updated++
 		res.Results = append(res.Results, row)
 		if prog != nil {
-			prog.step("")
-			prog.logf("%s: %.5f, %.5f", m.Mapname, lat, lon)
+			prog.Step("")
+			prog.Logf("%s: %.5f, %.5f", m.Mapname, lat, lon)
 		}
 		// Be polite to the API between requests.
 		time.Sleep(120 * time.Millisecond)

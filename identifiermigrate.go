@@ -385,15 +385,15 @@ func (app *App) runIdentifierStage(target string) {
 	app.purgeStaging()
 	plan, err := app.buildMigPlan(target)
 	if err != nil {
-		prog.finish("", "building migration plan: "+err.Error())
+		prog.Finish("", "building migration plan: "+err.Error())
 		return
 	}
 	if plan.totalDir == 0 {
-		prog.finish("", "the directory is empty — run a directory sync before migrating")
+		prog.Finish("", "the directory is empty — run a directory sync before migrating")
 		return
 	}
-	prog.logf("Staging conversion: %s → %s", plan.current, target)
-	prog.logf("%d directory user(s): %d to convert, %d already in target form, %d conflict(s) skipped.",
+	prog.Logf("Staging conversion: %s → %s", plan.current, target)
+	prog.Logf("%d directory user(s): %d to convert, %d already in target form, %d conflict(s) skipped.",
 		plan.totalDir, plan.mappable, plan.already, len(plan.conflicts))
 
 	var areas []migStageArea
@@ -401,7 +401,7 @@ func (app *App) runIdentifierStage(target string) {
 		areas = append(areas, migStageArea{Key: key, Label: label, Total: total, Changed: changed})
 	}
 
-	prog.setStage("Staging audit log")
+	prog.SetStage("Staging audit log")
 	t, c, err := app.stageBucket(bktMigAudit, bucketAudit, func(v []byte) ([]byte, bool) {
 		var e AuditEntry
 		if json.Unmarshal(v, &e) != nil {
@@ -419,13 +419,13 @@ func (app *App) runIdentifierStage(target string) {
 		return nv, true
 	})
 	if err != nil {
-		prog.finish("", "staging audit log: "+err.Error())
+		prog.Finish("", "staging audit log: "+err.Error())
 		return
 	}
 	add("audit", "Audit log", t, c)
-	prog.logf("Audit log: %d of %d record(s) staged.", c, t)
+	prog.Logf("Audit log: %d of %d record(s) staged.", c, t)
 
-	prog.setStage("Staging changelog")
+	prog.SetStage("Staging changelog")
 	t, c, err = app.stageBucket(bktMigChangelog, bucketChangelog, func(v []byte) ([]byte, bool) {
 		var e ChangelogEntry
 		if json.Unmarshal(v, &e) != nil {
@@ -443,13 +443,13 @@ func (app *App) runIdentifierStage(target string) {
 		return nv, true
 	})
 	if err != nil {
-		prog.finish("", "staging changelog: "+err.Error())
+		prog.Finish("", "staging changelog: "+err.Error())
 		return
 	}
 	add("changelog", "Changelog", t, c)
-	prog.logf("Changelog: %d of %d record(s) staged.", c, t)
+	prog.Logf("Changelog: %d of %d record(s) staged.", c, t)
 
-	prog.setStage("Staging bookings")
+	prog.SetStage("Staging bookings")
 	t, c, err = app.stageBucket(bktMigBookings, bucketBookings, func(v []byte) ([]byte, bool) {
 		var b Booking
 		if json.Unmarshal(v, &b) != nil {
@@ -467,13 +467,13 @@ func (app *App) runIdentifierStage(target string) {
 		return nv, true
 	})
 	if err != nil {
-		prog.finish("", "staging bookings: "+err.Error())
+		prog.Finish("", "staging bookings: "+err.Error())
 		return
 	}
 	add("bookings", "Bookings", t, c)
-	prog.logf("Bookings: %d of %d record(s) staged.", c, t)
+	prog.Logf("Bookings: %d of %d record(s) staged.", c, t)
 
-	prog.setStage("Staging desks")
+	prog.SetStage("Staging desks")
 	t, c, err = app.stageBucket(bktMigDesks, bucketDesks, func(v []byte) ([]byte, bool) {
 		var d Desk
 		if json.Unmarshal(v, &d) != nil {
@@ -494,25 +494,25 @@ func (app *App) runIdentifierStage(target string) {
 		return nv, true
 	})
 	if err != nil {
-		prog.finish("", "staging desks: "+err.Error())
+		prog.Finish("", "staging desks: "+err.Error())
 		return
 	}
 	add("desks", "Desks", t, c)
-	prog.logf("Desks: %d of %d record(s) staged.", c, t)
+	prog.Logf("Desks: %d of %d record(s) staged.", c, t)
 
-	prog.setStage("Staging map admins")
+	prog.SetStage("Staging map admins")
 	t, c, err = app.stageAdmins(plan)
 	if err != nil {
-		prog.finish("", "staging map admins: "+err.Error())
+		prog.Finish("", "staging map admins: "+err.Error())
 		return
 	}
 	add("admins", "Map admins", t, c)
-	prog.logf("Map admins: %d of %d record(s) staged.", c, t)
+	prog.Logf("Map admins: %d of %d record(s) staged.", c, t)
 
-	prog.setStage("Scanning avatars")
+	prog.SetStage("Scanning avatars")
 	at, ac := app.avatarChangeCount(plan)
 	add("avatars", "Avatar images", at, ac)
-	prog.logf("Avatars: %d of %d file(s) will be renamed.", ac, at)
+	prog.Logf("Avatars: %d of %d file(s) will be renamed.", ac, at)
 
 	// Local accounts: count those still missing a synthetic mail.
 	users, _ := app.db.ListUsers()
@@ -535,7 +535,7 @@ func (app *App) runIdentifierStage(target string) {
 		Areas:     areas,
 	}
 	if err := app.writeStageInfo(info); err != nil {
-		prog.finish("", "writing staging metadata: "+err.Error())
+		prog.Finish("", "writing staging metadata: "+err.Error())
 		return
 	}
 
@@ -543,7 +543,7 @@ func (app *App) runIdentifierStage(target string) {
 	for _, a := range areas {
 		totalChanges += a.Changed
 	}
-	prog.finish(fmt.Sprintf("Staged %d change(s). Review, then apply to switch.", totalChanges), "")
+	prog.Finish(fmt.Sprintf("Staged %d change(s). Review, then apply to switch.", totalChanges), "")
 }
 
 // applyStagedBucket copies every staged row into the live bucket under the same
@@ -614,59 +614,59 @@ func (app *App) runIdentifierApply(target string) {
 	prog := &app.migrateProg
 	info, ok := app.readStageInfo()
 	if !ok || info.Target != target {
-		prog.finish("", "no staged migration found — please run the create step again")
+		prog.Finish("", "no staged migration found — please run the create step again")
 		return
 	}
 	if info.stageExpired() {
 		app.purgeStaging()
-		prog.finish("", "the staged migration expired (older than 1 hour) — please run the create step again")
+		prog.Finish("", "the staged migration expired (older than 1 hour) — please run the create step again")
 		return
 	}
 	plan, err := app.buildMigPlan(target)
 	if err != nil {
-		prog.finish("", "building migration plan: "+err.Error())
+		prog.Finish("", "building migration plan: "+err.Error())
 		return
 	}
-	prog.logf("Applying staged migration: %s → %s", info.Current, target)
+	prog.Logf("Applying staged migration: %s → %s", info.Current, target)
 
-	prog.setStage("Applying audit log")
+	prog.SetStage("Applying audit log")
 	if n, err := app.applyStagedBucket(bucketAudit, bktMigAudit); err != nil {
-		prog.finish("", "applying audit log: "+err.Error())
+		prog.Finish("", "applying audit log: "+err.Error())
 		return
 	} else {
-		prog.logf("Audit log: %d record(s) updated.", n)
+		prog.Logf("Audit log: %d record(s) updated.", n)
 	}
 
-	prog.setStage("Applying changelog")
+	prog.SetStage("Applying changelog")
 	if n, err := app.applyStagedBucket(bucketChangelog, bktMigChangelog); err != nil {
-		prog.finish("", "applying changelog: "+err.Error())
+		prog.Finish("", "applying changelog: "+err.Error())
 		return
 	} else {
-		prog.logf("Changelog: %d record(s) updated.", n)
+		prog.Logf("Changelog: %d record(s) updated.", n)
 	}
 
-	prog.setStage("Applying bookings")
+	prog.SetStage("Applying bookings")
 	if n, err := app.applyStagedBucket(bucketBookings, bktMigBookings); err != nil {
-		prog.finish("", "applying bookings: "+err.Error())
+		prog.Finish("", "applying bookings: "+err.Error())
 		return
 	} else {
-		prog.logf("Bookings: %d record(s) updated.", n)
+		prog.Logf("Bookings: %d record(s) updated.", n)
 	}
 
-	prog.setStage("Applying desks")
+	prog.SetStage("Applying desks")
 	if n, err := app.applyStagedBucket(bucketDesks, bktMigDesks); err != nil {
-		prog.finish("", "applying desks: "+err.Error())
+		prog.Finish("", "applying desks: "+err.Error())
 		return
 	} else {
-		prog.logf("Desks: %d record(s) updated.", n)
+		prog.Logf("Desks: %d record(s) updated.", n)
 	}
 
-	prog.setStage("Applying map admins")
+	prog.SetStage("Applying map admins")
 	if n, err := app.applyStagedAdmins(); err != nil {
-		prog.finish("", "applying map admins: "+err.Error())
+		prog.Finish("", "applying map admins: "+err.Error())
 		return
 	} else {
-		prog.logf("Map admins: %d re-keyed.", n)
+		prog.Logf("Map admins: %d re-keyed.", n)
 	}
 
 	// Keep already-authenticated admins signed in: their map-admin record was
@@ -678,10 +678,10 @@ func (app *App) runIdentifierApply(target string) {
 
 	// Avatar files: rename <old>.jpg -> <new>.jpg (disk is only touched now).
 	entries, _ := os.ReadDir(app.cfg.dataPath("avatarcache"))
-	prog.beginPhase(len(entries), "Renaming avatars")
+	prog.BeginPhase(len(entries), "Renaming avatars")
 	avatars := 0
 	for _, e := range entries {
-		prog.step("")
+		prog.Step("")
 		name := e.Name()
 		if e.IsDir() || len(name) <= 4 || !strings.EqualFold(name[len(name)-4:], ".jpg") {
 			continue
@@ -694,16 +694,16 @@ func (app *App) runIdentifierApply(target string) {
 		src := app.cfg.dataPath("avatarcache", name)
 		dst := app.cfg.dataPath("avatarcache", nb+".jpg")
 		if err := copyFile(src, dst); err != nil {
-			prog.logf("   ✗ avatar %s: %v", base, err)
+			prog.Logf("   ✗ avatar %s: %v", base, err)
 			continue
 		}
 		_ = os.Remove(src)
 		avatars++
 	}
-	prog.logf("Avatars: %d renamed.", avatars)
+	prog.Logf("Avatars: %d renamed.", avatars)
 
 	// Local accounts: backfill synthetic mail so they are never missing one.
-	prog.setStage("Backfilling local accounts")
+	prog.SetStage("Backfilling local accounts")
 	users, _ := app.db.ListUsers()
 	localMail := 0
 	for _, u := range users {
@@ -714,35 +714,35 @@ func (app *App) runIdentifierApply(target string) {
 		}
 	}
 	if localMail > 0 {
-		prog.logf("Local accounts: %d synthetic mail address(es) added.", localMail)
+		prog.Logf("Local accounts: %d synthetic mail address(es) added.", localMail)
 	}
 
-	prog.setStage("Applying setting")
+	prog.SetStage("Applying setting")
 	if err := app.db.SetSetting("identifier", target); err != nil {
-		prog.finish("", "converted data but failed to save the identifier setting: "+err.Error())
+		prog.Finish("", "converted data but failed to save the identifier setting: "+err.Error())
 		return
 	}
 	_ = app.db.AuditLog("config", "System", "Employee identifier switched to "+target)
-	prog.logf("Identifier setting is now: %s", target)
+	prog.Logf("Identifier setting is now: %s", target)
 
-	prog.setStage("Re-syncing directory")
+	prog.SetStage("Re-syncing directory")
 	if app.anyLdapSourceEnabled() {
 		if _, err := app.RunADSync(); err != nil {
-			prog.logf("   ⚠ LDAP re-sync: %v", err)
+			prog.Logf("   ⚠ LDAP re-sync: %v", err)
 		} else {
-			prog.logf("LDAP directory re-synced.")
+			prog.Logf("LDAP directory re-synced.")
 		}
 	}
 	if app.entraHasEnabledSource() {
 		if _, err := app.RunEntraSync(); err != nil {
-			prog.logf("   ⚠ EntraID re-sync: %v", err)
+			prog.Logf("   ⚠ EntraID re-sync: %v", err)
 		} else {
-			prog.logf("EntraID directory re-synced.")
+			prog.Logf("EntraID directory re-synced.")
 		}
 	}
 
 	app.purgeStaging()
-	prog.finish(fmt.Sprintf("Migrated to %s. %d avatar(s) renamed, %d conflict(s) skipped.", target, avatars, info.Conflicts), "")
+	prog.Finish(fmt.Sprintf("Migrated to %s. %d avatar(s) renamed, %d conflict(s) skipped.", target, avatars, info.Conflicts), "")
 }
 
 // ── REST endpoints ──────────────────────────────────────────
@@ -807,7 +807,7 @@ func (app *App) handleRestIdentifierCreate(w http.ResponseWriter, r *http.Reques
 		http.Error(w, "invalid target identifier", http.StatusBadRequest)
 		return
 	}
-	if !app.migrateProg.start(0, "Staging…") {
+	if !app.migrateProg.Start(0, "Staging…") {
 		writeJSON(w, map[string]interface{}{"started": false, "running": true})
 		return
 	}
@@ -815,7 +815,7 @@ func (app *App) handleRestIdentifierCreate(w http.ResponseWriter, r *http.Reques
 	go func() {
 		defer func() {
 			if rec := recover(); rec != nil {
-				app.migrateProg.finish("", fmt.Sprintf("staging crashed: %v", rec))
+				app.migrateProg.Finish("", fmt.Sprintf("staging crashed: %v", rec))
 			}
 		}()
 		app.runIdentifierStage(target)
@@ -880,7 +880,7 @@ func (app *App) handleRestIdentifierApply(w http.ResponseWriter, r *http.Request
 		http.Error(w, "invalid target identifier", http.StatusBadRequest)
 		return
 	}
-	if !app.migrateProg.start(0, "Applying…") {
+	if !app.migrateProg.Start(0, "Applying…") {
 		writeJSON(w, map[string]interface{}{"started": false, "running": true})
 		return
 	}
@@ -888,7 +888,7 @@ func (app *App) handleRestIdentifierApply(w http.ResponseWriter, r *http.Request
 	go func() {
 		defer func() {
 			if rec := recover(); rec != nil {
-				app.migrateProg.finish("", fmt.Sprintf("migration crashed: %v", rec))
+				app.migrateProg.Finish("", fmt.Sprintf("migration crashed: %v", rec))
 			}
 		}()
 		app.runIdentifierApply(target)
@@ -903,5 +903,5 @@ func (app *App) handleRestIdentifierProgress(w http.ResponseWriter, r *http.Requ
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}
-	writeJSON(w, app.migrateProg.snapshot())
+	writeJSON(w, app.migrateProg.Snapshot())
 }

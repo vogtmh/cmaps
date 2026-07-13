@@ -1,6 +1,8 @@
 package main
 
 import (
+	"companymaps/internal/progress"
+
 	"crypto/rand"
 	"encoding/hex"
 	"html/template"
@@ -22,22 +24,22 @@ type App struct {
 	syncDebugMu sync.Mutex
 	syncDebug   ADSyncDebug
 
-	robinProg syncProgress
-	ldapProg  syncProgress
-	entraProg syncProgress
+	robinProg progress.Progress
+	ldapProg  progress.Progress
+	entraProg progress.Progress
 
 	// migrateProg tracks the background identifier migration (samaccountname <->
 	// mail) so the admin Sync > General subtab can show a live progress bar + log.
-	migrateProg syncProgress
+	migrateProg progress.Progress
 
 	// robinDeskProg tracks the background desk-data diagnostic so the admin Sync
 	// tab can show a live progress bar + log.
-	robinDeskProg syncProgress
+	robinDeskProg progress.Progress
 
 	// robinSuggestProg tracks the background strip-pattern suggestion scan so the
 	// admin Sync tab can show a live progress bar. robinSuggestResult holds the
 	// suggestions from the most recent completed scan.
-	robinSuggestProg   syncProgress
+	robinSuggestProg   progress.Progress
 	robinSuggestMu     sync.Mutex
 	robinSuggestResult []robinStripSuggestion
 
@@ -51,7 +53,7 @@ type App struct {
 	// exportProg tracks the background build of a full data export so the admin
 	// Backup dialog can show a determinate progress bar. exportPath/exportName
 	// point at the finished zip awaiting download.
-	exportProg syncProgress
+	exportProg progress.Progress
 	exportMu   sync.Mutex
 	exportPath string
 	exportName string
@@ -59,7 +61,7 @@ type App struct {
 	// geoProg tracks the background Geoapify batch geocode so the admin Sync
 	// panel can show a live progress bar. geoResult holds the most recent
 	// completed run for rendering once it finishes.
-	geoProg   syncProgress
+	geoProg   progress.Progress
 	geoMu     sync.Mutex
 	geoResult GeoSyncResult
 
