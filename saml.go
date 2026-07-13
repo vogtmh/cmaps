@@ -1,14 +1,11 @@
 package main
 
+// SAML SSO HTTP handlers. The SP engine (flow state, signature validation,
+// metadata parsing, debug/capture stores) lives in internal/auth/saml; these
+// handlers wire it to the session store, user records and config.
+
 import (
-	"bytes"
-	"companymaps/internal/config"
-	"compress/flate"
-	"crypto/rand"
-	"crypto/sha256"
-	"crypto/x509"
 	"encoding/base64"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -16,190 +13,27 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
-	"sync"
 	"time"
+
+	"companymaps/internal/auth/saml"
+	"companymaps/internal/config"
 
 	"github.com/beevik/etree"
 	dsig "github.com/russellhaering/goxmldsig"
-	"github.com/russellhaering/goxmldsig/etreeutils"
 )
-
-// Legacy SimpleSAMLphp paths. The ACS (reply) URL must stay identical to the old
-// deployment so the existing Entra app registration needs no changes.
-const (
-	samlACSPath    = "/simplesaml/module.php/saml/sp/saml2-acs.php/default-sp"
-	samlLogoutPath = "/simplesaml/module.php/saml/sp/saml2-logout.php/default-sp"
-)
-
-// --- SAML flow state (pending + replay protection) ---
-
-type samlFlowStore struct {
-	mu              sync.Mutex
-	pendingRequests map[string]time.Time
-	consumedIDs     map[string]time.Time
-}
-
-var samlFlows = &samlFlowStore{
-	pendingRequests: make(map[string]time.Time),
-	consumedIDs:     make(map[string]time.Time),
-}
-
-func (s *samlFlowStore) add(id string) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.cleanup()
-	s.pendingRequests[id] = time.Now().Add(10 * time.Minute)
-}
-
-func (s *samlFlowStore) consume(id string) bool {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	exp, ok := s.pendingRequests[id]
-	if !ok || time.Now().After(exp) {
-		return false
-	}
-	delete(s.pendingRequests, id)
-	return true
-}
-
-func (s *samlFlowStore) isConsumed(id string) bool {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	exp, ok := s.consumedIDs[id]
-	return ok && time.Now().Before(exp)
-}
-
-func (s *samlFlowStore) markConsumed(id string) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.consumedIDs[id] = time.Now().Add(10 * time.Minute)
-}
-
-func (s *samlFlowStore) cleanup() {
-	now := time.Now()
-	for id, exp := range s.pendingRequests {
-		if now.After(exp) {
-			delete(s.pendingRequests, id)
-		}
-	}
-	for id, exp := range s.consumedIDs {
-		if now.After(exp) {
-			delete(s.consumedIDs, id)
-		}
-	}
-}
-
-// --- Debug store (for the "Test SAML" button on the settings page) ---
-
-type samlDebugInfo struct {
-	Status             string            `json:"status"`
-	Message            string            `json:"message"`
-	StartedAt          string            `json:"started_at,omitempty"`
-	CompletedAt        string            `json:"completed_at,omitempty"`
-	RequestID          string            `json:"request_id,omitempty"`
-	SignatureValidated bool              `json:"signature_validated"`
-	UserEmail          string            `json:"user_email,omitempty"`
-	DisplayName        string            `json:"display_name,omitempty"`
-	Attributes         map[string]string `json:"attributes,omitempty"`
-
-	ResponseCertSubject       string `json:"response_cert_subject,omitempty"`
-	ResponseCertFingerprint   string `json:"response_cert_fingerprint,omitempty"`
-	ResponseCertNotAfter      string `json:"response_cert_not_after,omitempty"`
-	ResponseCertBase64        string `json:"response_cert_base64,omitempty"`
-	ConfiguredCertSubject     string `json:"configured_cert_subject,omitempty"`
-	ConfiguredCertFingerprint string `json:"configured_cert_fingerprint,omitempty"`
-	CertMatch                 bool   `json:"cert_match"`
-}
-
-type samlDebugStoreType struct {
-	mu      sync.RWMutex
-	pending map[string]*samlDebugInfo
-	last    *samlDebugInfo
-}
-
-var samlDebugStore = &samlDebugStoreType{pending: make(map[string]*samlDebugInfo)}
-
-func (s *samlDebugStoreType) start(requestID string, info *samlDebugInfo) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.pending[requestID] = info
-	s.last = info
-}
-
-func (s *samlDebugStoreType) finish(requestID string, info *samlDebugInfo) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	delete(s.pending, requestID)
-	s.last = info
-}
-
-func (s *samlDebugStoreType) getLast() *samlDebugInfo {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	return s.last
-}
-
-// --- Captured live login responses (for the "Show my SAML login response"
-// button on the SAML SSO subtab) ---
-//
-// On every successful SAML login by a user who holds an admin role, we keep the
-// full decoded SAML response XML and its parsed attributes in memory, keyed by
-// username. An admin can then inspect exactly what their IdP sent (which claims,
-// which mail value, etc.) without wiring up a separate debug login. It is a
-// diagnostic aid only, held in memory and cleared on restart.
-
-type samlCapture struct {
-	When       string            `json:"when"`
-	Username   string            `json:"username"`
-	RawXML     string            `json:"raw_xml"`
-	Attributes map[string]string `json:"attributes"`
-}
-
-var samlCaptures = struct {
-	mu sync.Mutex
-	m  map[string]*samlCapture
-}{m: make(map[string]*samlCapture)}
-
-func samlStoreCapture(c *samlCapture) {
-	samlCaptures.mu.Lock()
-	samlCaptures.m[strings.ToLower(c.Username)] = c
-	samlCaptures.mu.Unlock()
-}
-
-func samlGetCapture(username string) *samlCapture {
-	samlCaptures.mu.Lock()
-	defer samlCaptures.mu.Unlock()
-	return samlCaptures.m[strings.ToLower(username)]
-}
-
-func samlBaseURL(r *http.Request) string {
-	scheme := "https"
-	if r.TLS == nil {
-		if fwdProto := r.Header.Get("X-Forwarded-Proto"); fwdProto != "" {
-			scheme = fwdProto
-		} else {
-			scheme = "http"
-		}
-	}
-	host := r.Host
-	if fwdHost := r.Header.Get("X-Forwarded-Host"); fwdHost != "" {
-		host = fwdHost
-	}
-	return scheme + "://" + host
-}
 
 func (app *App) samlEntityID(r *http.Request) string {
 	if app.cfg.SAML.AppEntityID != "" {
 		return app.cfg.SAML.AppEntityID
 	}
-	return samlBaseURL(r)
+	return saml.BaseURL(r)
 }
 
 func (app *App) samlACSURL(r *http.Request) string {
 	if app.cfg.SAML.AppReplyURL != "" {
 		return app.cfg.SAML.AppReplyURL
 	}
-	return samlBaseURL(r) + samlACSPath
+	return saml.BaseURL(r) + saml.ACSPath
 }
 
 // --- Handlers ---
@@ -209,7 +43,7 @@ func (app *App) handleSAMLMetadata(w http.ResponseWriter, r *http.Request) {
 	acsURL := app.samlACSURL(r)
 	logoutURL := app.cfg.SAML.AppLogoutURL
 	if logoutURL == "" {
-		logoutURL = samlBaseURL(r) + samlLogoutPath
+		logoutURL = saml.BaseURL(r) + saml.LogoutPath
 	}
 
 	metadata := `<?xml version="1.0" encoding="UTF-8"?>
@@ -239,21 +73,21 @@ func (app *App) handleSAMLLogin(w http.ResponseWriter, r *http.Request) {
 	entityID := app.samlEntityID(r)
 	acsURL := app.samlACSURL(r)
 
-	requestID := samlGenerateID()
+	requestID := saml.GenerateID()
 	issueInstant := time.Now().UTC().Format(time.RFC3339)
-	authnReq := buildSAMLAuthnRequest(requestID, issueInstant, entityID, cfg.EntraLoginURL, acsURL, cfg.NameIDFormat)
-	encoded, err := samlDeflateAndEncode([]byte(authnReq))
+	authnReq := saml.BuildAuthnRequest(requestID, issueInstant, entityID, cfg.EntraLoginURL, acsURL, cfg.NameIDFormat)
+	encoded, err := saml.DeflateAndEncode([]byte(authnReq))
 	if err != nil {
 		log.Printf("SAML login: encode AuthnRequest: %v", err)
 		http.Error(w, "failed to initiate SAML login", http.StatusInternalServerError)
 		return
 	}
 
-	samlFlows.add(requestID)
+	saml.Flows.Add(requestID)
 
 	debugMode := r.URL.Query().Get("debug") == "1"
 	if debugMode {
-		samlDebugStore.start(requestID, &samlDebugInfo{
+		saml.DebugStore.Start(requestID, &saml.DebugInfo{
 			Status:    "started",
 			Message:   "Live SAML test started. Waiting for SAML response.",
 			StartedAt: time.Now().UTC().Format(time.RFC3339),
@@ -345,7 +179,7 @@ h2{color:#2ecc71;margin:0 0 16px}p{color:#666;margin:0 0 24px}a{color:#0a66c2}</
 		return
 	}
 
-	certStore, err := samlBuildCertStore(cfg.EntraX509Certificate)
+	certStore, err := saml.BuildCertStore(cfg.EntraX509Certificate)
 	if err != nil {
 		log.Printf("SAML ACS: cert store: %v", err)
 		fail("Server configuration error (invalid X.509 certificate).")
@@ -353,7 +187,7 @@ h2{color:#2ecc71;margin:0 0 16px}p{color:#666;margin:0 0 24px}a{color:#0a66c2}</
 	}
 
 	validationCtx := dsig.NewDefaultValidationContext(certStore)
-	if confCert, cerr := samlParseCertBase64(cfg.EntraX509Certificate); cerr == nil {
+	if confCert, cerr := saml.ParseCertBase64(cfg.EntraX509Certificate); cerr == nil {
 		anchor := confCert.NotBefore.Add(confCert.NotAfter.Sub(confCert.NotBefore) / 2)
 		validationCtx.Clock = dsig.NewFakeClockAt(anchor)
 	} else {
@@ -363,7 +197,7 @@ h2{color:#2ecc71;margin:0 0 16px}p{color:#666;margin:0 0 24px}a{color:#0a66c2}</
 	doc := etree.NewDocument()
 	if err := doc.ReadFromBytes(xmlBytes); err != nil {
 		if debugRequestID != "" {
-			samlDebugStore.finish(debugRequestID, &samlDebugInfo{Status: "error", Message: "Malformed SAML response (XML parse failed).", CompletedAt: nowRFC()})
+			saml.DebugStore.Finish(debugRequestID, &saml.DebugInfo{Status: "error", Message: "Malformed SAML response (XML parse failed).", CompletedAt: saml.NowRFC()})
 			debugDone("Parse failed — check debug info in settings.")
 			return
 		}
@@ -374,19 +208,19 @@ h2{color:#2ecc71;margin:0 0 16px}p{color:#666;margin:0 0 24px}a{color:#0a66c2}</
 	root := doc.Root()
 	assertionEl := root.FindElement(".//Assertion")
 
-	certDiag := &samlDebugInfo{}
-	if respCert, respRaw := samlExtractResponseCert(doc); respCert != nil {
+	certDiag := &saml.DebugInfo{}
+	if respCert, respRaw := saml.ExtractResponseCert(doc); respCert != nil {
 		certDiag.ResponseCertSubject = respCert.Subject.CommonName
-		certDiag.ResponseCertFingerprint = samlCertFingerprint(respCert)
+		certDiag.ResponseCertFingerprint = saml.CertFingerprint(respCert)
 		certDiag.ResponseCertNotAfter = respCert.NotAfter.UTC().Format(time.RFC3339)
 		certDiag.ResponseCertBase64 = respRaw
-		if confCert, err := samlParseCertBase64(cfg.EntraX509Certificate); err == nil {
+		if confCert, err := saml.ParseCertBase64(cfg.EntraX509Certificate); err == nil {
 			certDiag.ConfiguredCertSubject = confCert.Subject.CommonName
-			certDiag.ConfiguredCertFingerprint = samlCertFingerprint(confCert)
-			certDiag.CertMatch = samlCertFingerprint(confCert) == certDiag.ResponseCertFingerprint
+			certDiag.ConfiguredCertFingerprint = saml.CertFingerprint(confCert)
+			certDiag.CertMatch = saml.CertFingerprint(confCert) == certDiag.ResponseCertFingerprint
 		}
 	}
-	applyCertDiag := func(info *samlDebugInfo) *samlDebugInfo {
+	applyCertDiag := func(info *saml.DebugInfo) *saml.DebugInfo {
 		info.ResponseCertSubject = certDiag.ResponseCertSubject
 		info.ResponseCertFingerprint = certDiag.ResponseCertFingerprint
 		info.ResponseCertNotAfter = certDiag.ResponseCertNotAfter
@@ -400,11 +234,11 @@ h2{color:#2ecc71;margin:0 0 16px}p{color:#666;margin:0 0 24px}a{color:#0a66c2}</
 	var validatedEl *etree.Element
 	var validationErr error
 	if assertionEl != nil {
-		validatedEl, validationErr = samlValidateElement(validationCtx, assertionEl)
+		validatedEl, validationErr = saml.ValidateElement(validationCtx, assertionEl)
 		if validationErr != nil {
 			assertionErr := validationErr
 			var rootValidated *etree.Element
-			rootValidated, validationErr = samlValidateElement(validationCtx, root)
+			rootValidated, validationErr = saml.ValidateElement(validationCtx, root)
 			if validationErr != nil {
 				log.Printf("SAML ACS: assertion signature: %v; response signature: %v", assertionErr, validationErr)
 				validationErr = fmt.Errorf("assertion signature invalid (%v)", assertionErr)
@@ -413,7 +247,7 @@ h2{color:#2ecc71;margin:0 0 16px}p{color:#666;margin:0 0 24px}a{color:#0a66c2}</
 			}
 		}
 	} else {
-		validatedEl, validationErr = samlValidateElement(validationCtx, root)
+		validatedEl, validationErr = saml.ValidateElement(validationCtx, root)
 	}
 	if validationErr != nil {
 		log.Printf("SAML ACS: signature validation: %v", validationErr)
@@ -423,7 +257,7 @@ h2{color:#2ecc71;margin:0 0 16px}p{color:#666;margin:0 0 24px}a{color:#0a66c2}</
 				msg += " — the configured certificate does not match the certificate the IdP signed with. " +
 					"Copy response_cert_base64 below into the X.509 certificate setting."
 			}
-			samlDebugStore.finish(debugRequestID, applyCertDiag(&samlDebugInfo{Status: "error", Message: msg, CompletedAt: nowRFC()}))
+			saml.DebugStore.Finish(debugRequestID, applyCertDiag(&saml.DebugInfo{Status: "error", Message: msg, CompletedAt: saml.NowRFC()}))
 			debugDone("Signature validation failed — check debug info in settings.")
 			return
 		}
@@ -442,7 +276,7 @@ h2{color:#2ecc71;margin:0 0 16px}p{color:#666;margin:0 0 24px}a{color:#0a66c2}</
 
 	responseID := root.SelectAttrValue("ID", "")
 	assertionID := assertion.SelectAttrValue("ID", "")
-	if samlFlows.isConsumed(responseID) || samlFlows.isConsumed(assertionID) {
+	if saml.Flows.IsConsumed(responseID) || saml.Flows.IsConsumed(assertionID) {
 		fail("This SAML response was already used.")
 		return
 	}
@@ -453,7 +287,7 @@ h2{color:#2ecc71;margin:0 0 16px}p{color:#666;margin:0 0 24px}a{color:#0a66c2}</
 			inResponseTo = sc.SelectAttrValue("InResponseTo", "")
 		}
 	}
-	if inResponseTo != "" && !samlFlows.consume(inResponseTo) {
+	if inResponseTo != "" && !saml.Flows.Consume(inResponseTo) {
 		fail("SAML response does not match an active login request. Please try again.")
 		return
 	}
@@ -489,14 +323,14 @@ h2{color:#2ecc71;margin:0 0 16px}p{color:#666;margin:0 0 24px}a{color:#0a66c2}</
 		}
 	}
 
-	samlFlows.markConsumed(responseID)
-	samlFlows.markConsumed(assertionID)
+	saml.Flows.MarkConsumed(responseID)
+	saml.Flows.MarkConsumed(assertionID)
 
-	samaccountname := samlExtractAttr(assertion, cfg.AttrSamAccount())
-	givenname := samlExtractAttr(assertion, cfg.AttrGivenName())
-	surname := samlExtractAttr(assertion, cfg.AttrSurname())
-	fullname := samlExtractAttr(assertion, cfg.AttrFullName())
-	mail := normalizeMail(samlExtractAttr(assertion, cfg.AttrMail()))
+	samaccountname := saml.ExtractAttr(assertion, cfg.AttrSamAccount())
+	givenname := saml.ExtractAttr(assertion, cfg.AttrGivenName())
+	surname := saml.ExtractAttr(assertion, cfg.AttrSurname())
+	fullname := saml.ExtractAttr(assertion, cfg.AttrFullName())
+	mail := normalizeMail(saml.ExtractAttr(assertion, cfg.AttrMail()))
 	if fullname == "" {
 		fullname = strings.TrimSpace(givenname + " " + surname)
 	}
@@ -505,14 +339,14 @@ h2{color:#2ecc71;margin:0 0 16px}p{color:#666;margin:0 0 24px}a{color:#0a66c2}</
 	}
 
 	if debugRequestID != "" {
-		samlDebugStore.finish(debugRequestID, applyCertDiag(&samlDebugInfo{
+		saml.DebugStore.Finish(debugRequestID, applyCertDiag(&saml.DebugInfo{
 			Status:             "success",
 			Message:            "The SAML response was accepted. Return to the settings page and refresh the debug info.",
-			CompletedAt:        nowRFC(),
+			CompletedAt:        saml.NowRFC(),
 			SignatureValidated: true,
 			UserEmail:          mail,
 			DisplayName:        fullname,
-			Attributes:         samlExtractAllAttrs(assertion),
+			Attributes:         saml.ExtractAllAttrs(assertion),
 		}))
 		debugDone("The SAML response was accepted. Return to the settings page and refresh the debug info.")
 		return
@@ -556,11 +390,11 @@ h2{color:#2ecc71;margin:0 0 16px}p{color:#666;margin:0 0 24px}a{color:#0a66c2}</
 	// Capture the full response for admins so they can inspect exactly what the
 	// IdP sent from the SAML SSO subtab.
 	if u.Role != 0 {
-		samlStoreCapture(&samlCapture{
+		saml.StoreCapture(&saml.Capture{
 			When:       time.Now().In(app.db.Location()).Format("2006-01-02 15:04:05"),
 			Username:   username,
 			RawXML:     string(xmlBytes),
-			Attributes: samlExtractAllAttrs(assertion),
+			Attributes: saml.ExtractAllAttrs(assertion),
 		})
 	}
 
@@ -642,7 +476,7 @@ func (app *App) handleSAMLValidate(w http.ResponseWriter, r *http.Request) {
 	// Certificate parses + expiry.
 	if strings.TrimSpace(cfg.EntraX509Certificate) == "" {
 		add("X.509 certificate", "fail", "No signing certificate configured.")
-	} else if cert, err := samlParseCertBase64(cfg.EntraX509Certificate); err != nil {
+	} else if cert, err := saml.ParseCertBase64(cfg.EntraX509Certificate); err != nil {
 		add("X.509 certificate", "fail", "Certificate could not be parsed: "+err.Error())
 	} else {
 		now := time.Now()
@@ -663,8 +497,8 @@ func (app *App) handleSAMLValidate(w http.ResponseWriter, r *http.Request) {
 	if parsedLogin != nil {
 		entityID := app.samlEntityID(r)
 		acsURL := app.samlACSURL(r)
-		reqXML := buildSAMLAuthnRequest(samlGenerateID(), time.Now().UTC().Format(time.RFC3339), entityID, loginURL, acsURL, cfg.NameIDFormat)
-		if _, err := samlDeflateAndEncode([]byte(reqXML)); err != nil {
+		reqXML := saml.BuildAuthnRequest(saml.GenerateID(), time.Now().UTC().Format(time.RFC3339), entityID, loginURL, acsURL, cfg.NameIDFormat)
+		if _, err := saml.DeflateAndEncode([]byte(reqXML)); err != nil {
 			add("AuthnRequest", "fail", "Failed to build the SAML request: "+err.Error())
 		} else {
 			add("AuthnRequest", "ok", "A valid SAML authentication request can be generated.")
@@ -720,15 +554,15 @@ func (app *App) handleSAMLSPInfo(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]string{
 		"entity_id":    app.samlEntityID(r),
 		"acs_url":      app.samlACSURL(r),
-		"sign_on_url":  samlBaseURL(r) + "/",
-		"metadata_url": samlBaseURL(r) + "/auth/saml/metadata",
-		"login_url":    samlBaseURL(r) + "/auth/saml/login",
+		"sign_on_url":  saml.BaseURL(r) + "/",
+		"metadata_url": saml.BaseURL(r) + "/auth/saml/metadata",
+		"login_url":    saml.BaseURL(r) + "/auth/saml/login",
 	})
 }
 
 func (app *App) handleSAMLDebugLast(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	info := samlDebugStore.getLast()
+	info := saml.DebugStore.GetLast()
 	if info == nil {
 		json.NewEncoder(w).Encode(map[string]string{"status": "none", "message": "No live test has been run yet."})
 		return
@@ -745,7 +579,7 @@ func (app *App) handleSAMLMyCapture(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(map[string]string{"status": "none", "message": "Not signed in."})
 		return
 	}
-	c := samlGetCapture(sess.Username)
+	c := saml.GetCapture(sess.Username)
 	if c == nil {
 		json.NewEncoder(w).Encode(map[string]string{"status": "none",
 			"message": "No SAML response captured for your account yet. Sign in via SAML SSO (not local login) to capture one."})
@@ -785,7 +619,7 @@ func (app *App) handleSAMLImportMetadata(w http.ResponseWriter, r *http.Request)
 		json.NewEncoder(w).Encode(map[string]string{"error": "read failed: " + err.Error()})
 		return
 	}
-	parsed, err := parseIdPMetadata(body)
+	parsed, err := saml.ParseIdPMetadata(body)
 	if err != nil {
 		json.NewEncoder(w).Encode(map[string]string{"error": "parse failed: " + err.Error()})
 		return
@@ -808,231 +642,4 @@ func (app *App) handleSAMLImportMetadata(w http.ResponseWriter, r *http.Request)
 		"entity_id": parsed.EntityID,
 		"tenant_id": parsed.TenantID,
 	})
-}
-
-// --- IdP metadata parser ---
-
-type idPMetadata struct {
-	SSOURL      string
-	Certificate string
-	EntityID    string
-	TenantID    string
-}
-
-func parseIdPMetadata(data []byte) (*idPMetadata, error) {
-	doc := etree.NewDocument()
-	if err := doc.ReadFromBytes(data); err != nil {
-		return nil, fmt.Errorf("XML parse error: %w", err)
-	}
-	root := doc.Root()
-	if root == nil {
-		return nil, fmt.Errorf("empty XML document")
-	}
-	result := &idPMetadata{EntityID: root.SelectAttrValue("entityID", "")}
-
-	var idpDesc *etree.Element
-	for _, child := range root.ChildElements() {
-		if localName(child.Tag) == "IDPSSODescriptor" {
-			idpDesc = child
-			break
-		}
-	}
-	if idpDesc == nil {
-		idpDesc = root.FindElement("//IDPSSODescriptor")
-	}
-	if idpDesc != nil {
-		var walk func(*etree.Element) *etree.Element
-		walk = func(el *etree.Element) *etree.Element {
-			for _, ch := range el.ChildElements() {
-				if localName(ch.Tag) == "X509Certificate" {
-					return ch
-				}
-				if found := walk(ch); found != nil {
-					return found
-				}
-			}
-			return nil
-		}
-		for _, kd := range idpDesc.FindElements("KeyDescriptor") {
-			use := kd.SelectAttrValue("use", "")
-			certEl := walk(kd)
-			if certEl == nil {
-				continue
-			}
-			certVal := strings.TrimSpace(certEl.Text())
-			if certVal != "" && (use == "signing" || result.Certificate == "") {
-				result.Certificate = certVal
-				if use == "signing" {
-					break
-				}
-			}
-		}
-		postBinding := "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST"
-		redirectBinding := "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect"
-		for _, sso := range idpDesc.FindElements("SingleSignOnService") {
-			binding := sso.SelectAttrValue("Binding", "")
-			location := sso.SelectAttrValue("Location", "")
-			if binding == postBinding || (result.SSOURL == "" && binding == redirectBinding) {
-				result.SSOURL = location
-				if binding == postBinding {
-					break
-				}
-			}
-		}
-	}
-	if result.SSOURL == "" {
-		return nil, fmt.Errorf("no SSO URL found in metadata")
-	}
-	if result.EntityID != "" {
-		if u, err := url.Parse(result.EntityID); err == nil {
-			parts := strings.Split(strings.Trim(u.Path, "/"), "/")
-			if len(parts) > 0 && parts[0] != "" {
-				result.TenantID = parts[0]
-			}
-		}
-	}
-	return result, nil
-}
-
-// --- crypto / XML helpers ---
-
-func localName(tag string) string {
-	if idx := strings.LastIndexAny(tag, ":}"); idx >= 0 {
-		return tag[idx+1:]
-	}
-	return tag
-}
-
-func nowRFC() string { return time.Now().UTC().Format(time.RFC3339) }
-
-func samlGenerateID() string {
-	b := make([]byte, 20)
-	rand.Read(b)
-	return "_" + hex.EncodeToString(b)
-}
-
-func samlDeflateAndEncode(data []byte) (string, error) {
-	var buf bytes.Buffer
-	w, err := flate.NewWriter(&buf, flate.DefaultCompression)
-	if err != nil {
-		return "", err
-	}
-	if _, err := w.Write(data); err != nil {
-		w.Close()
-		return "", err
-	}
-	if err := w.Close(); err != nil {
-		return "", err
-	}
-	return base64.StdEncoding.EncodeToString(buf.Bytes()), nil
-}
-
-func buildSAMLAuthnRequest(id, issueInstant, issuer, destination, acsURL, nameIDFormat string) string {
-	req := `<?xml version="1.0" encoding="UTF-8"?>` +
-		`<AuthnRequest xmlns="urn:oasis:names:tc:SAML:2.0:protocol" ID="` + id +
-		`" Version="2.0" IssueInstant="` + issueInstant +
-		`" Destination="` + destination +
-		`" ProtocolBinding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST"` +
-		` AssertionConsumerServiceURL="` + acsURL + `">` +
-		`<Issuer xmlns="urn:oasis:names:tc:SAML:2.0:assertion">` + issuer + `</Issuer>`
-	if nameIDFormat != "" {
-		req += `<NameIDPolicy AllowCreate="true" Format="` + nameIDFormat + `"/>`
-	} else {
-		req += `<NameIDPolicy AllowCreate="true" Format="urn:oasis:names:tc:SAML:2.0:nameid-format:persistent"/>`
-	}
-	req += `</AuthnRequest>`
-	return req
-}
-
-func samlBuildCertStore(certBase64 string) (*dsig.MemoryX509CertificateStore, error) {
-	cert, err := samlParseCertBase64(certBase64)
-	if err != nil {
-		return nil, err
-	}
-	return &dsig.MemoryX509CertificateStore{Roots: []*x509.Certificate{cert}}, nil
-}
-
-func samlValidateElement(ctx *dsig.ValidationContext, el *etree.Element) (*etree.Element, error) {
-	nsCtx, err := etreeutils.NSBuildParentContext(el)
-	if err != nil {
-		return nil, err
-	}
-	detached, err := etreeutils.NSDetatch(nsCtx, el)
-	if err != nil {
-		return nil, err
-	}
-	return ctx.Validate(detached)
-}
-
-func samlCertFingerprint(cert *x509.Certificate) string {
-	sum := sha256.Sum256(cert.Raw)
-	return hex.EncodeToString(sum[:])
-}
-
-func samlParseCertBase64(certBase64 string) (*x509.Certificate, error) {
-	cleaned := strings.ReplaceAll(certBase64, "\n", "")
-	cleaned = strings.ReplaceAll(cleaned, "\r", "")
-	cleaned = strings.ReplaceAll(cleaned, " ", "")
-	cleaned = strings.TrimPrefix(cleaned, "-----BEGINCERTIFICATE-----")
-	cleaned = strings.TrimSuffix(cleaned, "-----ENDCERTIFICATE-----")
-	der, err := base64.StdEncoding.DecodeString(cleaned)
-	if err != nil {
-		return nil, err
-	}
-	return x509.ParseCertificate(der)
-}
-
-func samlExtractResponseCert(doc *etree.Document) (*x509.Certificate, string) {
-	root := doc.Root()
-	if root == nil {
-		return nil, ""
-	}
-	var certEls []*etree.Element
-	if assertion := root.FindElement(".//Assertion"); assertion != nil {
-		certEls = assertion.FindElements(".//X509Certificate")
-	}
-	if len(certEls) == 0 {
-		certEls = root.FindElements(".//X509Certificate")
-	}
-	for _, el := range certEls {
-		raw := strings.Join(strings.Fields(el.Text()), "")
-		if raw == "" {
-			continue
-		}
-		if cert, err := samlParseCertBase64(raw); err == nil {
-			return cert, raw
-		}
-	}
-	return nil, ""
-}
-
-func samlExtractAttr(assertion *etree.Element, attrName string) string {
-	for _, attrEl := range assertion.FindElements(".//Attribute") {
-		if attrEl.SelectAttrValue("Name", "") != attrName {
-			continue
-		}
-		for _, val := range attrEl.FindElements("AttributeValue") {
-			if v := strings.TrimSpace(val.Text()); v != "" {
-				return v
-			}
-		}
-	}
-	return ""
-}
-
-func samlExtractAllAttrs(assertion *etree.Element) map[string]string {
-	attrs := make(map[string]string)
-	for _, attrEl := range assertion.FindElements(".//Attribute") {
-		name := attrEl.SelectAttrValue("Name", "")
-		if name == "" {
-			continue
-		}
-		for _, val := range attrEl.FindElements("AttributeValue") {
-			if v := strings.TrimSpace(val.Text()); v != "" {
-				attrs[name] = v
-				break
-			}
-		}
-	}
-	return attrs
 }

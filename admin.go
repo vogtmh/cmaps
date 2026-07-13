@@ -3,6 +3,7 @@ package main
 import (
 	"archive/zip"
 	"bytes"
+	"companymaps/internal/integrations"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -1703,24 +1704,14 @@ func (app *App) handleRestLdap(w http.ResponseWriter, r *http.Request) {
 }
 
 // testCheck is one row in a structured connection-test summary, matching the
-// SAML/Robin test UI: a check name, a status (ok|warn|fail) and a human detail.
-type testCheck struct {
-	Name   string `json:"name"`
-	Status string `json:"status"`
-	Detail string `json:"detail"`
-}
+// SAML/Robin test UI. Alias of the shared integrations.Check (transitional
+// until the handlers move to internal/web in Phase 4).
+type testCheck = integrations.Check
 
 // testResult wraps a set of checks into the {ok, checks} payload the admin test
 // modal renders. ok is false when any check failed.
 func testResult(checks []testCheck) map[string]interface{} {
-	ok := true
-	for _, c := range checks {
-		if c.Status == "fail" {
-			ok = false
-			break
-		}
-	}
-	return map[string]interface{}{"ok": ok, "checks": checks}
+	return integrations.Result(checks)
 }
 
 // handleRestLdapTest validates a single LDAP source's connectivity and bind

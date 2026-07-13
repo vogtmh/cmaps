@@ -1,6 +1,7 @@
 package main
 
 import (
+	"companymaps/internal/auth/saml"
 	"companymaps/internal/config"
 	"companymaps/internal/store"
 	"embed"
@@ -245,8 +246,8 @@ func (app *App) registerSAMLRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/auth/saml/metadata", app.handleSAMLMetadata)
 	mux.HandleFunc("/auth/saml/login", app.handleSAMLLogin)
 	mux.HandleFunc("/auth/saml/logout", app.handleSAMLLogout)
-	mux.HandleFunc(samlACSPath, app.handleSAMLACS)
-	mux.HandleFunc(samlLogoutPath, app.handleSAMLLogout)
+	mux.HandleFunc(saml.ACSPath, app.handleSAMLACS)
+	mux.HandleFunc(saml.LogoutPath, app.handleSAMLLogout)
 
 	// Admin-only SAML configuration REST endpoints.
 	mux.HandleFunc("/rest/saml/status", app.handleSAMLStatus)
