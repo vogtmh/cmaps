@@ -42,7 +42,7 @@ check() {
 
 info "Building executable .."
 rm -rf build || die "Could not remove old build directory"
-GOOS=linux GOARCH=amd64 go build -mod=vendor -o "build/${appname}_linux" .
+GOOS=linux GOARCH=amd64 go build -mod=vendor -o "build/${appname}_linux" ./cmd/cmaps
 check $? "go build failed"
 
 if [ ! -s "build/${appname}_linux" ]; then

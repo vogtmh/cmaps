@@ -58,7 +58,7 @@ The module is fully vendored, so builds need no network access for dependencies
 (a Go toolchain is still required to compile).
 
 ```sh
-go build -mod=vendor -o cmaps .
+go build -mod=vendor -o cmaps ./cmd/cmaps
 ```
 
 ## Deployment (Linux server)
