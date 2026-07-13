@@ -1,6 +1,7 @@
 package main
 
 import (
+	"companymaps/internal/auth"
 	"encoding/json"
 	"io"
 	"net"
@@ -331,7 +332,7 @@ func (app *App) authenticateLocal(username, password string) (Session, bool) {
 	if err != nil || !found || !u.IsLocal || u.PassHash == "" {
 		return Session{}, false
 	}
-	if !checkPassword(password, u.PassHash, u.Salt) {
+	if !auth.CheckPassword(password, u.PassHash, u.Salt) {
 		return Session{}, false
 	}
 	u.LastLogin = time.Now().Format("2006-01-02 15:04:05")

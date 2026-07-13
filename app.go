@@ -1,11 +1,10 @@
 package main
 
 import (
+	"companymaps/internal/auth"
 	"companymaps/internal/config"
 	"companymaps/internal/progress"
 
-	"crypto/rand"
-	"encoding/hex"
 	"html/template"
 	"io/fs"
 	"net/http"
@@ -99,76 +98,15 @@ func (app *App) getNextSync(src *time.Time) time.Time {
 	return *src
 }
 
-// Session holds the authenticated user's identity, mirroring the PHP $_SESSION
-// values. AdminPassword is true when the user authenticated with the local admin
-// password from config.json (the break-glass superadmin).
-type Session struct {
-	Expiry         time.Time
-	AdminPassword  bool
-	Samaccountname string
-	Username       string // mapadmins key, e.g. "tvcorp\\INT001327" or "admin"
-	Fullname       string
-	Mail           string
-	Phone          string
-}
+// Session management lives in internal/auth; these aliases keep the root
+// package handlers compiling until they move into internal/web (Phase 4).
+type (
+	Session      = auth.Session
+	SessionStore = auth.SessionStore
+)
 
-type SessionStore struct {
-	mu       sync.RWMutex
-	sessions map[string]Session
-}
-
-func NewSessionStore() *SessionStore {
-	return &SessionStore{sessions: make(map[string]Session)}
-}
-
-func (s *SessionStore) Create(sess Session) (string, error) {
-	b := make([]byte, 32)
-	if _, err := rand.Read(b); err != nil {
-		return "", err
-	}
-	token := hex.EncodeToString(b)
-	sess.Expiry = time.Now().Add(8 * time.Hour)
-	s.mu.Lock()
-	s.sessions[token] = sess
-	s.mu.Unlock()
-	return token, nil
-}
-
-func (s *SessionStore) Get(token string) (Session, bool) {
-	s.mu.RLock()
-	sess, ok := s.sessions[token]
-	s.mu.RUnlock()
-	if !ok {
-		return Session{}, false
-	}
-	if time.Now().After(sess.Expiry) {
-		s.Delete(token)
-		return Session{}, false
-	}
-	return sess, true
-}
-
-func (s *SessionStore) Delete(token string) {
-	s.mu.Lock()
-	delete(s.sessions, token)
-	s.mu.Unlock()
-}
-
-// Remap rewrites the Username of every stored session using fn, which returns
-// the new username and whether it changed. It is used by the identifier
-// migration so admins who are already signed in (e.g. via SAML) are not logged
-// out when their map-admin record is re-keyed: permLevel() looks the user up by
-// session Username, so the in-memory sessions must follow the rename.
-func (s *SessionStore) Remap(fn func(username string) (string, bool)) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	for token, sess := range s.sessions {
-		if newName, ok := fn(sess.Username); ok && newName != sess.Username {
-			sess.Username = newName
-			s.sessions[token] = sess
-		}
-	}
-}
+// NewSessionStore returns an empty session store.
+func NewSessionStore() *SessionStore { return auth.NewSessionStore() }
 
 const sessionCookie = "cmaps_session"
 
