@@ -89,7 +89,7 @@ func (app *App) runADSync(prog *progress.Progress) (int, error) {
 		prog.Logf("Starting sync of %d source(s)…", len(sources))
 	}
 
-	now := time.Now().In(app.db.loc)
+	now := time.Now().In(app.db.Location())
 	debug := ADSyncDebug{When: now.Format("2006-01-02 15:04:05")}
 
 	for _, src := range sources {
@@ -162,7 +162,7 @@ func (app *App) rebuildLdapMirror(announce bool) (int, error) {
 	if err != nil {
 		return 0, fmt.Errorf("loading AD sources: %w", err)
 	}
-	now := time.Now().In(app.db.loc)
+	now := time.Now().In(app.db.Location())
 
 	// Snapshot the existing mirror (keyed by userid) for change detection.
 	var oldByID map[string]LdapUser

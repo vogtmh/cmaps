@@ -1,4 +1,4 @@
-package main
+package store
 
 import (
 	"path/filepath"
@@ -10,7 +10,7 @@ import (
 // when the test finishes.
 func newTestDB(t *testing.T) *DB {
 	t.Helper()
-	db, err := openDB(filepath.Join(t.TempDir(), "test.db"))
+	db, err := Open(filepath.Join(t.TempDir(), "test.db"))
 	if err != nil {
 		t.Fatalf("openDB: %v", err)
 	}
@@ -22,24 +22,24 @@ func TestGetPutJSONRoundtrip(t *testing.T) {
 	db := newTestDB(t)
 
 	// Missing key -> found=false, zero value.
-	got, found, err := getJSON[MapInfo](db, bucketMaps, []byte("nope"))
+	got, found, err := GetJSON[MapInfo](db, BucketMaps, []byte("nope"))
 	if err != nil {
-		t.Fatalf("getJSON missing key: %v", err)
+		t.Fatalf("GetJSON missing key: %v", err)
 	}
 	if found {
-		t.Errorf("getJSON reported found for a missing key")
+		t.Errorf("GetJSON reported found for a missing key")
 	}
 	if got.Mapname != "" {
-		t.Errorf("getJSON returned non-zero value for missing key: %+v", got)
+		t.Errorf("GetJSON returned non-zero value for missing key: %+v", got)
 	}
 
 	want := MapInfo{Mapname: "hq", DisplayName: "Headquarters", Lat: 48.1, Lon: 11.5, MapX: 10, MapY: 20}
-	if err := putJSON(db, bucketMaps, []byte("hq"), want); err != nil {
-		t.Fatalf("putJSON: %v", err)
+	if err := PutJSON(db, BucketMaps, []byte("hq"), want); err != nil {
+		t.Fatalf("PutJSON: %v", err)
 	}
-	got, found, err = getJSON[MapInfo](db, bucketMaps, []byte("hq"))
+	got, found, err = GetJSON[MapInfo](db, BucketMaps, []byte("hq"))
 	if err != nil || !found {
-		t.Fatalf("getJSON after put: found=%v err=%v", found, err)
+		t.Fatalf("GetJSON after put: found=%v err=%v", found, err)
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("roundtrip mismatch:\n got %+v\nwant %+v", got, want)
@@ -47,10 +47,10 @@ func TestGetPutJSONRoundtrip(t *testing.T) {
 
 	// Overwrite in place.
 	want.DisplayName = "HQ Munich"
-	if err := putJSON(db, bucketMaps, []byte("hq"), want); err != nil {
-		t.Fatalf("putJSON overwrite: %v", err)
+	if err := PutJSON(db, BucketMaps, []byte("hq"), want); err != nil {
+		t.Fatalf("PutJSON overwrite: %v", err)
 	}
-	got, _, _ = getJSON[MapInfo](db, bucketMaps, []byte("hq"))
+	got, _, _ = GetJSON[MapInfo](db, BucketMaps, []byte("hq"))
 	if got.DisplayName != "HQ Munich" {
 		t.Errorf("overwrite not persisted, got %q", got.DisplayName)
 	}
@@ -58,22 +58,22 @@ func TestGetPutJSONRoundtrip(t *testing.T) {
 
 func TestDeleteKey(t *testing.T) {
 	db := newTestDB(t)
-	if err := putJSON(db, bucketSettings, []byte("k"), "v"); err != nil {
-		t.Fatalf("putJSON: %v", err)
+	if err := PutJSON(db, BucketSettings, []byte("k"), "v"); err != nil {
+		t.Fatalf("PutJSON: %v", err)
 	}
-	if err := deleteKey(db, bucketSettings, []byte("k")); err != nil {
-		t.Fatalf("deleteKey: %v", err)
+	if err := DeleteKey(db, BucketSettings, []byte("k")); err != nil {
+		t.Fatalf("DeleteKey: %v", err)
 	}
-	_, found, err := getJSON[string](db, bucketSettings, []byte("k"))
+	_, found, err := GetJSON[string](db, BucketSettings, []byte("k"))
 	if err != nil {
-		t.Fatalf("getJSON after delete: %v", err)
+		t.Fatalf("GetJSON after delete: %v", err)
 	}
 	if found {
-		t.Errorf("key still present after deleteKey")
+		t.Errorf("key still present after DeleteKey")
 	}
 	// Deleting a missing key must not error.
-	if err := deleteKey(db, bucketSettings, []byte("missing")); err != nil {
-		t.Errorf("deleteKey on missing key: %v", err)
+	if err := DeleteKey(db, BucketSettings, []byte("missing")); err != nil {
+		t.Errorf("DeleteKey on missing key: %v", err)
 	}
 }
 
@@ -85,25 +85,25 @@ func TestListJSONPrefix(t *testing.T) {
 		{ID: 1, Map: "lab", Desktype: "hotseat", Desknumber: "L1"},
 	}
 	for _, d := range desks {
-		if err := putJSON(db, bucketDesks, deskKey(d.Map, d.ID), d); err != nil {
-			t.Fatalf("putJSON desk: %v", err)
+		if err := PutJSON(db, BucketDesks, DeskKey(d.Map, d.ID), d); err != nil {
+			t.Fatalf("PutJSON desk: %v", err)
 		}
 	}
 
-	all, err := listJSON[Desk](db, bucketDesks, "")
+	all, err := ListJSON[Desk](db, BucketDesks, "")
 	if err != nil {
-		t.Fatalf("listJSON all: %v", err)
+		t.Fatalf("ListJSON all: %v", err)
 	}
 	if len(all) != 3 {
-		t.Errorf("listJSON all: got %d entries, want 3", len(all))
+		t.Errorf("ListJSON all: got %d entries, want 3", len(all))
 	}
 
-	hq, err := listJSON[Desk](db, bucketDesks, "hq:")
+	hq, err := ListJSON[Desk](db, BucketDesks, "hq:")
 	if err != nil {
-		t.Fatalf("listJSON prefix: %v", err)
+		t.Fatalf("ListJSON prefix: %v", err)
 	}
 	if len(hq) != 2 {
-		t.Fatalf("listJSON prefix hq: got %d entries, want 2", len(hq))
+		t.Fatalf("ListJSON prefix hq: got %d entries, want 2", len(hq))
 	}
 	for _, d := range hq {
 		if d.Map != "hq" {
@@ -111,26 +111,26 @@ func TestListJSONPrefix(t *testing.T) {
 		}
 	}
 
-	none, err := listJSON[Desk](db, bucketDesks, "zzz:")
+	none, err := ListJSON[Desk](db, BucketDesks, "zzz:")
 	if err != nil {
-		t.Fatalf("listJSON empty prefix result: %v", err)
+		t.Fatalf("ListJSON empty prefix result: %v", err)
 	}
 	if len(none) != 0 {
-		t.Errorf("listJSON with non-matching prefix returned %d entries", len(none))
+		t.Errorf("ListJSON with non-matching prefix returned %d entries", len(none))
 	}
 }
 
 func TestSeqKeyOrdering(t *testing.T) {
 	// Big-endian encoding must preserve numeric ordering byte-wise, which the
 	// audit log and bookings rely on for cursor iteration order.
-	prev := seqKey(0)
+	prev := SeqKey(0)
 	for _, n := range []uint64{1, 2, 255, 256, 65535, 1 << 20, 1 << 40} {
-		cur := seqKey(n)
+		cur := SeqKey(n)
 		if len(cur) != 8 {
-			t.Fatalf("seqKey(%d) length = %d, want 8", n, len(cur))
+			t.Fatalf("SeqKey(%d) length = %d, want 8", n, len(cur))
 		}
 		if string(prev) >= string(cur) {
-			t.Errorf("seqKey ordering broken: key(%d) not > previous", n)
+			t.Errorf("SeqKey ordering broken: key(%d) not > previous", n)
 		}
 		prev = cur
 	}

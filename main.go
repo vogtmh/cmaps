@@ -2,6 +2,7 @@ package main
 
 import (
 	"companymaps/internal/config"
+	"companymaps/internal/store"
 	"embed"
 	"html/template"
 	"io/fs"
@@ -63,7 +64,7 @@ func main() {
 		}
 	}
 
-	db, err := openDB(cfg.DataPath("cmaps.db"))
+	db, err := store.Open(cfg.DataPath("cmaps.db"))
 	if err != nil {
 		log.Fatalf("database: %v", err)
 	}

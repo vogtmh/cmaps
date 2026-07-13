@@ -1,6 +1,7 @@
 package main
 
 import (
+	"companymaps/internal/store"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -134,7 +135,7 @@ func (p *migPlan) mapUsername(oldUser string) (string, bool) {
 // bucketCount returns the number of keys in a bucket.
 func (app *App) bucketCount(bucket []byte) int {
 	n := 0
-	_ = app.db.bolt.View(func(tx *bolt.Tx) error {
+	_ = app.db.Bolt().View(func(tx *bolt.Tx) error {
 		if b := tx.Bucket(bucket); b != nil {
 			n = b.Stats().KeyN
 		}
@@ -219,7 +220,7 @@ func (info migStageInfo) stageExpired() bool {
 // purgeStaging drops all staging buckets. No avatar files are ever created during
 // staging, so nothing on disk needs cleaning up.
 func (app *App) purgeStaging() {
-	_ = app.db.bolt.Update(func(tx *bolt.Tx) error {
+	_ = app.db.Bolt().Update(func(tx *bolt.Tx) error {
 		for _, b := range migStageBuckets {
 			_ = tx.DeleteBucket(b)
 		}
@@ -231,7 +232,7 @@ func (app *App) purgeStaging() {
 func (app *App) readStageInfo() (migStageInfo, bool) {
 	var info migStageInfo
 	found := false
-	_ = app.db.bolt.View(func(tx *bolt.Tx) error {
+	_ = app.db.Bolt().View(func(tx *bolt.Tx) error {
 		b := tx.Bucket(bktMigMeta)
 		if b == nil {
 			return nil
@@ -249,7 +250,7 @@ func (app *App) readStageInfo() (migStageInfo, bool) {
 }
 
 func (app *App) writeStageInfo(info migStageInfo) error {
-	return app.db.bolt.Update(func(tx *bolt.Tx) error {
+	return app.db.Bolt().Update(func(tx *bolt.Tx) error {
 		b, err := tx.CreateBucketIfNotExists(bktMigMeta)
 		if err != nil {
 			return err
@@ -284,7 +285,7 @@ func (app *App) startMigStageJanitor(interval time.Duration) {
 // changed rows (same key) into a freshly recreated dst staging bucket. It
 // returns the total rows scanned and the number of changed rows staged.
 func (app *App) stageBucket(dst, src []byte, transform func(v []byte) ([]byte, bool)) (total, changed int, err error) {
-	err = app.db.bolt.Update(func(tx *bolt.Tx) error {
+	err = app.db.Bolt().Update(func(tx *bolt.Tx) error {
 		_ = tx.DeleteBucket(dst)
 		d, e := tx.CreateBucket(dst)
 		if e != nil {
@@ -316,13 +317,13 @@ func (app *App) stageBucket(dst, src []byte, transform func(v []byte) ([]byte, b
 // the new user (carrying the new username), so apply can delete the old key and
 // insert the new one.
 func (app *App) stageAdmins(plan *migPlan) (total, changed int, err error) {
-	err = app.db.bolt.Update(func(tx *bolt.Tx) error {
+	err = app.db.Bolt().Update(func(tx *bolt.Tx) error {
 		_ = tx.DeleteBucket(bktMigAdmins)
 		d, e := tx.CreateBucket(bktMigAdmins)
 		if e != nil {
 			return e
 		}
-		s := tx.Bucket(bucketUsers)
+		s := tx.Bucket(store.BucketUsers)
 		if s == nil {
 			return nil
 		}
@@ -402,7 +403,7 @@ func (app *App) runIdentifierStage(target string) {
 	}
 
 	prog.SetStage("Staging audit log")
-	t, c, err := app.stageBucket(bktMigAudit, bucketAudit, func(v []byte) ([]byte, bool) {
+	t, c, err := app.stageBucket(bktMigAudit, store.BucketAudit, func(v []byte) ([]byte, bool) {
 		var e AuditEntry
 		if json.Unmarshal(v, &e) != nil {
 			return nil, false
@@ -426,7 +427,7 @@ func (app *App) runIdentifierStage(target string) {
 	prog.Logf("Audit log: %d of %d record(s) staged.", c, t)
 
 	prog.SetStage("Staging changelog")
-	t, c, err = app.stageBucket(bktMigChangelog, bucketChangelog, func(v []byte) ([]byte, bool) {
+	t, c, err = app.stageBucket(bktMigChangelog, store.BucketChangelog, func(v []byte) ([]byte, bool) {
 		var e ChangelogEntry
 		if json.Unmarshal(v, &e) != nil {
 			return nil, false
@@ -450,7 +451,7 @@ func (app *App) runIdentifierStage(target string) {
 	prog.Logf("Changelog: %d of %d record(s) staged.", c, t)
 
 	prog.SetStage("Staging bookings")
-	t, c, err = app.stageBucket(bktMigBookings, bucketBookings, func(v []byte) ([]byte, bool) {
+	t, c, err = app.stageBucket(bktMigBookings, store.BucketBookings, func(v []byte) ([]byte, bool) {
 		var b Booking
 		if json.Unmarshal(v, &b) != nil {
 			return nil, false
@@ -474,7 +475,7 @@ func (app *App) runIdentifierStage(target string) {
 	prog.Logf("Bookings: %d of %d record(s) staged.", c, t)
 
 	prog.SetStage("Staging desks")
-	t, c, err = app.stageBucket(bktMigDesks, bucketDesks, func(v []byte) ([]byte, bool) {
+	t, c, err = app.stageBucket(bktMigDesks, store.BucketDesks, func(v []byte) ([]byte, bool) {
 		var d Desk
 		if json.Unmarshal(v, &d) != nil {
 			return nil, false
@@ -550,7 +551,7 @@ func (app *App) runIdentifierStage(target string) {
 // key (overwrite). Returns the number of rows applied.
 func (app *App) applyStagedBucket(live, stage []byte) (int, error) {
 	n := 0
-	err := app.db.bolt.Update(func(tx *bolt.Tx) error {
+	err := app.db.Bolt().Update(func(tx *bolt.Tx) error {
 		s := tx.Bucket(stage)
 		if s == nil {
 			return nil
@@ -575,12 +576,12 @@ func (app *App) applyStagedBucket(live, stage []byte) (int, error) {
 // old username and the value holds the new user (with the new username).
 func (app *App) applyStagedAdmins() (int, error) {
 	n := 0
-	err := app.db.bolt.Update(func(tx *bolt.Tx) error {
+	err := app.db.Bolt().Update(func(tx *bolt.Tx) error {
 		s := tx.Bucket(bktMigAdmins)
 		if s == nil {
 			return nil
 		}
-		l := tx.Bucket(bucketUsers)
+		l := tx.Bucket(store.BucketUsers)
 		if l == nil {
 			return nil
 		}
@@ -630,7 +631,7 @@ func (app *App) runIdentifierApply(target string) {
 	prog.Logf("Applying staged migration: %s → %s", info.Current, target)
 
 	prog.SetStage("Applying audit log")
-	if n, err := app.applyStagedBucket(bucketAudit, bktMigAudit); err != nil {
+	if n, err := app.applyStagedBucket(store.BucketAudit, bktMigAudit); err != nil {
 		prog.Finish("", "applying audit log: "+err.Error())
 		return
 	} else {
@@ -638,7 +639,7 @@ func (app *App) runIdentifierApply(target string) {
 	}
 
 	prog.SetStage("Applying changelog")
-	if n, err := app.applyStagedBucket(bucketChangelog, bktMigChangelog); err != nil {
+	if n, err := app.applyStagedBucket(store.BucketChangelog, bktMigChangelog); err != nil {
 		prog.Finish("", "applying changelog: "+err.Error())
 		return
 	} else {
@@ -646,7 +647,7 @@ func (app *App) runIdentifierApply(target string) {
 	}
 
 	prog.SetStage("Applying bookings")
-	if n, err := app.applyStagedBucket(bucketBookings, bktMigBookings); err != nil {
+	if n, err := app.applyStagedBucket(store.BucketBookings, bktMigBookings); err != nil {
 		prog.Finish("", "applying bookings: "+err.Error())
 		return
 	} else {
@@ -654,7 +655,7 @@ func (app *App) runIdentifierApply(target string) {
 	}
 
 	prog.SetStage("Applying desks")
-	if n, err := app.applyStagedBucket(bucketDesks, bktMigDesks); err != nil {
+	if n, err := app.applyStagedBucket(store.BucketDesks, bktMigDesks); err != nil {
 		prog.Finish("", "applying desks: "+err.Error())
 		return
 	} else {
@@ -784,10 +785,10 @@ func (app *App) handleRestIdentifierAnalyze(w http.ResponseWriter, r *http.Reque
 		"conflicts": plan.conflicts,
 		"counts": map[string]int{
 			"avatars":   app.avatarCount(),
-			"mapAdmins": app.bucketCount(bucketUsers),
-			"bookings":  app.bucketCount(bucketBookings),
-			"changelog": app.bucketCount(bucketChangelog),
-			"audit":     app.bucketCount(bucketAudit),
+			"mapAdmins": app.bucketCount(store.BucketUsers),
+			"bookings":  app.bucketCount(store.BucketBookings),
+			"changelog": app.bucketCount(store.BucketChangelog),
+			"audit":     app.bucketCount(store.BucketAudit),
 			"desks":     app.deskAvatarCount(),
 		},
 	})

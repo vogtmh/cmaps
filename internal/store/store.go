@@ -1,4 +1,4 @@
-package main
+package store
 
 import (
 	"bytes"
@@ -15,43 +15,43 @@ import (
 // boltDB buckets, replacing the MySQL tables of the PHP app. Per-map desk tables
 // (desks_<map>) are collapsed into a single "desks" bucket keyed by "<map>:<id>".
 var (
-	bucketSettings  = []byte("settings")        // config_general (variable -> value)
-	bucketMaps      = []byte("maplist")         // config_maplist (key = mapname)
-	bucketDesks     = []byte("desks")           // desks_<map> (key = "<map>:<id>")
-	bucketLdap      = []byte("ldapmirror")      // ldap-mirror (key = userid+office, one row per desk placement)
-	bucketDirectory = []byte("directory")       // full AD directory, all users (key = samaccountname)
-	bucketBookings  = []byte("bookings")        // bookings (key = seq)
-	bucketTeams     = []byte("teams")           // config_teams (key = teamname)
-	bucketRoles     = []byte("roles")           // config_roles (key = id)
-	bucketUsers     = []byte("users")           // config_mapadmins + local users (key = username)
-	bucketChangelog = []byte("changelog")       // ldap_changelog (key = seq)
-	bucketStats     = []byte("stats")           // stats (key = YYYY-MM-DD)
-	bucketTracking  = []byte("tracking")        // legacy unique-visitor tracking (no longer written)
-	bucketVips      = []byte("vips")            // config_vips (key = seq)
-	bucketDepts     = []byte("departments")     // config_department_list (key = seq)
-	bucketRobin     = []byte("robinspaces")     // config_robinspaces (key = spacename)
-	bucketRobinCfg  = []byte("robinconfig")     // robin org/token/last-sync (key = name)
-	bucketRobinDesk = []byte("robindeskstatus") // live Robin seat occupancy (key = "<map>:<desknumber>")
-	bucketMeeting   = []byte("meetingstatus")   // meetingstatus (key = "<map>:<room>")
-	bucketWhitelist = []byte("healthwhitelist") // health_whitelist (key = seq)
-	bucketLdapSrc   = []byte("ldapsources")     // config_ldap (key = id)
-	bucketAudit     = []byte("auditlog")        // auditlog (key = seq)
-	bucketMeta      = []byte("meta")            // app meta (wizard state, etc.)
-	bucketGeoCfg    = []byte("geoconfig")       // geocoding (geoapify) api key / settings (key = name)
-	bucketItemTypes = []byte("itemtypes")       // admin-defined custom palette item types (key = id)
-	bucketEntraLdap = []byte("entraidmirror")   // EntraID (Graph) office-filtered mirror, same shape as ldapmirror
-	bucketEntraCfg  = []byte("entraidconfig")   // EntraID app-registration credentials / last-sync (key = name)
-	bucketEntraSrc  = []byte("entraidsources")  // EntraID app registrations, one per connection (key = id)
-	bucketSrcMirror = []byte("sourcemirror")    // per-source desk placements (key = "ldap:<id>"/"entra:<id>" -> JSON []LdapUser)
-	bucketSrcDir    = []byte("sourcedir")       // per-source full directory snapshot (key = "ldap:<id>" -> JSON []DirectoryUser)
+	BucketSettings  = []byte("settings")        // config_general (variable -> value)
+	BucketMaps      = []byte("maplist")         // config_maplist (key = mapname)
+	BucketDesks     = []byte("desks")           // desks_<map> (key = "<map>:<id>")
+	BucketLdap      = []byte("ldapmirror")      // ldap-mirror (key = userid+office, one row per desk placement)
+	BucketDirectory = []byte("directory")       // full AD directory, all users (key = samaccountname)
+	BucketBookings  = []byte("bookings")        // bookings (key = seq)
+	BucketTeams     = []byte("teams")           // config_teams (key = teamname)
+	BucketRoles     = []byte("roles")           // config_roles (key = id)
+	BucketUsers     = []byte("users")           // config_mapadmins + local users (key = username)
+	BucketChangelog = []byte("changelog")       // ldap_changelog (key = seq)
+	BucketStats     = []byte("stats")           // stats (key = YYYY-MM-DD)
+	BucketTracking  = []byte("tracking")        // legacy unique-visitor tracking (no longer written)
+	BucketVips      = []byte("vips")            // config_vips (key = seq)
+	BucketDepts     = []byte("departments")     // config_department_list (key = seq)
+	BucketRobin     = []byte("robinspaces")     // config_robinspaces (key = spacename)
+	BucketRobinCfg  = []byte("robinconfig")     // robin org/token/last-sync (key = name)
+	BucketRobinDesk = []byte("robindeskstatus") // live Robin seat occupancy (key = "<map>:<desknumber>")
+	BucketMeeting   = []byte("meetingstatus")   // meetingstatus (key = "<map>:<room>")
+	BucketWhitelist = []byte("healthwhitelist") // health_whitelist (key = seq)
+	BucketLdapSrc   = []byte("ldapsources")     // config_ldap (key = id)
+	BucketAudit     = []byte("auditlog")        // auditlog (key = seq)
+	BucketMeta      = []byte("meta")            // app meta (wizard state, etc.)
+	BucketGeoCfg    = []byte("geoconfig")       // geocoding (geoapify) api key / settings (key = name)
+	BucketItemTypes = []byte("itemtypes")       // admin-defined custom palette item types (key = id)
+	BucketEntraLdap = []byte("entraidmirror")   // EntraID (Graph) office-filtered mirror, same shape as ldapmirror
+	BucketEntraCfg  = []byte("entraidconfig")   // EntraID app-registration credentials / last-sync (key = name)
+	BucketEntraSrc  = []byte("entraidsources")  // EntraID app registrations, one per connection (key = id)
+	BucketSrcMirror = []byte("sourcemirror")    // per-source desk placements (key = "ldap:<id>"/"entra:<id>" -> JSON []LdapUser)
+	BucketSrcDir    = []byte("sourcedir")       // per-source full directory snapshot (key = "ldap:<id>" -> JSON []DirectoryUser)
 )
 
 var allBuckets = [][]byte{
-	bucketSettings, bucketMaps, bucketDesks, bucketLdap, bucketBookings, bucketTeams,
-	bucketRoles, bucketUsers, bucketChangelog, bucketStats, bucketTracking, bucketVips,
-	bucketDepts, bucketRobin, bucketMeeting, bucketWhitelist, bucketLdapSrc, bucketAudit,
-	bucketMeta, bucketDirectory, bucketRobinCfg, bucketRobinDesk, bucketGeoCfg, bucketItemTypes,
-	bucketEntraLdap, bucketEntraCfg, bucketEntraSrc, bucketSrcMirror, bucketSrcDir,
+	BucketSettings, BucketMaps, BucketDesks, BucketLdap, BucketBookings, BucketTeams,
+	BucketRoles, BucketUsers, BucketChangelog, BucketStats, BucketTracking, BucketVips,
+	BucketDepts, BucketRobin, BucketMeeting, BucketWhitelist, BucketLdapSrc, BucketAudit,
+	BucketMeta, BucketDirectory, BucketRobinCfg, BucketRobinDesk, BucketGeoCfg, BucketItemTypes,
+	BucketEntraLdap, BucketEntraCfg, BucketEntraSrc, BucketSrcMirror, BucketSrcDir,
 }
 
 type DB struct {
@@ -92,7 +92,7 @@ type Desk struct {
 	Department string `json:"department"`
 }
 
-func deskKey(mapName string, id int) []byte {
+func DeskKey(mapName string, id int) []byte {
 	return []byte(fmt.Sprintf("%s:%d", mapName, id))
 }
 
@@ -336,7 +336,7 @@ type AuditEntry struct {
 	Info      string `json:"info"`
 }
 
-func openDB(path string) (*DB, error) {
+func Open(path string) (*DB, error) {
 	bdb, err := bolt.Open(path, 0600, &bolt.Options{Timeout: 5 * time.Second})
 	if err != nil {
 		return nil, fmt.Errorf("opening db: %w", err)
@@ -370,12 +370,12 @@ func openDB(path string) (*DB, error) {
 // robinconfig bucket, so they no longer clutter the "base variables" list.
 func (db *DB) migrateRobinConfig() {
 	for _, name := range []string{"robintoken", "robinOrganisation", "robinLastSync"} {
-		v, found, _ := getJSON[string](db, bucketSettings, []byte(name))
+		v, found, _ := GetJSON[string](db, BucketSettings, []byte(name))
 		if !found {
 			continue
 		}
-		_ = putJSON(db, bucketRobinCfg, []byte(name), v)
-		_ = deleteKey(db, bucketSettings, []byte(name))
+		_ = PutJSON(db, BucketRobinCfg, []byte(name), v)
+		_ = DeleteKey(db, BucketSettings, []byte(name))
 	}
 }
 
@@ -383,7 +383,7 @@ func (db *DB) migrateRobinConfig() {
 // application so they stop appearing in the admin "base variables" list.
 func (db *DB) removeObsoleteSettings() {
 	for _, name := range []string{"teamsChannel", "avatarType"} {
-		_ = deleteKey(db, bucketSettings, []byte(name))
+		_ = DeleteKey(db, BucketSettings, []byte(name))
 	}
 }
 
@@ -397,17 +397,17 @@ func (db *DB) pinLegacyIdentifier() {
 	if db.GetMeta("setup_done") != "1" {
 		return
 	}
-	if v, found, _ := getJSON[string](db, bucketSettings, []byte("identifier")); found && v != "" {
+	if v, found, _ := GetJSON[string](db, BucketSettings, []byte("identifier")); found && v != "" {
 		return
 	}
-	_ = putJSON(db, bucketSettings, []byte("identifier"), "samaccountname")
+	_ = PutJSON(db, BucketSettings, []byte("identifier"), "samaccountname")
 }
 
 func (db *DB) Close() error { return db.bolt.Close() }
 
 // --- Generic helpers ---
 
-func getJSON[T any](db *DB, bucket, key []byte) (T, bool, error) {
+func GetJSON[T any](db *DB, bucket, key []byte) (T, bool, error) {
 	var out T
 	found := false
 	err := db.bolt.View(func(tx *bolt.Tx) error {
@@ -421,7 +421,7 @@ func getJSON[T any](db *DB, bucket, key []byte) (T, bool, error) {
 	return out, found, err
 }
 
-func putJSON[T any](db *DB, bucket, key []byte, val T) error {
+func PutJSON[T any](db *DB, bucket, key []byte, val T) error {
 	return db.bolt.Update(func(tx *bolt.Tx) error {
 		data, err := json.Marshal(val)
 		if err != nil {
@@ -431,14 +431,14 @@ func putJSON[T any](db *DB, bucket, key []byte, val T) error {
 	})
 }
 
-func deleteKey(db *DB, bucket, key []byte) error {
+func DeleteKey(db *DB, bucket, key []byte) error {
 	return db.bolt.Update(func(tx *bolt.Tx) error {
 		return tx.Bucket(bucket).Delete(key)
 	})
 }
 
-// listJSON returns all values in a bucket, optionally filtered by a key prefix.
-func listJSON[T any](db *DB, bucket []byte, prefix string) ([]T, error) {
+// ListJSON returns all values in a bucket, optionally filtered by a key prefix.
+func ListJSON[T any](db *DB, bucket []byte, prefix string) ([]T, error) {
 	var out []T
 	err := db.bolt.View(func(tx *bolt.Tx) error {
 		c := tx.Bucket(bucket).Cursor()
@@ -465,7 +465,7 @@ func listJSON[T any](db *DB, bucket []byte, prefix string) ([]T, error) {
 	return out, err
 }
 
-func seqKey(seq uint64) []byte {
+func SeqKey(seq uint64) []byte {
 	k := make([]byte, 8)
 	binary.BigEndian.PutUint64(k, seq)
 	return k
@@ -474,19 +474,19 @@ func seqKey(seq uint64) []byte {
 // --- Settings (config_general) ---
 
 func (db *DB) GetSetting(name string) string {
-	v, _, _ := getJSON[string](db, bucketSettings, []byte(name))
+	v, _, _ := GetJSON[string](db, BucketSettings, []byte(name))
 	return v
 }
 
 func (db *DB) SetSetting(name, value string) error {
-	return putJSON(db, bucketSettings, []byte(name), value)
+	return PutJSON(db, BucketSettings, []byte(name), value)
 }
 
 // EnsureSetting creates the setting with the given default only if it does not
 // already exist, leaving any existing value untouched. Used to surface newer
 // optional settings in the admin panel on upgraded installations.
 func (db *DB) EnsureSetting(name, def string) error {
-	if _, ok, _ := getJSON[string](db, bucketSettings, []byte(name)); ok {
+	if _, ok, _ := GetJSON[string](db, BucketSettings, []byte(name)); ok {
 		return nil
 	}
 	return db.SetSetting(name, def)
@@ -495,24 +495,24 @@ func (db *DB) EnsureSetting(name, def string) error {
 // --- Robin configuration (org, token, last-sync) ---
 
 func (db *DB) GetRobinSetting(name string) string {
-	v, _, _ := getJSON[string](db, bucketRobinCfg, []byte(name))
+	v, _, _ := GetJSON[string](db, BucketRobinCfg, []byte(name))
 	return v
 }
 
 func (db *DB) SetRobinSetting(name, value string) error {
-	return putJSON(db, bucketRobinCfg, []byte(name), value)
+	return PutJSON(db, BucketRobinCfg, []byte(name), value)
 }
 
 // --- Geocoding configuration (geoapify api key, kept out of the visible
 // config_general table since it is a secret) ---
 
 func (db *DB) GetGeoSetting(name string) string {
-	v, _, _ := getJSON[string](db, bucketGeoCfg, []byte(name))
+	v, _, _ := GetJSON[string](db, BucketGeoCfg, []byte(name))
 	return v
 }
 
 func (db *DB) SetGeoSetting(name, value string) error {
-	return putJSON(db, bucketGeoCfg, []byte(name), value)
+	return PutJSON(db, BucketGeoCfg, []byte(name), value)
 }
 
 // geoUsage tracks how many Geoapify API requests this server has made in a
@@ -528,7 +528,7 @@ type geoUsage struct {
 // begun and the estimate resets).
 func (db *DB) GetGeoUsage() (month string, count int) {
 	now := time.Now().Format("2006-01")
-	u, _, _ := getJSON[geoUsage](db, bucketGeoCfg, []byte("usage"))
+	u, _, _ := GetJSON[geoUsage](db, BucketGeoCfg, []byte("usage"))
 	if u.Month != now {
 		return now, 0
 	}
@@ -539,13 +539,13 @@ func (db *DB) GetGeoUsage() (month string, count int) {
 // the month rolls over, and returns the updated month and total.
 func (db *DB) IncrGeoUsage(n int) (month string, count int, err error) {
 	now := time.Now().Format("2006-01")
-	u, _, _ := getJSON[geoUsage](db, bucketGeoCfg, []byte("usage"))
+	u, _, _ := GetJSON[geoUsage](db, BucketGeoCfg, []byte("usage"))
 	if u.Month != now {
 		u.Month = now
 		u.Count = 0
 	}
 	u.Count += n
-	if err := putJSON(db, bucketGeoCfg, []byte("usage"), u); err != nil {
+	if err := PutJSON(db, BucketGeoCfg, []byte("usage"), u); err != nil {
 		return u.Month, u.Count, err
 	}
 	return u.Month, u.Count, nil
@@ -554,7 +554,7 @@ func (db *DB) IncrGeoUsage(n int) (month string, count int, err error) {
 func (db *DB) AllSettings() (map[string]string, error) {
 	out := map[string]string{}
 	err := db.bolt.View(func(tx *bolt.Tx) error {
-		return tx.Bucket(bucketSettings).ForEach(func(k, v []byte) error {
+		return tx.Bucket(BucketSettings).ForEach(func(k, v []byte) error {
 			var s string
 			if json.Unmarshal(v, &s) == nil {
 				out[string(k)] = s
@@ -568,13 +568,13 @@ func (db *DB) AllSettings() (map[string]string, error) {
 // --- Maps (config_maplist) ---
 
 func (db *DB) ListMaps() ([]MapInfo, error) {
-	maps, err := listJSON[MapInfo](db, bucketMaps, "")
+	maps, err := ListJSON[MapInfo](db, BucketMaps, "")
 	sort.Slice(maps, func(i, j int) bool { return maps[i].Mapname < maps[j].Mapname })
 	return maps, err
 }
 
 func (db *DB) GetMap(name string) (MapInfo, bool, error) {
-	return getJSON[MapInfo](db, bucketMaps, []byte(name))
+	return GetJSON[MapInfo](db, BucketMaps, []byte(name))
 }
 
 // MapLocation returns the time.Location for a map, falling back to the database
@@ -594,9 +594,9 @@ func (db *DB) MapToday(name string) string {
 	return time.Now().In(db.MapLocation(name)).Format("2006-01-02")
 }
 
-func (db *DB) PutMap(m MapInfo) error { return putJSON(db, bucketMaps, []byte(m.Mapname), m) }
+func (db *DB) PutMap(m MapInfo) error { return PutJSON(db, BucketMaps, []byte(m.Mapname), m) }
 
-func (db *DB) DeleteMap(name string) error { return deleteKey(db, bucketMaps, []byte(name)) }
+func (db *DB) DeleteMap(name string) error { return DeleteKey(db, BucketMaps, []byte(name)) }
 
 // RenameMap renames a map and re-keys everything that references it: the map
 // record itself, all of its desks, its cached meeting status, and any bookings.
@@ -605,7 +605,7 @@ func (db *DB) DeleteMap(name string) error { return deleteKey(db, bucketMaps, []
 // changes happen atomically in a single transaction.
 func (db *DB) RenameMap(oldName, newName string) error {
 	return db.bolt.Update(func(tx *bolt.Tx) error {
-		mapsB := tx.Bucket(bucketMaps)
+		mapsB := tx.Bucket(BucketMaps)
 		if mapsB.Get([]byte(newName)) != nil {
 			return fmt.Errorf("a map named %q already exists", newName)
 		}
@@ -630,16 +630,16 @@ func (db *DB) RenameMap(oldName, newName string) error {
 		}
 
 		// Re-key desks ("<old>:<id>" -> "<new>:<id>").
-		if err := rekeyMapPrefix(tx, bucketDesks, oldName, newName, func(d *Desk) { d.Map = newName }); err != nil {
+		if err := rekeyMapPrefix(tx, BucketDesks, oldName, newName, func(d *Desk) { d.Map = newName }); err != nil {
 			return err
 		}
 		// Re-key cached meeting status ("<old>:<room>" -> "<new>:<room>").
-		if err := rekeyMapPrefix(tx, bucketMeeting, oldName, newName, func(s *MeetingStatus) { s.Map = newName }); err != nil {
+		if err := rekeyMapPrefix(tx, BucketMeeting, oldName, newName, func(s *MeetingStatus) { s.Map = newName }); err != nil {
 			return err
 		}
 
 		// Update bookings (keyed by seq, value references the map).
-		bkB := tx.Bucket(bucketBookings)
+		bkB := tx.Bucket(BucketBookings)
 		type kv struct{ k, v []byte }
 		var updates []kv
 		c := bkB.Cursor()
@@ -701,24 +701,24 @@ func rekeyMapPrefix[T any](tx *bolt.Tx, bucket []byte, oldName, newName string, 
 // --- Desks ---
 
 func (db *DB) ListDesks(mapName string) ([]Desk, error) {
-	desks, err := listJSON[Desk](db, bucketDesks, mapName+":")
+	desks, err := ListJSON[Desk](db, BucketDesks, mapName+":")
 	return desks, err
 }
 
 // ListAllDesks returns every desk/item record across all maps. Used for the
 // dashboard overview counts.
 func (db *DB) ListAllDesks() ([]Desk, error) {
-	return listJSON[Desk](db, bucketDesks, "")
+	return ListJSON[Desk](db, BucketDesks, "")
 }
 
 func (db *DB) GetDesk(mapName string, id int) (Desk, bool, error) {
-	return getJSON[Desk](db, bucketDesks, deskKey(mapName, id))
+	return GetJSON[Desk](db, BucketDesks, DeskKey(mapName, id))
 }
 
-func (db *DB) PutDesk(d Desk) error { return putJSON(db, bucketDesks, deskKey(d.Map, d.ID), d) }
+func (db *DB) PutDesk(d Desk) error { return PutJSON(db, BucketDesks, DeskKey(d.Map, d.ID), d) }
 
 func (db *DB) DeleteDesk(mapName string, id int) error {
-	return deleteKey(db, bucketDesks, deskKey(mapName, id))
+	return DeleteKey(db, BucketDesks, DeskKey(mapName, id))
 }
 
 // NextDeskID returns the next free desk id for a map.
@@ -764,24 +764,24 @@ func (t CustomItemType) Halfsize() int {
 }
 
 func (db *DB) ListItemTypes() ([]CustomItemType, error) {
-	return listJSON[CustomItemType](db, bucketItemTypes, "")
+	return ListJSON[CustomItemType](db, BucketItemTypes, "")
 }
 
 func (db *DB) GetItemType(id string) (CustomItemType, bool, error) {
-	return getJSON[CustomItemType](db, bucketItemTypes, []byte(id))
+	return GetJSON[CustomItemType](db, BucketItemTypes, []byte(id))
 }
 
 func (db *DB) PutItemType(t CustomItemType) error {
-	return putJSON(db, bucketItemTypes, []byte(t.ID), t)
+	return PutJSON(db, BucketItemTypes, []byte(t.ID), t)
 }
 
 func (db *DB) DeleteItemType(id string) error {
-	return deleteKey(db, bucketItemTypes, []byte(id))
+	return DeleteKey(db, BucketItemTypes, []byte(id))
 }
 
 // --- LDAP mirror ---
 
-func (db *DB) ListLdap() ([]LdapUser, error) { return listJSON[LdapUser](db, bucketLdap, "") }
+func (db *DB) ListLdap() ([]LdapUser, error) { return ListJSON[LdapUser](db, BucketLdap, "") }
 
 // ldapKey builds the mirror bucket key for a placement. A user may hold several
 // desks (office "A|B" split into separate placements by deriveMirrorUsers), so
@@ -797,16 +797,16 @@ func ldapKey(u LdapUser) []byte {
 }
 
 func (db *DB) PutLdap(u LdapUser) error {
-	return putJSON(db, bucketLdap, ldapKey(u), u)
+	return PutJSON(db, BucketLdap, ldapKey(u), u)
 }
 
 // ReplaceLdap clears the mirror and stores the given users (used by full sync).
 func (db *DB) ReplaceLdap(users []LdapUser) error {
 	return db.bolt.Update(func(tx *bolt.Tx) error {
-		if err := tx.DeleteBucket(bucketLdap); err != nil && err != bolt.ErrBucketNotFound {
+		if err := tx.DeleteBucket(BucketLdap); err != nil && err != bolt.ErrBucketNotFound {
 			return err
 		}
-		b, err := tx.CreateBucket(bucketLdap)
+		b, err := tx.CreateBucket(BucketLdap)
 		if err != nil {
 			return err
 		}
@@ -833,7 +833,7 @@ func (db *DB) SetLdapAvatar(userid string, has bool) error {
 		return nil
 	}
 	return db.bolt.Update(func(tx *bolt.Tx) error {
-		b := tx.Bucket(bucketLdap)
+		b := tx.Bucket(BucketLdap)
 		if b == nil {
 			return nil
 		}
@@ -874,7 +874,7 @@ func (db *DB) SetLdapAvatar(userid string, has bool) error {
 //
 // Each sync source (LDAP or EntraID) stores its own derived desk placements
 // (and, for LDAP, its full directory snapshot) under its own key. The shared
-// combined caches (bucketLdap/bucketEntraLdap/bucketDirectory) are then rebuilt
+// combined caches (BucketLdap/BucketEntraLdap/BucketDirectory) are then rebuilt
 // by unioning the enabled sources, so a single-source sync never wipes the
 // others. Keys are "ldap:<id>" and "entra:<id>".
 
@@ -884,34 +884,34 @@ func srcKey(kind string, id int) []byte {
 
 // PutSourceMirror stores one source's derived desk placements.
 func (db *DB) PutSourceMirror(kind string, id int, users []LdapUser) error {
-	return putJSON(db, bucketSrcMirror, srcKey(kind, id), users)
+	return PutJSON(db, BucketSrcMirror, srcKey(kind, id), users)
 }
 
 // GetSourceMirror returns one source's derived desk placements (nil if unset).
 func (db *DB) GetSourceMirror(kind string, id int) ([]LdapUser, error) {
-	users, _, err := getJSON[[]LdapUser](db, bucketSrcMirror, srcKey(kind, id))
+	users, _, err := GetJSON[[]LdapUser](db, BucketSrcMirror, srcKey(kind, id))
 	return users, err
 }
 
 // DeleteSourceMirror removes one source's derived desk placements.
 func (db *DB) DeleteSourceMirror(kind string, id int) error {
-	return deleteKey(db, bucketSrcMirror, srcKey(kind, id))
+	return DeleteKey(db, BucketSrcMirror, srcKey(kind, id))
 }
 
 // PutSourceDir stores one LDAP source's full directory snapshot.
 func (db *DB) PutSourceDir(id int, users []DirectoryUser) error {
-	return putJSON(db, bucketSrcDir, srcKey("ldap", id), users)
+	return PutJSON(db, BucketSrcDir, srcKey("ldap", id), users)
 }
 
 // GetSourceDir returns one LDAP source's full directory snapshot (nil if unset).
 func (db *DB) GetSourceDir(id int) ([]DirectoryUser, error) {
-	users, _, err := getJSON[[]DirectoryUser](db, bucketSrcDir, srcKey("ldap", id))
+	users, _, err := GetJSON[[]DirectoryUser](db, BucketSrcDir, srcKey("ldap", id))
 	return users, err
 }
 
 // DeleteSourceDir removes one LDAP source's full directory snapshot.
 func (db *DB) DeleteSourceDir(id int) error {
-	return deleteKey(db, bucketSrcDir, srcKey("ldap", id))
+	return DeleteKey(db, BucketSrcDir, srcKey("ldap", id))
 }
 
 // --- EntraID mirror (Microsoft Graph, same shape as the LDAP mirror) ---
@@ -922,16 +922,16 @@ func (db *DB) DeleteSourceDir(id int) error {
 // comparison with the LDAP data.
 
 func (db *DB) ListEntraLdap() ([]LdapUser, error) {
-	return listJSON[LdapUser](db, bucketEntraLdap, "")
+	return ListJSON[LdapUser](db, BucketEntraLdap, "")
 }
 
 // ReplaceEntraLdap clears the EntraID mirror and stores the given users (full sync).
 func (db *DB) ReplaceEntraLdap(users []LdapUser) error {
 	return db.bolt.Update(func(tx *bolt.Tx) error {
-		if err := tx.DeleteBucket(bucketEntraLdap); err != nil && err != bolt.ErrBucketNotFound {
+		if err := tx.DeleteBucket(BucketEntraLdap); err != nil && err != bolt.ErrBucketNotFound {
 			return err
 		}
-		b, err := tx.CreateBucket(bucketEntraLdap)
+		b, err := tx.CreateBucket(BucketEntraLdap)
 		if err != nil {
 			return err
 		}
@@ -951,44 +951,44 @@ func (db *DB) ReplaceEntraLdap(users []LdapUser) error {
 // --- EntraID configuration (tenant, client id, auth method + secret/cert) ---
 
 func (db *DB) GetEntraSetting(name string) string {
-	v, _, _ := getJSON[string](db, bucketEntraCfg, []byte(name))
+	v, _, _ := GetJSON[string](db, BucketEntraCfg, []byte(name))
 	return v
 }
 
 func (db *DB) SetEntraSetting(name, value string) error {
-	return putJSON(db, bucketEntraCfg, []byte(name), value)
+	return PutJSON(db, BucketEntraCfg, []byte(name), value)
 }
 
 // --- EntraID sources (one row per app registration / connection) ---
 
 func (db *DB) ListEntraSources() ([]EntraSource, error) {
-	srcs, err := listJSON[EntraSource](db, bucketEntraSrc, "")
+	srcs, err := ListJSON[EntraSource](db, BucketEntraSrc, "")
 	sort.Slice(srcs, func(i, j int) bool { return srcs[i].ID < srcs[j].ID })
 	return srcs, err
 }
 
 func (db *DB) PutEntraSource(s EntraSource) error {
-	return putJSON(db, bucketEntraSrc, []byte(fmt.Sprintf("%d", s.ID)), s)
+	return PutJSON(db, BucketEntraSrc, []byte(fmt.Sprintf("%d", s.ID)), s)
 }
 
 func (db *DB) DeleteEntraSource(id int) error {
-	return deleteKey(db, bucketEntraSrc, []byte(fmt.Sprintf("%d", id)))
+	return DeleteKey(db, BucketEntraSrc, []byte(fmt.Sprintf("%d", id)))
 }
 
 // --- Directory (full AD snapshot) ---
 
 func (db *DB) ListDirectory() ([]DirectoryUser, error) {
-	return listJSON[DirectoryUser](db, bucketDirectory, "")
+	return ListJSON[DirectoryUser](db, BucketDirectory, "")
 }
 
 // ReplaceDirectory clears the directory snapshot and stores the given users
 // (used by full sync). Keyed by lowercased samaccountname.
 func (db *DB) ReplaceDirectory(users []DirectoryUser) error {
 	return db.bolt.Update(func(tx *bolt.Tx) error {
-		if err := tx.DeleteBucket(bucketDirectory); err != nil && err != bolt.ErrBucketNotFound {
+		if err := tx.DeleteBucket(BucketDirectory); err != nil && err != bolt.ErrBucketNotFound {
 			return err
 		}
-		b, err := tx.CreateBucket(bucketDirectory)
+		b, err := tx.CreateBucket(BucketDirectory)
 		if err != nil {
 			return err
 		}
@@ -999,8 +999,8 @@ func (db *DB) ReplaceDirectory(users []DirectoryUser) error {
 			}
 			// Defensive sanity check: mail addresses are always stored strictly
 			// lowercased regardless of which sync path produced this record.
-			u.Mail = normalizeMail(u.Mail)
-			u.Aliases = normalizeMails(u.Aliases)
+			u.Mail = NormalizeMail(u.Mail)
+			u.Aliases = NormalizeMails(u.Aliases)
 			data, err := json.Marshal(u)
 			if err != nil {
 				return err
@@ -1015,7 +1015,7 @@ func (db *DB) ReplaceDirectory(users []DirectoryUser) error {
 
 // GetDirectoryUser looks up a single account by samaccountname (case-insensitive).
 func (db *DB) GetDirectoryUser(sam string) (DirectoryUser, bool, error) {
-	return getJSON[DirectoryUser](db, bucketDirectory, []byte(strings.ToLower(strings.TrimSpace(sam))))
+	return GetJSON[DirectoryUser](db, BucketDirectory, []byte(strings.ToLower(strings.TrimSpace(sam))))
 }
 
 // SearchDirectory returns up to limit users whose name, samaccountname or mail
@@ -1048,84 +1048,84 @@ func (db *DB) SearchDirectory(query string, limit int) ([]DirectoryUser, error) 
 
 // --- Bookings ---
 
-func (db *DB) ListBookings() ([]Booking, error) { return listJSON[Booking](db, bucketBookings, "") }
+func (db *DB) ListBookings() ([]Booking, error) { return ListJSON[Booking](db, BucketBookings, "") }
 
 func (db *DB) AddBooking(b Booking) error {
 	// Defensive sanity check: mail addresses are always stored strictly lowercased.
-	b.Mail = normalizeMail(b.Mail)
+	b.Mail = NormalizeMail(b.Mail)
 	return db.bolt.Update(func(tx *bolt.Tx) error {
-		bkt := tx.Bucket(bucketBookings)
+		bkt := tx.Bucket(BucketBookings)
 		seq, _ := bkt.NextSequence()
 		b.ID = seq
 		data, err := json.Marshal(b)
 		if err != nil {
 			return err
 		}
-		return bkt.Put(seqKey(seq), data)
+		return bkt.Put(SeqKey(seq), data)
 	})
 }
 
-func (db *DB) DeleteBooking(id uint64) error { return deleteKey(db, bucketBookings, seqKey(id)) }
+func (db *DB) DeleteBooking(id uint64) error { return DeleteKey(db, BucketBookings, SeqKey(id)) }
 
 // --- Teams ---
 
 func (db *DB) ListTeams() ([]Team, error) {
-	teams, err := listJSON[Team](db, bucketTeams, "")
+	teams, err := ListJSON[Team](db, BucketTeams, "")
 	sort.Slice(teams, func(i, j int) bool { return teams[i].Teamname < teams[j].Teamname })
 	return teams, err
 }
 
-func (db *DB) PutTeam(t Team) error { return putJSON(db, bucketTeams, []byte(t.Teamname), t) }
+func (db *DB) PutTeam(t Team) error { return PutJSON(db, BucketTeams, []byte(t.Teamname), t) }
 
-func (db *DB) DeleteTeam(name string) error { return deleteKey(db, bucketTeams, []byte(name)) }
+func (db *DB) DeleteTeam(name string) error { return DeleteKey(db, BucketTeams, []byte(name)) }
 
 // --- Roles ---
 
 func (db *DB) ListRoles() ([]Role, error) {
-	roles, err := listJSON[Role](db, bucketRoles, "")
+	roles, err := ListJSON[Role](db, BucketRoles, "")
 	sort.Slice(roles, func(i, j int) bool { return roles[i].ID < roles[j].ID })
 	return roles, err
 }
 
 func (db *DB) GetRole(id int) (Role, bool, error) {
-	return getJSON[Role](db, bucketRoles, []byte(fmt.Sprintf("%d", id)))
+	return GetJSON[Role](db, BucketRoles, []byte(fmt.Sprintf("%d", id)))
 }
 
 func (db *DB) PutRole(r Role) error {
-	return putJSON(db, bucketRoles, []byte(fmt.Sprintf("%d", r.ID)), r)
+	return PutJSON(db, BucketRoles, []byte(fmt.Sprintf("%d", r.ID)), r)
 }
 
 func (db *DB) DeleteRole(id int) error {
-	return deleteKey(db, bucketRoles, []byte(fmt.Sprintf("%d", id)))
+	return DeleteKey(db, BucketRoles, []byte(fmt.Sprintf("%d", id)))
 }
 
 // --- Users (mapadmins + local) ---
 
-func (db *DB) ListUsers() ([]User, error) { return listJSON[User](db, bucketUsers, "") }
+func (db *DB) ListUsers() ([]User, error) { return ListJSON[User](db, BucketUsers, "") }
 
 func (db *DB) GetUser(username string) (User, bool, error) {
-	return getJSON[User](db, bucketUsers, []byte(username))
+	return GetJSON[User](db, BucketUsers, []byte(username))
 }
 
 func (db *DB) PutUser(u User) error {
 	// Defensive sanity check: mail addresses are always stored strictly lowercased.
-	u.Mail = normalizeMail(u.Mail)
-	return putJSON(db, bucketUsers, []byte(u.Username), u)
+	u.Mail = NormalizeMail(u.Mail)
+	return PutJSON(db, BucketUsers, []byte(u.Username), u)
 }
 
-func (db *DB) DeleteUser(username string) error { return deleteKey(db, bucketUsers, []byte(username)) }
+func (db *DB) DeleteUser(username string) error { return DeleteKey(db, BucketUsers, []byte(username)) }
 
 // --- Changelog ---
 
 func (db *DB) AddChangelog(e ChangelogEntry) error {
 	return db.bolt.Update(func(tx *bolt.Tx) error {
-		bkt := tx.Bucket(bucketChangelog)
+		bkt := tx.Bucket(BucketChangelog)
 		seq, _ := bkt.NextSequence()
 		data, err := json.Marshal(e)
 		if err != nil {
 			return err
 		}
-		return bkt.Put(seqKey(seq), data)
+		return bkt.Put(SeqKey(seq), data)
 	})
 }
 
@@ -1133,7 +1133,7 @@ func (db *DB) AddChangelog(e ChangelogEntry) error {
 func (db *DB) ListChangelog(limit int) ([]ChangelogEntry, error) {
 	var out []ChangelogEntry
 	err := db.bolt.View(func(tx *bolt.Tx) error {
-		c := tx.Bucket(bucketChangelog).Cursor()
+		c := tx.Bucket(BucketChangelog).Cursor()
 		for k, v := c.Last(); k != nil; k, v = c.Prev() {
 			var e ChangelogEntry
 			if json.Unmarshal(v, &e) == nil {
@@ -1151,12 +1151,12 @@ func (db *DB) ListChangelog(limit int) ([]ChangelogEntry, error) {
 // --- Stats & tracking ---
 
 func (db *DB) ListStats() ([]StatEntry, error) {
-	stats, err := listJSON[StatEntry](db, bucketStats, "")
+	stats, err := ListJSON[StatEntry](db, BucketStats, "")
 	sort.Slice(stats, func(i, j int) bool { return stats[i].Date < stats[j].Date })
 	return stats, err
 }
 
-func (db *DB) PutStat(s StatEntry) error { return putJSON(db, bucketStats, []byte(s.Date), s) }
+func (db *DB) PutStat(s StatEntry) error { return PutJSON(db, BucketStats, []byte(s.Date), s) }
 
 // AddVisit increments today's visitor count on every call (one per page view),
 // matching the legacy PHP stats behaviour.
@@ -1164,7 +1164,7 @@ func (db *DB) AddVisit() error {
 	now := time.Now().In(db.loc)
 	date := now.Format("2006-01-02")
 	return db.bolt.Update(func(tx *bolt.Tx) error {
-		sb := tx.Bucket(bucketStats)
+		sb := tx.Bucket(BucketStats)
 		var s StatEntry
 		if v := sb.Get([]byte(date)); v != nil {
 			_ = json.Unmarshal(v, &s)
@@ -1182,17 +1182,17 @@ func (db *DB) AddVisit() error {
 
 // --- VIPs ---
 
-func (db *DB) ListVips() ([]VIP, error) { return listJSON[VIP](db, bucketVips, "") }
+func (db *DB) ListVips() ([]VIP, error) { return ListJSON[VIP](db, BucketVips, "") }
 
 func (db *DB) AddVip(v VIP) error {
 	return db.bolt.Update(func(tx *bolt.Tx) error {
-		bkt := tx.Bucket(bucketVips)
+		bkt := tx.Bucket(BucketVips)
 		seq, _ := bkt.NextSequence()
 		data, err := json.Marshal(v)
 		if err != nil {
 			return err
 		}
-		return bkt.Put(seqKey(seq), data)
+		return bkt.Put(SeqKey(seq), data)
 	})
 }
 
@@ -1211,7 +1211,7 @@ func (db *DB) AddVipTag(typ, title string) error {
 // DeleteVipTag removes every VIP entry matching the given category and tag.
 func (db *DB) DeleteVipTag(typ, title string) error {
 	return db.bolt.Update(func(tx *bolt.Tx) error {
-		bkt := tx.Bucket(bucketVips)
+		bkt := tx.Bucket(BucketVips)
 		var doomed [][]byte
 		_ = bkt.ForEach(func(k, val []byte) error {
 			var v VIP
@@ -1236,7 +1236,7 @@ func (db *DB) DeleteVipTag(typ, title string) error {
 func (db *DB) ListDepartments() ([]string, error) {
 	var out []string
 	err := db.bolt.View(func(tx *bolt.Tx) error {
-		return tx.Bucket(bucketDepts).ForEach(func(k, v []byte) error {
+		return tx.Bucket(BucketDepts).ForEach(func(k, v []byte) error {
 			var s string
 			if json.Unmarshal(v, &s) == nil {
 				out = append(out, s)
@@ -1250,25 +1250,25 @@ func (db *DB) ListDepartments() ([]string, error) {
 
 func (db *DB) AddDepartment(name string) error {
 	return db.bolt.Update(func(tx *bolt.Tx) error {
-		bkt := tx.Bucket(bucketDepts)
+		bkt := tx.Bucket(BucketDepts)
 		seq, _ := bkt.NextSequence()
 		data, _ := json.Marshal(name)
-		return bkt.Put(seqKey(seq), data)
+		return bkt.Put(SeqKey(seq), data)
 	})
 }
 
 // --- Robin spaces ---
 
 func (db *DB) ListRobinSpaces() ([]RobinSpace, error) {
-	return listJSON[RobinSpace](db, bucketRobin, "")
+	return ListJSON[RobinSpace](db, BucketRobin, "")
 }
 
 func (db *DB) PutRobinSpace(s RobinSpace) error {
-	return putJSON(db, bucketRobin, []byte(s.Spacename), s)
+	return PutJSON(db, BucketRobin, []byte(s.Spacename), s)
 }
 
 func (db *DB) DeleteRobinSpace(name string) error {
-	return deleteKey(db, bucketRobin, []byte(name))
+	return DeleteKey(db, BucketRobin, []byte(name))
 }
 
 // --- Robin desk occupancy cache (robindeskstatus) ---
@@ -1281,19 +1281,19 @@ func robinDeskKey(mapName, desknumber string) []byte {
 // maps when mapName is empty).
 func (db *DB) ListRobinDeskStatus(mapName string) ([]RobinDeskStatus, error) {
 	if mapName == "" {
-		return listJSON[RobinDeskStatus](db, bucketRobinDesk, "")
+		return ListJSON[RobinDeskStatus](db, BucketRobinDesk, "")
 	}
-	return listJSON[RobinDeskStatus](db, bucketRobinDesk, mapName+":")
+	return ListJSON[RobinDeskStatus](db, BucketRobinDesk, mapName+":")
 }
 
 // ReplaceRobinDeskStatus atomically clears the occupancy cache and writes the
 // supplied set, so a poll fully replaces the previous snapshot.
 func (db *DB) ReplaceRobinDeskStatus(all []RobinDeskStatus) error {
 	return db.bolt.Update(func(tx *bolt.Tx) error {
-		if err := tx.DeleteBucket(bucketRobinDesk); err != nil && err != bolt.ErrBucketNotFound {
+		if err := tx.DeleteBucket(BucketRobinDesk); err != nil && err != bolt.ErrBucketNotFound {
 			return err
 		}
-		bkt, err := tx.CreateBucketIfNotExists(bucketRobinDesk)
+		bkt, err := tx.CreateBucketIfNotExists(BucketRobinDesk)
 		if err != nil {
 			return err
 		}
@@ -1318,30 +1318,30 @@ func meetingKey(mapName, room string) []byte {
 
 func (db *DB) ListMeetingStatus(mapName string) ([]MeetingStatus, error) {
 	if mapName == "" {
-		return listJSON[MeetingStatus](db, bucketMeeting, "")
+		return ListJSON[MeetingStatus](db, BucketMeeting, "")
 	}
-	return listJSON[MeetingStatus](db, bucketMeeting, mapName+":")
+	return ListJSON[MeetingStatus](db, BucketMeeting, mapName+":")
 }
 
 func (db *DB) PutMeetingStatus(m MeetingStatus) error {
-	return putJSON(db, bucketMeeting, meetingKey(m.Map, m.Room), m)
+	return PutJSON(db, BucketMeeting, meetingKey(m.Map, m.Room), m)
 }
 
 // --- Health whitelist ---
 
 func (db *DB) ListWhitelist() ([]WhitelistEntry, error) {
-	return listJSON[WhitelistEntry](db, bucketWhitelist, "")
+	return ListJSON[WhitelistEntry](db, BucketWhitelist, "")
 }
 
 func (db *DB) AddWhitelist(e WhitelistEntry) error {
 	return db.bolt.Update(func(tx *bolt.Tx) error {
-		bkt := tx.Bucket(bucketWhitelist)
+		bkt := tx.Bucket(BucketWhitelist)
 		seq, _ := bkt.NextSequence()
 		data, err := json.Marshal(e)
 		if err != nil {
 			return err
 		}
-		return bkt.Put(seqKey(seq), data)
+		return bkt.Put(SeqKey(seq), data)
 	})
 }
 
@@ -1350,7 +1350,7 @@ func (db *DB) AddWhitelist(e WhitelistEntry) error {
 // the cursor scan, since bbolt forbids mutating a bucket during iteration.
 func (db *DB) DeleteWhitelist(e WhitelistEntry) error {
 	return db.bolt.Update(func(tx *bolt.Tx) error {
-		bkt := tx.Bucket(bucketWhitelist)
+		bkt := tx.Bucket(BucketWhitelist)
 		var toDelete [][]byte
 		c := bkt.Cursor()
 		for k, v := c.First(); k != nil; k, v = c.Next() {
@@ -1376,17 +1376,17 @@ func (db *DB) DeleteWhitelist(e WhitelistEntry) error {
 // --- LDAP sources (config_ldap) ---
 
 func (db *DB) ListLdapSources() ([]LdapSource, error) {
-	srcs, err := listJSON[LdapSource](db, bucketLdapSrc, "")
+	srcs, err := ListJSON[LdapSource](db, BucketLdapSrc, "")
 	sort.Slice(srcs, func(i, j int) bool { return srcs[i].ID < srcs[j].ID })
 	return srcs, err
 }
 
 func (db *DB) PutLdapSource(s LdapSource) error {
-	return putJSON(db, bucketLdapSrc, []byte(fmt.Sprintf("%d", s.ID)), s)
+	return PutJSON(db, BucketLdapSrc, []byte(fmt.Sprintf("%d", s.ID)), s)
 }
 
 func (db *DB) DeleteLdapSource(id int) error {
-	return deleteKey(db, bucketLdapSrc, []byte(fmt.Sprintf("%d", id)))
+	return DeleteKey(db, BucketLdapSrc, []byte(fmt.Sprintf("%d", id)))
 }
 
 // --- Audit log ---
@@ -1403,13 +1403,13 @@ func (db *DB) AuditLog(logType, user, message string) error {
 
 func (db *DB) PutAuditRaw(entry AuditEntry) error {
 	return db.bolt.Update(func(tx *bolt.Tx) error {
-		bkt := tx.Bucket(bucketAudit)
+		bkt := tx.Bucket(BucketAudit)
 		seq, _ := bkt.NextSequence()
 		data, err := json.Marshal(entry)
 		if err != nil {
 			return err
 		}
-		return bkt.Put(seqKey(seq), data)
+		return bkt.Put(SeqKey(seq), data)
 	})
 }
 
@@ -1420,10 +1420,10 @@ func (db *DB) PutAuditRaw(entry AuditEntry) error {
 // above the imported history. Used by the superadmin one-time audit re-import.
 func (db *DB) ReplaceAudit(entries []AuditEntry) error {
 	return db.bolt.Update(func(tx *bolt.Tx) error {
-		if err := tx.DeleteBucket(bucketAudit); err != nil && err != bolt.ErrBucketNotFound {
+		if err := tx.DeleteBucket(BucketAudit); err != nil && err != bolt.ErrBucketNotFound {
 			return err
 		}
-		bkt, err := tx.CreateBucket(bucketAudit)
+		bkt, err := tx.CreateBucket(BucketAudit)
 		if err != nil {
 			return err
 		}
@@ -1433,7 +1433,7 @@ func (db *DB) ReplaceAudit(entries []AuditEntry) error {
 			if err != nil {
 				return err
 			}
-			if err := bkt.Put(seqKey(seq), data); err != nil {
+			if err := bkt.Put(SeqKey(seq), data); err != nil {
 				return err
 			}
 		}
@@ -1444,7 +1444,7 @@ func (db *DB) ReplaceAudit(entries []AuditEntry) error {
 func (db *DB) ListAudit(limit int) ([]AuditEntry, error) {
 	var out []AuditEntry
 	err := db.bolt.View(func(tx *bolt.Tx) error {
-		c := tx.Bucket(bucketAudit).Cursor()
+		c := tx.Bucket(BucketAudit).Cursor()
 		for k, v := c.Last(); k != nil; k, v = c.Prev() {
 			var e AuditEntry
 			if json.Unmarshal(v, &e) == nil {
@@ -1477,7 +1477,7 @@ func (db *DB) ListAuditPage(offset, limit int, fType, fTime, fUser, fInfo string
 	hasMore := false
 	skipped := 0
 	err := db.bolt.View(func(tx *bolt.Tx) error {
-		c := tx.Bucket(bucketAudit).Cursor()
+		c := tx.Bucket(BucketAudit).Cursor()
 		for k, v := c.Last(); k != nil; k, v = c.Prev() {
 			var e AuditEntry
 			if json.Unmarshal(v, &e) != nil {
@@ -1513,15 +1513,75 @@ func (db *DB) ListAuditPage(offset, limit int, fType, fTime, fUser, fInfo string
 // --- Meta (wizard state, etc.) ---
 
 func (db *DB) GetMeta(key string) string {
-	v, _, _ := getJSON[string](db, bucketMeta, []byte(key))
+	v, _, _ := GetJSON[string](db, BucketMeta, []byte(key))
 	return v
 }
 
 func (db *DB) SetMeta(key, value string) error {
-	return putJSON(db, bucketMeta, []byte(key), value)
+	return PutJSON(db, BucketMeta, []byte(key), value)
 }
 
 // IsConfigured reports whether the initial setup has been completed.
 func (db *DB) IsConfigured() bool {
 	return db.GetMeta("setup_done") == "1"
 }
+
+// NormalizeMail canonicalises an e-mail address for storage: trimmed and
+// strictly lowercased. Mail addresses are case-insensitive for our purposes
+// (matching, identifiers, display), so every directory source runs its mail
+// values through this before persisting.
+func NormalizeMail(mail string) string {
+	return strings.ToLower(strings.TrimSpace(mail))
+}
+
+// NormalizeMails canonicalises a slice of mail addresses (e.g. AD
+// proxyAddresses aliases), dropping any that are empty after trimming.
+func NormalizeMails(mails []string) []string {
+	out := make([]string, 0, len(mails))
+	for _, m := range mails {
+		if n := NormalizeMail(m); n != "" {
+			out = append(out, n)
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+// SourceRule is one entry of the stored directory-source priority list. Ref
+// identifies the source: "ldap:<id>", "entra:<id>" or "robin". Slice order is
+// the priority (index 0 = highest). The two flags are stored inverted/
+// omitempty so entries added automatically (or migrated from older installs)
+// default to "assigns desks, deduplicates people".
+type SourceRule struct {
+	Ref string `json:"ref"`
+	// KeepDuplicates lets this (lower priority) source place a person again even
+	// when a higher-priority source already placed them on the same map. It never
+	// lets it overwrite a desk a higher-priority source already owns.
+	KeepDuplicates bool `json:"keepDuplicates,omitempty"`
+	// NoAssign excludes the source from desk assignment while leaving its sync
+	// intact. Stored inverted so existing rules assign by default.
+	NoAssign bool `json:"noAssign,omitempty"`
+}
+
+var metaSourceOrder = []byte("directorySourceOrder")
+
+// GetSourceOrder returns the stored ordered priority list (nil if never set).
+func (db *DB) GetSourceOrder() []SourceRule {
+	rules, _, _ := GetJSON[[]SourceRule](db, BucketMeta, metaSourceOrder)
+	return rules
+}
+
+// SetSourceOrder persists the ordered priority list.
+func (db *DB) SetSourceOrder(rules []SourceRule) error {
+	return PutJSON(db, BucketMeta, metaSourceOrder, rules)
+}
+
+// Bolt exposes the underlying bolt handle. Transitional: only the backup
+// export/import and the identifier migration engine still need raw
+// transactions; both are scheduled to move into this package.
+func (db *DB) Bolt() *bolt.DB { return db.bolt }
+
+// Location returns the display timezone used for admin-facing timestamps.
+func (db *DB) Location() *time.Location { return db.loc }

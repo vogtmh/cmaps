@@ -9,28 +9,28 @@ import (
 // deskItem is one entry in the /rest/desks response. Field names and the
 // "0"/"1" booked string match the legacy PHP API consumed by user.js.
 type deskItem struct {
-	Map      string    `json:"map"`
-	ID       int       `json:"id,string"`
-	Desktype string    `json:"desktype"`
-	X        int       `json:"x"`
-	Y        int       `json:"y"`
-	Dsk      string    `json:"dsk"`
-	Empl     string    `json:"empl"`
-	Avtr     string    `json:"avtr"`
-	Dept     string    `json:"dept"`
-	Fname    string    `json:"fname"`
-	Lname    string    `json:"lname"`
-	Phone    string    `json:"phone"`
-	Mail     string    `json:"mail"`
-	Title    string    `json:"title"`
-	Mobil    string    `json:"mobil"`
-	Color    string    `json:"color"`
-	Parsed   string    `json:"parsed"`
-	Booked   string    `json:"booked"`
+	Map      string `json:"map"`
+	ID       int    `json:"id,string"`
+	Desktype string `json:"desktype"`
+	X        int    `json:"x"`
+	Y        int    `json:"y"`
+	Dsk      string `json:"dsk"`
+	Empl     string `json:"empl"`
+	Avtr     string `json:"avtr"`
+	Dept     string `json:"dept"`
+	Fname    string `json:"fname"`
+	Lname    string `json:"lname"`
+	Phone    string `json:"phone"`
+	Mail     string `json:"mail"`
+	Title    string `json:"title"`
+	Mobil    string `json:"mobil"`
+	Color    string `json:"color"`
+	Parsed   string `json:"parsed"`
+	Booked   string `json:"booked"`
 	// Source identifies the directory a desk occupancy came from: "ldap",
 	// "entraid" or "robin". Empty for manually placed / non-directory desks.
 	// Drives the harmonized (blue) ball color and the per-source name badge.
-	Source   string    `json:"source,omitempty"`
+	Source string `json:"source,omitempty"`
 	// Config* preserve the underlying STORED desk configuration on synthetic
 	// overlay items (e.g. a Robin-occupied desk is shown as "occupied" with the
 	// live occupant in Empl). The editor uses these to edit the real item instead
@@ -42,7 +42,7 @@ type deskItem struct {
 	// desk's occupant. When false the client uses a single shared placeholder URL
 	// (downloaded once) instead of requesting a unique missing image per person.
 	HasAvatar bool      `json:"hasavatar"`
-	Bookdata *bookData `json:"bookdata,omitempty"`
+	Bookdata  *bookData `json:"bookdata,omitempty"`
 }
 
 type bookData struct {
@@ -224,7 +224,6 @@ func sourceLabel(sourceType string) string {
 	}
 	return ""
 }
-
 
 // sameRobinPerson reports whether the Robin desk occupant is the same individual
 // as an AD-mirrored user, comparing the LDAP userid first and then the primary

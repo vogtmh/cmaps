@@ -18,22 +18,6 @@ import (
 // decision is made entirely at RENDER time from the existing per-source caches,
 // so reordering never requires a resync.
 
-// SourceRule is one entry of the stored priority list. Ref identifies the
-// source: "ldap:<id>", "entra:<id>" or "robin". Slice order is the priority
-// (index 0 = highest). The two flags are stored inverted/omitempty so entries
-// added automatically (or migrated from older installs) default to
-// "assigns desks, deduplicates people".
-type SourceRule struct {
-	Ref string `json:"ref"`
-	// KeepDuplicates lets this (lower priority) source place a person again even
-	// when a higher-priority source already placed them on the same map. It never
-	// lets it overwrite a desk a higher-priority source already owns.
-	KeepDuplicates bool `json:"keepDuplicates,omitempty"`
-	// NoAssign excludes the source from desk assignment while leaving its sync
-	// intact. Stored inverted so existing rules assign by default.
-	NoAssign bool `json:"noAssign,omitempty"`
-}
-
 // UnifiedSource is one resolved row of the priority list, combining the stored
 // rule with the live source's metadata. Used by both the admin UI and the
 // render-time assignment engine.
@@ -52,18 +36,8 @@ type UnifiedSource struct {
 	PopulatedSeats int
 }
 
-var metaSourceOrder = []byte("directorySourceOrder")
-
-// getSourceOrder returns the stored ordered priority list (nil if never set).
-func (db *DB) getSourceOrder() []SourceRule {
-	rules, _, _ := getJSON[[]SourceRule](db, bucketMeta, metaSourceOrder)
-	return rules
-}
-
-// SetSourceOrder persists the ordered priority list.
-func (db *DB) SetSourceOrder(rules []SourceRule) error {
-	return putJSON(db, bucketMeta, metaSourceOrder, rules)
-}
+// The stored priority list lives in the meta bucket under
+// "directorySourceOrder"; see store.DB.GetSourceOrder / SetSourceOrder.
 
 // currentRules returns the fully reconciled priority list as SourceRules (every
 // live source present, in current priority order, with its flags). Persisting
@@ -156,7 +130,7 @@ func (app *App) listUnifiedSources() []UnifiedSource {
 		liveRefs = append(liveRefs, "robin")
 	}
 
-	rules := app.db.getSourceOrder()
+	rules := app.db.GetSourceOrder()
 	if len(rules) == 0 {
 		rules = app.defaultSourceOrder(liveRefs)
 	}
@@ -503,4 +477,3 @@ func (app *App) handleRestSourceSeats(w http.ResponseWriter, r *http.Request) {
 		Seats       []sourceSeat `json:"seats"`
 	}{Ref: ref, Description: desc, Count: len(seats), Seats: seats})
 }
-

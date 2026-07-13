@@ -304,7 +304,7 @@ func (app *App) dashboardIntegrations(health map[string]intgHealthResult) []map[
 			o["testOk"] = r.OK
 			o["testMessage"] = r.Message
 			if !r.Checked.IsZero() {
-				o["checked"] = r.Checked.In(app.db.loc).Format("2006-01-02 15:04:05")
+				o["checked"] = r.Checked.In(app.db.Location()).Format("2006-01-02 15:04:05")
 			}
 		} else {
 			o["testDone"] = false
@@ -407,7 +407,7 @@ func (app *App) dashboardVisitors() []map[string]interface{} {
 	for _, s := range stats {
 		byDate[s.Date] = s.Count
 	}
-	now := time.Now().In(app.db.loc)
+	now := time.Now().In(app.db.Location())
 	out := make([]map[string]interface{}, 0, 7)
 	for i := 6; i >= 0; i-- {
 		d := now.AddDate(0, 0, -i)
@@ -422,7 +422,7 @@ func (app *App) dashboardVisitors() []map[string]interface{} {
 }
 
 func (app *App) nowLocal() string {
-	return time.Now().In(app.db.loc).Format("2006-01-02 15:04:05")
+	return time.Now().In(app.db.Location()).Format("2006-01-02 15:04:05")
 }
 
 // humanBytes formats a byte count as a human-readable string (KB/MB/GB/TB).

@@ -120,10 +120,10 @@ type adminData struct {
 	PermAuditlog   int
 	PermAdminpanel int
 
-	GeneralVars             []kv
-	LogoRegular             string
-	LogoHover               string
-	LdapSources             []LdapSource
+	GeneralVars []kv
+	LogoRegular string
+	LogoHover   string
+	LdapSources []LdapSource
 	// UnifiedSources is the ordered, priority-ranked list of every configured
 	// directory source (each LDAP/EntraID config plus Robin) shown in Sync >
 	// General, where the admin reorders priority and toggles assign / keep-dupes.
@@ -868,7 +868,7 @@ func (app *App) saveItemIcon(id string, fh *multipart.FileHeader) error {
 	}
 	defer dst.Close()
 	return png.Encode(dst, img)
-}// normalizeMembers turns a user-entered member list (comma- and/or pipe-separated,
+} // normalizeMembers turns a user-entered member list (comma- and/or pipe-separated,
 // possibly with surrounding spaces) into the stored format: full names joined by
 // "|" with no spaces around the pipes.
 func normalizeMembers(s string) string {
@@ -2601,5 +2601,5 @@ func (app *App) nextSyncLabel(t time.Time, enabled bool) string {
 	if t.IsZero() {
 		return ""
 	}
-	return t.In(app.db.loc).Format("2006-01-02 15:04:05")
+	return t.In(app.db.Location()).Format("2006-01-02 15:04:05")
 }

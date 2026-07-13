@@ -550,14 +550,14 @@ h2{color:#2ecc71;margin:0 0 16px}p{color:#666;margin:0 0 24px}a{color:#0a66c2}</
 	}
 	u.Fullname = fullname
 	u.Mail = mail
-	u.LastLogin = time.Now().In(app.db.loc).Format("2006-01-02 15:04:05")
+	u.LastLogin = time.Now().In(app.db.Location()).Format("2006-01-02 15:04:05")
 	_ = app.db.PutUser(u)
 
 	// Capture the full response for admins so they can inspect exactly what the
 	// IdP sent from the SAML SSO subtab.
 	if u.Role != 0 {
 		samlStoreCapture(&samlCapture{
-			When:       time.Now().In(app.db.loc).Format("2006-01-02 15:04:05"),
+			When:       time.Now().In(app.db.Location()).Format("2006-01-02 15:04:05"),
 			Username:   username,
 			RawXML:     string(xmlBytes),
 			Attributes: samlExtractAllAttrs(assertion),

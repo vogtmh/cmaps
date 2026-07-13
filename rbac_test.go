@@ -1,13 +1,23 @@
 package main
 
-import "testing"
+import (
+	"path/filepath"
+	"testing"
+
+	"companymaps/internal/store"
+)
 
 // newTestApp builds a minimal App backed by a temp database, sufficient for
 // permission checks.
 func newTestApp(t *testing.T) *App {
 	t.Helper()
+	db, err := store.Open(filepath.Join(t.TempDir(), "test.db"))
+	if err != nil {
+		t.Fatalf("store.Open: %v", err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
 	return &App{
-		db:       newTestDB(t),
+		db:       db,
 		sessions: NewSessionStore(),
 	}
 }

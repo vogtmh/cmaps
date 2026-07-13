@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"bytes"
 	"companymaps/internal/config"
+	"companymaps/internal/store"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -32,12 +33,12 @@ type backupGroup struct {
 // backupGroups is the authoritative list of import-selectable data sets. Order
 // is the order shown in the import dialog.
 var backupGroups = []backupGroup{
-	{Key: "maps", Label: "Maps & desks", Buckets: [][]byte{bucketMaps, bucketDesks}},
-	{Key: "users", Label: "Users, roles, teams & departments", Buckets: [][]byte{bucketUsers, bucketRoles, bucketTeams, bucketDepts, bucketVips}},
-	{Key: "ldap", Label: "LDAP directory & sources", Buckets: [][]byte{bucketLdap, bucketDirectory, bucketLdapSrc, bucketChangelog, bucketSrcMirror, bucketSrcDir}},
-	{Key: "bookings", Label: "Bookings", Buckets: [][]byte{bucketBookings}},
-	{Key: "settings", Label: "Settings & integrations", Buckets: [][]byte{bucketSettings, bucketMeta, bucketGeoCfg, bucketRobinCfg, bucketRobin, bucketRobinDesk, bucketMeeting, bucketWhitelist}},
-	{Key: "stats", Label: "Statistics & audit log", Buckets: [][]byte{bucketStats, bucketTracking, bucketAudit}},
+	{Key: "maps", Label: "Maps & desks", Buckets: [][]byte{store.BucketMaps, store.BucketDesks}},
+	{Key: "users", Label: "Users, roles, teams & departments", Buckets: [][]byte{store.BucketUsers, store.BucketRoles, store.BucketTeams, store.BucketDepts, store.BucketVips}},
+	{Key: "ldap", Label: "LDAP directory & sources", Buckets: [][]byte{store.BucketLdap, store.BucketDirectory, store.BucketLdapSrc, store.BucketChangelog, store.BucketSrcMirror, store.BucketSrcDir}},
+	{Key: "bookings", Label: "Bookings", Buckets: [][]byte{store.BucketBookings}},
+	{Key: "settings", Label: "Settings & integrations", Buckets: [][]byte{store.BucketSettings, store.BucketMeta, store.BucketGeoCfg, store.BucketRobinCfg, store.BucketRobin, store.BucketRobinDesk, store.BucketMeeting, store.BucketWhitelist}},
+	{Key: "stats", Label: "Statistics & audit log", Buckets: [][]byte{store.BucketStats, store.BucketTracking, store.BucketAudit}},
 	{Key: "mapimages", Label: "Map images", Dir: "maps"},
 	{Key: "logos", Label: "Logos", Dir: "logos"},
 	{Key: "avatars", Label: "Avatar cache", Dir: "avatarcache"},
@@ -194,7 +195,7 @@ func (app *App) buildExport() error {
 		_ = closeAndRemove(tmp, zw, tmpPath)
 		return fmt.Errorf("zip db entry: %w", err)
 	}
-	if err := app.db.bolt.View(func(tx *bolt.Tx) error {
+	if err := app.db.Bolt().View(func(tx *bolt.Tx) error {
 		_, werr := tx.WriteTo(dbWriter)
 		return werr
 	}); err != nil {
@@ -433,7 +434,7 @@ func (app *App) importBuckets(srcDB *bolt.DB, buckets [][]byte) (int, error) {
 		return 0, err
 	}
 
-	if err := app.db.bolt.Update(func(tx *bolt.Tx) error {
+	if err := app.db.Bolt().Update(func(tx *bolt.Tx) error {
 		for _, name := range buckets {
 			if err := tx.DeleteBucket(name); err != nil && err != bolt.ErrBucketNotFound {
 				return err
