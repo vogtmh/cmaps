@@ -157,7 +157,7 @@ func (app *App) renderIndex(w http.ResponseWriter, r *http.Request, sess Session
 				label = stripNomap(label)
 				isPlaceholder = true
 			} else if m != "overview" {
-				if _, err := os.Stat(app.cfg.dataPath("maps", m+".png")); err != nil {
+				if _, err := os.Stat(app.cfg.DataPath("maps", m+".png")); err != nil {
 					isPlaceholder = true
 				}
 			}
@@ -198,7 +198,7 @@ func (app *App) renderIndex(w http.ResponseWriter, r *http.Request, sess Session
 	// front-end shows a placeholder instead of a broken image.
 	hasMapImage := true
 	if mapName != "overview" {
-		if _, err := os.Stat(app.cfg.dataPath("maps", mapName+".png")); err != nil {
+		if _, err := os.Stat(app.cfg.DataPath("maps", mapName+".png")); err != nil {
 			hasMapImage = false
 		}
 	}
@@ -282,7 +282,7 @@ func (app *App) renderIndex(w http.ResponseWriter, r *http.Request, sess Session
 	avatarURL := "images/noavatar2.png"
 	if loggedIn {
 		userid := app.sessionUserID(sess)
-		if _, err := os.Stat(app.cfg.dataPath("avatarcache", userid+".jpg")); err == nil {
+		if _, err := os.Stat(app.cfg.DataPath("avatarcache", userid+".jpg")); err == nil {
 			avatarURL = "avatarcache/" + userid + ".jpg?time=" + strconv.FormatInt(time.Now().Unix(), 10)
 		}
 	}

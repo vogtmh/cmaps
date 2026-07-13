@@ -426,7 +426,7 @@ func extractProxyAliases(proxies []string, primaryMail string) []string {
 // "has avatar" flag.
 func (app *App) avatarFileSet() map[string]bool {
 	set := map[string]bool{}
-	entries, err := os.ReadDir(app.cfg.dataPath("avatarcache"))
+	entries, err := os.ReadDir(app.cfg.DataPath("avatarcache"))
 	if err != nil {
 		return set
 	}

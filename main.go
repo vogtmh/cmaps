@@ -1,6 +1,7 @@
 package main
 
 import (
+	"companymaps/internal/config"
 	"embed"
 	"html/template"
 	"io/fs"
@@ -50,19 +51,19 @@ func cacheControl(maxAge time.Duration, h http.Handler) http.Handler {
 }
 
 func main() {
-	cfg, err := loadOrCreateConfig()
+	cfg, err := config.LoadOrCreate()
 	if err != nil {
 		log.Fatalf("config: %v", err)
 	}
 
 	// Ensure the data directory and its subfolders exist.
-	for _, d := range []string{cfg.DataDir, cfg.dataPath("maps"), cfg.dataPath("avatarcache"), cfg.dataPath("logos"), cfg.dataPath("itemtypes")} {
+	for _, d := range []string{cfg.DataDir, cfg.DataPath("maps"), cfg.DataPath("avatarcache"), cfg.DataPath("logos"), cfg.DataPath("itemtypes")} {
 		if err := os.MkdirAll(d, 0755); err != nil {
 			log.Fatalf("creating data dir %s: %v", d, err)
 		}
 	}
 
-	db, err := openDB(cfg.dataPath("cmaps.db"))
+	db, err := openDB(cfg.DataPath("cmaps.db"))
 	if err != nil {
 		log.Fatalf("database: %v", err)
 	}
@@ -214,10 +215,10 @@ func (app *App) routes(mux *http.ServeMux) {
 	mux.Handle("/static/", cacheControl(24*time.Hour, http.StripPrefix("/static/", http.FileServer(http.FS(app.staticFS)))))
 
 	// User data served from the data directory (maps, avatar cache).
-	mux.Handle("/maps/", cacheControl(24*time.Hour, http.StripPrefix("/maps/", http.FileServer(http.Dir(app.cfg.dataPath("maps"))))))
+	mux.Handle("/maps/", cacheControl(24*time.Hour, http.StripPrefix("/maps/", http.FileServer(http.Dir(app.cfg.DataPath("maps"))))))
 	mux.HandleFunc("/avatarcache/", app.serveAvatar)
-	mux.Handle("/logos/", cacheControl(24*time.Hour, http.StripPrefix("/logos/", http.FileServer(http.Dir(app.cfg.dataPath("logos"))))))
-	mux.Handle("/itemicons/", cacheControl(24*time.Hour, http.StripPrefix("/itemicons/", http.FileServer(http.Dir(app.cfg.dataPath("itemtypes"))))))
+	mux.Handle("/logos/", cacheControl(24*time.Hour, http.StripPrefix("/logos/", http.FileServer(http.Dir(app.cfg.DataPath("logos"))))))
+	mux.Handle("/itemicons/", cacheControl(24*time.Hour, http.StripPrefix("/itemicons/", http.FileServer(http.Dir(app.cfg.DataPath("itemtypes"))))))
 
 	// First-run setup wizard.
 	mux.HandleFunc("/setup", app.handleSetup)
@@ -259,5 +260,5 @@ func (app *App) registerSAMLRoutes(mux *http.ServeMux) {
 // dataFile resolves a path inside the data directory, guarding against traversal.
 func (app *App) dataFile(sub, name string) string {
 	clean := filepath.Base(name)
-	return app.cfg.dataPath(sub, clean)
+	return app.cfg.DataPath(sub, clean)
 }

@@ -242,7 +242,7 @@ func (app *App) serveAvatar(w http.ResponseWriter, r *http.Request) {
 	name := strings.TrimPrefix(path.Clean(r.URL.Path), "/avatarcache/")
 	w.Header().Set("Cache-Control", "public, max-age=86400")
 	if name != "" && !strings.HasPrefix(name, "..") && !strings.ContainsAny(name, "/\\") {
-		if f, err := os.Open(filepath.Join(app.cfg.dataPath("avatarcache"), name)); err == nil {
+		if f, err := os.Open(filepath.Join(app.cfg.DataPath("avatarcache"), name)); err == nil {
 			defer f.Close()
 			if info, err := f.Stat(); err == nil && !info.IsDir() {
 				http.ServeContent(w, r, info.Name(), info.ModTime(), f)

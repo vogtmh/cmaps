@@ -1,4 +1,9 @@
-package main
+// Package config loads and persists the externally-configurable settings of
+// the application (config.json next to the executable). Everything else
+// (maps, desks, users, ldap mirror, bookings, settings, secrets like the LDAP
+// bind password and Robin token) lives in the boltDB inside the data
+// directory and is editable from the admin UI.
+package config
 
 import (
 	"crypto/rand"
@@ -9,12 +14,13 @@ import (
 	"path/filepath"
 )
 
-const configFile = "config.json"
+// FileName is the name of the config file, sitting next to the executable.
+const FileName = "config.json"
+
+const configFile = FileName
 
 // Config holds all externally-configurable settings, persisted to config.json
-// next to the executable. Everything else (maps, desks, users, ldap mirror,
-// bookings, settings, secrets like the LDAP bind password and Robin token) lives
-// in the boltDB inside the data directory and is editable from the admin UI.
+// next to the executable.
 type Config struct {
 	ListenAddr    string     `json:"listen_addr"`
 	AdminPassword string     `json:"admin_password"`
@@ -23,8 +29,8 @@ type Config struct {
 }
 
 // SAMLConfig holds the SAML SP/IdP configuration. The SP is mounted at the exact
-// legacy SimpleSAMLphp paths (see saml.go) so an existing Entra app registration
-// requires no changes.
+// legacy SimpleSAMLphp paths (see the saml handlers) so an existing Entra app
+// registration requires no changes.
 type SAMLConfig struct {
 	Enabled                    bool   `json:"enabled"`
 	AllowLocalPasswordFallback bool   `json:"allow_local_password_fallback"`
@@ -59,15 +65,26 @@ const (
 	attrMailDefault = "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress"
 )
 
-func (s SAMLConfig) attrSamAccount() string {
+// AttrSamAccount returns the SAML attribute name carrying the samaccountname.
+func (s SAMLConfig) AttrSamAccount() string {
 	return orDefault(s.AttributeSamAccount, attrSamAccountDefault)
 }
-func (s SAMLConfig) attrGivenName() string {
+
+// AttrGivenName returns the SAML attribute name carrying the given name.
+func (s SAMLConfig) AttrGivenName() string {
 	return orDefault(s.AttributeGivenName, attrGivenNameDefault)
 }
-func (s SAMLConfig) attrSurname() string  { return orDefault(s.AttributeSurname, attrSurnameDefault) }
-func (s SAMLConfig) attrFullName() string { return orDefault(s.AttributeFullName, attrFullNameDefault) }
-func (s SAMLConfig) attrMail() string     { return orDefault(s.AttributeMail, attrMailDefault) }
+
+// AttrSurname returns the SAML attribute name carrying the surname.
+func (s SAMLConfig) AttrSurname() string { return orDefault(s.AttributeSurname, attrSurnameDefault) }
+
+// AttrFullName returns the SAML attribute name carrying the display name.
+func (s SAMLConfig) AttrFullName() string {
+	return orDefault(s.AttributeFullName, attrFullNameDefault)
+}
+
+// AttrMail returns the SAML attribute name carrying the mail address.
+func (s SAMLConfig) AttrMail() string { return orDefault(s.AttributeMail, attrMailDefault) }
 
 func orDefault(v, def string) string {
 	if v == "" {
@@ -76,11 +93,14 @@ func orDefault(v, def string) string {
 	return v
 }
 
-func loadOrCreateConfig() (*Config, error) {
+// LoadOrCreate reads config.json, creating it with generated defaults when it
+// does not exist yet. Missing fields from older config files are backfilled
+// and persisted.
+func LoadOrCreate() (*Config, error) {
 	data, err := os.ReadFile(configFile)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return createDefaultConfig()
+			return createDefault()
 		}
 		return nil, fmt.Errorf("reading config: %w", err)
 	}
@@ -106,14 +126,14 @@ func loadOrCreateConfig() (*Config, error) {
 		changed = true
 	}
 	if changed {
-		if err := saveConfig(&cfg); err != nil {
+		if err := Save(&cfg); err != nil {
 			return nil, err
 		}
 	}
 	return &cfg, nil
 }
 
-func createDefaultConfig() (*Config, error) {
+func createDefault() (*Config, error) {
 	password := generateRandomPassword(16)
 
 	cfg := &Config{
@@ -127,7 +147,7 @@ func createDefaultConfig() (*Config, error) {
 		},
 	}
 
-	if err := saveConfig(cfg); err != nil {
+	if err := Save(cfg); err != nil {
 		return nil, err
 	}
 
@@ -136,7 +156,8 @@ func createDefaultConfig() (*Config, error) {
 	return cfg, nil
 }
 
-func saveConfig(cfg *Config) error {
+// Save writes the config back to config.json.
+func Save(cfg *Config) error {
 	data, err := json.MarshalIndent(cfg, "", "  ")
 	if err != nil {
 		return fmt.Errorf("marshaling config: %w", err)
@@ -144,15 +165,20 @@ func saveConfig(cfg *Config) error {
 	return os.WriteFile(configFile, data, 0600)
 }
 
-// dataPath returns an absolute path inside the configured data directory.
-func (cfg *Config) dataPath(elem ...string) string {
+// DataPath returns a path inside the configured data directory.
+func (cfg *Config) DataPath(elem ...string) string {
 	return filepath.Join(append([]string{cfg.DataDir}, elem...)...)
 }
 
-func generateRandomPassword(length int) string {
+// GenerateRandomPassword returns a random hex password of the given length.
+// It is also used by the backup export to swap the real admin password for a
+// throwaway value.
+func GenerateRandomPassword(length int) string {
 	b := make([]byte, length)
 	if _, err := rand.Read(b); err != nil {
 		panic("failed to read random bytes: " + err.Error())
 	}
 	return hex.EncodeToString(b)[:length]
 }
+
+func generateRandomPassword(length int) string { return GenerateRandomPassword(length) }

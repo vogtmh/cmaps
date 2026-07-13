@@ -353,7 +353,7 @@ func (app *App) ensureDemoAvatars(dir []DirectoryUser) {
 		if id == "" {
 			continue
 		}
-		if _, err := os.Stat(app.cfg.dataPath("avatarcache", id+".jpg")); err == nil {
+		if _, err := os.Stat(app.cfg.DataPath("avatarcache", id+".jpg")); err == nil {
 			continue
 		}
 		seq := demoSeq(d.Samaccountname)
@@ -428,7 +428,7 @@ func (app *App) removeDemoData() error {
 	_ = app.db.DeleteSourceDir(demoSourceID)
 	for _, d := range app.demoDirectoryUsers() {
 		if id := strings.TrimSpace(d.Userid); id != "" {
-			_ = removeFileIfExists(app.cfg.dataPath("avatarcache", id+".jpg"))
+			_ = removeFileIfExists(app.cfg.DataPath("avatarcache", id+".jpg"))
 		}
 	}
 	for _, m := range []string{"germany", "usa"} {
@@ -438,7 +438,7 @@ func (app *App) removeDemoData() error {
 			}
 		}
 		_ = app.db.DeleteMap(m)
-		_ = removeFileIfExists(app.cfg.dataPath("maps", m+".png"))
+		_ = removeFileIfExists(app.cfg.DataPath("maps", m+".png"))
 	}
 	_, err := app.rebuildLdapMirror(false)
 	return err
@@ -477,7 +477,7 @@ func (app *App) copySampleMap(sampleName, mapName string) error {
 	if err != nil {
 		return fmt.Errorf("reading sample map %s: %w", sampleName, err)
 	}
-	dst := app.cfg.dataPath("maps", mapName+".png")
+	dst := app.cfg.DataPath("maps", mapName+".png")
 	return os.WriteFile(dst, data, 0644)
 }
 
@@ -486,7 +486,7 @@ func (app *App) copySampleAvatar(sampleName, userid string) error {
 	if err != nil {
 		return fmt.Errorf("reading sample avatar %s: %w", sampleName, err)
 	}
-	dst := app.cfg.dataPath("avatarcache", userid+".jpg")
+	dst := app.cfg.DataPath("avatarcache", userid+".jpg")
 	return os.WriteFile(dst, data, 0644)
 }
 

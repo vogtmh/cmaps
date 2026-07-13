@@ -644,7 +644,7 @@ func (app *App) handleAdminPost(w http.ResponseWriter, r *http.Request, sess Ses
 					_ = app.db.DeleteDesk(name, d.ID)
 				}
 			}
-			_ = removeFileIfExists(app.cfg.dataPath("maps", name+".png"))
+			_ = removeFileIfExists(app.cfg.DataPath("maps", name+".png"))
 			_ = app.db.AuditLog("Maps", sess.Username, "Map deleted ("+name+")")
 			return "Map deleted."
 		}
@@ -656,7 +656,7 @@ func (app *App) handleAdminPost(w http.ResponseWriter, r *http.Request, sess Ses
 			if name == "overview" {
 				return ""
 			}
-			_ = removeFileIfExists(app.cfg.dataPath("maps", name+".png"))
+			_ = removeFileIfExists(app.cfg.DataPath("maps", name+".png"))
 			_ = app.db.AuditLog("Maps", sess.Username, "Map image removed, converted to placeholder ("+name+")")
 			return "Map image removed. The map is now shown as a placeholder."
 		}
@@ -800,7 +800,7 @@ func itemTypeSlug(s string) string {
 func (app *App) saveItemTypeFromForm(r *http.Request, sess Session) string {
 	if del := r.FormValue("deleteType"); del != "" {
 		_ = app.db.DeleteItemType(del)
-		_ = os.Remove(app.cfg.dataPath("itemtypes", filepath.Base(del)+".png"))
+		_ = os.Remove(app.cfg.DataPath("itemtypes", filepath.Base(del)+".png"))
 		_ = app.db.AuditLog("Desks", sess.Username, "Custom item type removed ("+del+")")
 		return "Item type removed."
 	}
@@ -862,7 +862,7 @@ func (app *App) saveItemIcon(id string, fh *multipart.FileHeader) error {
 		return err
 	}
 
-	dst, err := os.Create(app.cfg.dataPath("itemtypes", filepath.Base(id)+".png"))
+	dst, err := os.Create(app.cfg.DataPath("itemtypes", filepath.Base(id)+".png"))
 	if err != nil {
 		return err
 	}
@@ -921,7 +921,7 @@ func (app *App) saveLogoImage(name string, fh *multipart.FileHeader) error {
 		return err
 	}
 
-	dst, err := os.Create(app.cfg.dataPath("logos", name+".png"))
+	dst, err := os.Create(app.cfg.DataPath("logos", name+".png"))
 	if err != nil {
 		return err
 	}
@@ -1023,9 +1023,9 @@ func (app *App) updateMapFromForm(r *http.Request, sess Session) string {
 		if err := app.db.RenameMap(orig, newName); err != nil {
 			return "Error renaming map: " + err.Error()
 		}
-		oldPath := app.cfg.dataPath("maps", orig+".png")
+		oldPath := app.cfg.DataPath("maps", orig+".png")
 		if _, err := os.Stat(oldPath); err == nil {
-			_ = os.Rename(oldPath, app.cfg.dataPath("maps", newName+".png"))
+			_ = os.Rename(oldPath, app.cfg.DataPath("maps", newName+".png"))
 		}
 		if updated, ok, _ := app.db.GetMap(newName); ok {
 			m = updated
@@ -1488,7 +1488,7 @@ func (app *App) buildAdminData(r *http.Request, sess Session, tab, msg string) a
 				continue
 			}
 			row := mapRow{MapInfo: m}
-			if _, err := os.Stat(app.cfg.dataPath("maps", m.Mapname+".png")); err == nil {
+			if _, err := os.Stat(app.cfg.DataPath("maps", m.Mapname+".png")); err == nil {
 				row.HasFile = true
 			}
 			if m.Mapname == "overview" {

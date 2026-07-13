@@ -3,6 +3,7 @@ package main
 import (
 	"archive/zip"
 	"bytes"
+	"companymaps/internal/config"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -147,7 +148,7 @@ func (app *App) buildExport() error {
 	// Count asset files up front so the progress bar is determinate (+1 for db).
 	total := 1
 	for _, dir := range backupAssetDirs {
-		total += countFiles(app.cfg.dataPath(dir))
+		total += countFiles(app.cfg.DataPath(dir))
 	}
 	app.exportProg.BeginPhase(total, "Snapshotting database…")
 
@@ -175,10 +176,10 @@ func (app *App) buildExport() error {
 	// admin password swapped for a fresh random value so the real break-glass
 	// password is never disclosed in a backup. Parsed as a generic map so any
 	// fields (including ones this build doesn't know about) are preserved.
-	if raw, err := os.ReadFile(configFile); err == nil {
+	if raw, err := os.ReadFile(config.FileName); err == nil {
 		var cfgMap map[string]interface{}
 		if json.Unmarshal(raw, &cfgMap) == nil {
-			cfgMap["admin_password"] = generateRandomPassword(16)
+			cfgMap["admin_password"] = config.GenerateRandomPassword(16)
 			if cb, err := json.MarshalIndent(cfgMap, "", "  "); err == nil {
 				if fw, err := zw.Create("config.json"); err == nil {
 					_, _ = fw.Write(cb)
@@ -204,7 +205,7 @@ func (app *App) buildExport() error {
 
 	// Asset directories — copied file by file, preserving the dir/<name> layout.
 	for _, dir := range backupAssetDirs {
-		root := app.cfg.dataPath(dir)
+		root := app.cfg.DataPath(dir)
 		err := filepath.WalkDir(root, func(p string, d os.DirEntry, err error) error {
 			if err != nil {
 				return nil // skip unreadable / missing entries
@@ -460,7 +461,7 @@ func (app *App) importBuckets(srcDB *bolt.DB, buckets [][]byte) (int, error) {
 // the archive are considered, and each is flattened to its base name to defend
 // against zip path traversal.
 func (app *App) importAssetDir(zr *zip.Reader, dir string) (int, error) {
-	dst := app.cfg.dataPath(dir)
+	dst := app.cfg.DataPath(dir)
 	if err := os.MkdirAll(dst, 0755); err != nil {
 		return 0, err
 	}

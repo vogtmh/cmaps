@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"companymaps/internal/config"
 	"compress/flate"
 	"crypto/rand"
 	"crypto/sha256"
@@ -491,11 +492,11 @@ h2{color:#2ecc71;margin:0 0 16px}p{color:#666;margin:0 0 24px}a{color:#0a66c2}</
 	samlFlows.markConsumed(responseID)
 	samlFlows.markConsumed(assertionID)
 
-	samaccountname := samlExtractAttr(assertion, cfg.attrSamAccount())
-	givenname := samlExtractAttr(assertion, cfg.attrGivenName())
-	surname := samlExtractAttr(assertion, cfg.attrSurname())
-	fullname := samlExtractAttr(assertion, cfg.attrFullName())
-	mail := normalizeMail(samlExtractAttr(assertion, cfg.attrMail()))
+	samaccountname := samlExtractAttr(assertion, cfg.AttrSamAccount())
+	givenname := samlExtractAttr(assertion, cfg.AttrGivenName())
+	surname := samlExtractAttr(assertion, cfg.AttrSurname())
+	fullname := samlExtractAttr(assertion, cfg.AttrFullName())
+	mail := normalizeMail(samlExtractAttr(assertion, cfg.AttrMail()))
 	if fullname == "" {
 		fullname = strings.TrimSpace(givenname + " " + surname)
 	}
@@ -697,13 +698,13 @@ func (app *App) handleSAMLSettings(w http.ResponseWriter, r *http.Request) {
 	case http.MethodGet:
 		json.NewEncoder(w).Encode(app.cfg.SAML)
 	case http.MethodPut, http.MethodPost:
-		var incoming SAMLConfig
+		var incoming config.SAMLConfig
 		if err := json.NewDecoder(r.Body).Decode(&incoming); err != nil {
 			http.Error(w, "invalid JSON", http.StatusBadRequest)
 			return
 		}
 		app.cfg.SAML = incoming
-		if err := saveConfig(app.cfg); err != nil {
+		if err := config.Save(app.cfg); err != nil {
 			log.Printf("SAML settings: save: %v", err)
 			http.Error(w, "failed to save settings", http.StatusInternalServerError)
 			return
@@ -796,7 +797,7 @@ func (app *App) handleSAMLImportMetadata(w http.ResponseWriter, r *http.Request)
 		app.cfg.SAML.EntraTenantID = parsed.TenantID
 	}
 	app.cfg.SAML.FederationMetadataURL = req.URL
-	if err := saveConfig(app.cfg); err != nil {
+	if err := config.Save(app.cfg); err != nil {
 		json.NewEncoder(w).Encode(map[string]string{"error": "save failed: " + err.Error()})
 		return
 	}

@@ -76,7 +76,7 @@ func (app *App) handleRestConfig(w http.ResponseWriter, r *http.Request) {
 			if strings.Contains(strings.ToLower(m.Mapname), "-nomap") {
 				placeholder = true
 			} else if strings.ToLower(m.Mapname) != "overview" {
-				if _, err := os.Stat(app.cfg.dataPath("maps", m.Mapname+".png")); err != nil {
+				if _, err := os.Stat(app.cfg.DataPath("maps", m.Mapname+".png")); err != nil {
 					placeholder = true
 				}
 			}

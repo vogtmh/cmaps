@@ -43,7 +43,7 @@ func (app *App) handleRestAvatar(w http.ResponseWriter, r *http.Request) {
 		_ = r.ParseForm()
 	}
 	mode := r.FormValue("mode")
-	target := app.cfg.dataPath("avatarcache", userid+".jpg")
+	target := app.cfg.DataPath("avatarcache", userid+".jpg")
 
 	switch mode {
 	case "delete":
@@ -171,7 +171,7 @@ func (app *App) handleRestAvatarOrientation(w http.ResponseWriter, r *http.Reque
 	}
 
 	mode := r.FormValue("mode")
-	dir := app.cfg.dataPath("avatarcache")
+	dir := app.cfg.DataPath("avatarcache")
 
 	switch mode {
 	case "list":

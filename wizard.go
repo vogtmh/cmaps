@@ -98,8 +98,8 @@ func (app *App) handleSetupDataCopy(w http.ResponseWriter, r *http.Request) {
 	src := strings.TrimRight(orDefault(r.FormValue("datapath"), "/var/www/html"), "/")
 	_ = app.db.SetMeta("migrate_datapath", src)
 
-	maps, err1 := copyDir(filepath.Join(src, "maps"), app.cfg.dataPath("maps"))
-	avs, err2 := copyDir(filepath.Join(src, "avatarcache"), app.cfg.dataPath("avatarcache"))
+	maps, err1 := copyDir(filepath.Join(src, "maps"), app.cfg.DataPath("maps"))
+	avs, err2 := copyDir(filepath.Join(src, "avatarcache"), app.cfg.DataPath("avatarcache"))
 	if err1 != nil && err2 != nil {
 		http.Redirect(w, r, "/setup?error="+urlMsg(fmt.Sprintf("Copy failed (maps: %v, avatars: %v)", err1, err2)), http.StatusSeeOther)
 		return

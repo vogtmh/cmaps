@@ -1,6 +1,7 @@
 package main
 
 import (
+	"companymaps/internal/config"
 	"companymaps/internal/progress"
 
 	"crypto/rand"
@@ -14,7 +15,7 @@ import (
 
 // App is the central application container shared by all handlers.
 type App struct {
-	cfg        *Config
+	cfg        *config.Config
 	db         *DB
 	sessions   *SessionStore
 	tmpl       *template.Template

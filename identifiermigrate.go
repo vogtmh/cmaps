@@ -145,7 +145,7 @@ func (app *App) bucketCount(bucket []byte) int {
 
 // avatarCount returns the number of cached avatar files.
 func (app *App) avatarCount() int {
-	entries, err := os.ReadDir(app.cfg.dataPath("avatarcache"))
+	entries, err := os.ReadDir(app.cfg.DataPath("avatarcache"))
 	if err != nil {
 		return 0
 	}
@@ -359,7 +359,7 @@ func (app *App) stageAdmins(plan *migPlan) (total, changed int, err error) {
 // avatarChangeCount counts avatar files whose base id maps to a different target
 // id — i.e. the number of files that Apply will rename. No files are touched.
 func (app *App) avatarChangeCount(plan *migPlan) (total, changed int) {
-	entries, err := os.ReadDir(app.cfg.dataPath("avatarcache"))
+	entries, err := os.ReadDir(app.cfg.DataPath("avatarcache"))
 	if err != nil {
 		return 0, 0
 	}
@@ -677,7 +677,7 @@ func (app *App) runIdentifierApply(target string) {
 	app.sessions.Remap(plan.mapUsername)
 
 	// Avatar files: rename <old>.jpg -> <new>.jpg (disk is only touched now).
-	entries, _ := os.ReadDir(app.cfg.dataPath("avatarcache"))
+	entries, _ := os.ReadDir(app.cfg.DataPath("avatarcache"))
 	prog.BeginPhase(len(entries), "Renaming avatars")
 	avatars := 0
 	for _, e := range entries {
@@ -691,8 +691,8 @@ func (app *App) runIdentifierApply(target string) {
 		if !ok || strings.EqualFold(nb, base) {
 			continue
 		}
-		src := app.cfg.dataPath("avatarcache", name)
-		dst := app.cfg.dataPath("avatarcache", nb+".jpg")
+		src := app.cfg.DataPath("avatarcache", name)
+		dst := app.cfg.DataPath("avatarcache", nb+".jpg")
 		if err := copyFile(src, dst); err != nil {
 			prog.Logf("   ✗ avatar %s: %v", base, err)
 			continue

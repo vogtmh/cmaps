@@ -252,7 +252,7 @@ func (app *App) saveMapImage(mapName string, fh *multipart.FileHeader) error {
 		return err
 	}
 
-	dst, err := os.Create(app.cfg.dataPath("maps", mapName+".png"))
+	dst, err := os.Create(app.cfg.DataPath("maps", mapName+".png"))
 	if err != nil {
 		return err
 	}

@@ -78,7 +78,7 @@ func (app *App) handleMobile(w http.ResponseWriter, r *http.Request) {
 		}
 		// Avatar lookup mirrors the desktop index page.
 		userid := app.sessionUserID(sess)
-		if _, err := os.Stat(app.cfg.dataPath("avatarcache", userid+".jpg")); err == nil {
+		if _, err := os.Stat(app.cfg.DataPath("avatarcache", userid+".jpg")); err == nil {
 			bs.AvatarURL = "/avatarcache/" + userid + ".jpg?time=" + strconv.FormatInt(time.Now().Unix(), 10)
 		}
 		if c, err := r.Cookie("map"); err == nil && c.Value != "" {
