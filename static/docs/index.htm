@@ -201,6 +201,38 @@
               <div class="cl-group">
 
             <div class="changelog-entry major">
+              <div class="changelog-head"><span class="changelog-date">2026-07-13</span><span class="changelog-ver">Version 9.2</span></div>
+              <div class="changelog-body">
+                <div class="cl-features">
+                  <div class="cl-feature">
+                    <div class="cl-feature-title">Brand-new admin dashboard</div>
+                    <p>Opening the admin panel now lands on a fresh dashboard that gives you an at-a-glance overview of your installation: the running version and build date, live system health (memory and disk usage) and a status card for every configured integration. Connectivity to LDAP, Microsoft Entra ID, Robin and SAML is checked automatically in the background so you can spot a broken connection before your users do.</p>
+                  </div>
+                  <div class="cl-feature">
+                    <div class="cl-feature-title">Unified directory priority list</div>
+                    <p>All of your user directories are now managed in a single, reorderable priority list &ndash; every LDAP and Microsoft Entra ID connection plus Robin, side by side. Drag sources into the order you want and, per source, choose whether it assigns people to desks and whether duplicates are kept. When the same person appears in several directories, the higher-priority source wins, so there's no more juggling of separate, hard-coded rules. Changes take effect instantly at render time, without a resync, and a new seat list lets you preview exactly who ends up where.</p>
+                  </div>
+                  <div class="cl-feature">
+                    <div class="cl-feature-title">Source badge on every desk</div>
+                    <p>The extra Robin-only desk colour is gone. Every occupied directory desk now shares one harmonized look and carries a small badge showing which directory it came from &ndash; LDAP, EntraID or Robin &ndash; so you can tell at a glance where an occupancy originates, whatever the source.</p>
+                  </div>
+                  <div class="cl-feature">
+                    <div class="cl-feature-title">Identifier migration tool</div>
+                    <p>You can now switch the identifier that ties users to their data from the Windows account name (samAccountName) to their e-mail address &ndash; and back &ndash; straight from the integration migration assistant. The migration runs as a safe, two-phase &ldquo;create the new, then remove the old&rdquo; process that converts avatars, admin records, audit log, bookings and desk references in one go, only flipping the setting once everything is converted, so an interrupted run never leaves things half-migrated.</p>
+                  </div>
+                </div>
+                <div class="cl-other-title">Other changes</div>
+                <ul>
+                  <li>New installations now use the e-mail address as the default identifier; existing installs keep their current setting untouched.</li>
+                  <li>Microsoft Entra ID connections can now assign people to desks just like LDAP, following the same priority list.</li>
+                  <li>Reworked the built-in demo data so it plugs into the new priority engine and works in both identifier modes.</li>
+                  <li>Fixed several directory-migration issues and a case where moving a desk could turn it into a manually placed one.</li>
+                  <li>Various fixes and polish across the users admin panel.</li>
+                </ul>
+              </div>
+            </div>
+
+            <div class="changelog-entry major">
               <div class="changelog-head"><span class="changelog-date">2026-07-02</span><span class="changelog-ver">Version 9.1</span></div>
               <div class="changelog-body">
                 <div class="cl-features">

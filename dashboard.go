@@ -14,7 +14,7 @@ import (
 
 // appVersion is the CompanyMaps version, surfaced on the dashboard. Bump this
 // manually after meaningful changes.
-const appVersion = "9.1"
+const appVersion = "9.2"
 
 // buildDate returns the date the running binary was built, derived from the
 // executable's modification time (go build sets it on compile; update.sh's mv
