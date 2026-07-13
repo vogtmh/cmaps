@@ -3,6 +3,7 @@ package main
 import (
 	"companymaps/internal/auth/saml"
 	"companymaps/internal/config"
+	"companymaps/internal/integrations/geo"
 	"companymaps/internal/store"
 	"embed"
 	"html/template"
@@ -91,6 +92,7 @@ func main() {
 		tmpl:      tmpl,
 		staticFS:  staticSub,
 		startTime: time.Now(),
+		geo:       &geo.Service{DB: db},
 	}
 
 	// Backfill newer optional settings so they appear in the admin panel on

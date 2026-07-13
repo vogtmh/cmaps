@@ -3,6 +3,7 @@ package main
 import (
 	"companymaps/internal/auth"
 	"companymaps/internal/config"
+	"companymaps/internal/integrations/geo"
 	"companymaps/internal/progress"
 
 	"html/template"
@@ -58,12 +59,9 @@ type App struct {
 	exportPath string
 	exportName string
 
-	// geoProg tracks the background Geoapify batch geocode so the admin Sync
-	// panel can show a live progress bar. geoResult holds the most recent
-	// completed run for rendering once it finishes.
-	geoProg   progress.Progress
-	geoMu     sync.Mutex
-	geoResult GeoSyncResult
+	// geo owns the Geoapify integration: enablement, batch geocode runs and
+	// the progress/result pair polled by the admin Sync panel.
+	geo *geo.Service
 
 	// next*Sync hold the wall-clock time of the next scheduled automatic sync for
 	// each integration, surfaced in the admin Sync tab. In-memory only (they

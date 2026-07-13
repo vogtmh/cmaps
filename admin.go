@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"bytes"
 	"companymaps/internal/integrations"
+	"companymaps/internal/integrations/geo"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -2131,7 +2132,7 @@ func (app *App) handleRestGeoTest(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
 	defer cancel()
-	lat, lon, formatted, country, city, timezone, err := geocodeAddress(ctx, apiKey, text)
+	lat, lon, formatted, country, city, timezone, err := geo.GeocodeAddress(ctx, apiKey, text)
 	// The test issues one real API request, so count it toward the monthly estimate.
 	_, _, _ = app.db.IncrGeoUsage(1)
 	if err != nil {
@@ -2172,22 +2173,19 @@ func (app *App) handleRestGeoSync(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, map[string]interface{}{"ok": false, "message": "No Geoapify API key configured. Save a key first."})
 		return
 	}
-	if !app.geoProg.Start(0, "Starting…") {
+	if !app.geo.Prog.Start(0, "Starting…") {
 		writeJSON(w, map[string]interface{}{"ok": false, "started": false, "running": true, "message": "A geocode sync is already running."})
 		return
 	}
 	go func() {
 		defer func() {
 			if rec := recover(); rec != nil {
-				app.geoProg.Finish("", fmt.Sprintf("sync crashed: %v", rec))
+				app.geo.Prog.Finish("", fmt.Sprintf("sync crashed: %v", rec))
 			}
 		}()
-		res := app.RunGeoapifySync(&app.geoProg)
-		app.geoMu.Lock()
-		app.geoResult = res
-		app.geoMu.Unlock()
+		res := app.geo.RunSync(&app.geo.Prog)
 		_ = app.db.AuditLog("LDAP", sess.Username, fmt.Sprintf("Geoapify batch sync (%d updated, %d skipped, %d failed)", res.Updated, res.Skipped, res.Failed))
-		app.geoProg.Finish(fmt.Sprintf("%d updated, %d skipped, %d failed.", res.Updated, res.Skipped, res.Failed), "")
+		app.geo.Prog.Finish(fmt.Sprintf("%d updated, %d skipped, %d failed.", res.Updated, res.Skipped, res.Failed), "")
 	}()
 	writeJSON(w, map[string]interface{}{"ok": true, "started": true})
 }
@@ -2200,11 +2198,9 @@ func (app *App) handleRestGeoProgress(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}
-	snap := app.geoProg.Snapshot()
+	snap := app.geo.Prog.Snapshot()
 	if done, _ := snap["done"].(bool); done {
-		app.geoMu.Lock()
-		snap["result"] = app.geoResult
-		app.geoMu.Unlock()
+		snap["result"] = app.geo.Result()
 	}
 	writeJSON(w, snap)
 }
