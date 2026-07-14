@@ -8,9 +8,11 @@ import (
 	"context"
 	"errors"
 	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -23,6 +25,26 @@ import (
 )
 
 func main() {
+	// Structured logging. CMAPS_LOG_FORMAT=json switches to JSON output for log
+	// aggregators; anything else (default) is human-readable text. CMAPS_LOG_LEVEL
+	// accepts debug|info|warn|error (default info).
+	logLevel := slog.LevelInfo
+	switch strings.ToLower(os.Getenv("CMAPS_LOG_LEVEL")) {
+	case "debug":
+		logLevel = slog.LevelDebug
+	case "warn":
+		logLevel = slog.LevelWarn
+	case "error":
+		logLevel = slog.LevelError
+	}
+	handlerOpts := &slog.HandlerOptions{Level: logLevel}
+	var logHandler slog.Handler = slog.NewTextHandler(os.Stderr, handlerOpts)
+	if strings.EqualFold(os.Getenv("CMAPS_LOG_FORMAT"), "json") {
+		logHandler = slog.NewJSONHandler(os.Stderr, handlerOpts)
+	}
+	logger := slog.New(logHandler)
+	slog.SetDefault(logger)
+
 	cfg, err := config.LoadOrCreate()
 	if err != nil {
 		log.Fatalf("config: %v", err)
@@ -50,8 +72,8 @@ func main() {
 	}
 
 	// Domain services.
-	dirSvc := &directory.Syncer{DB: db, AvatarDir: cfg.DataPath("avatarcache")}
-	robinSvc := &robin.Service{DB: db}
+	dirSvc := &directory.Syncer{DB: db, AvatarDir: cfg.DataPath("avatarcache"), Log: logger.With("component", "directory")}
+	robinSvc := &robin.Service{DB: db, Log: logger.With("component", "robin")}
 	geoSvc := &geo.Service{DB: db}
 
 	srv, err := web.NewServer(cfg, db, dirSvc, robinSvc, geoSvc)

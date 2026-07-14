@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"sort"
 	"strings"
@@ -126,7 +125,7 @@ func (svc *Service) Refresh(mapName string) {
 			continue
 		}
 		if err := svc.pollRobinLocation(s.Spaceid, s.MapName()); err != nil {
-			log.Printf("robin poll %s: %v", s.Spacename, err)
+			svc.logger().Error("robin poll location", "space", s.Spacename, "err", err)
 		}
 	}
 }
@@ -140,7 +139,7 @@ func (svc *Service) pollRobinLocation(locationID int, mapName string) error {
 	}
 	for _, room := range list.Data {
 		if err := svc.pollRobinRoom(room.ID, room.Name, mapName); err != nil {
-			log.Printf("robin room %s/%s: %v", mapName, room.Name, err)
+			svc.logger().Error("robin poll room", "map", mapName, "room", room.Name, "err", err)
 		}
 	}
 	return nil
@@ -397,9 +396,9 @@ func (svc *Service) StartLocationScheduler(interval time.Duration) {
 		time.Sleep(30 * time.Second)
 		if svc.Enabled() && svc.DB.GetRobinSetting("robintoken") != "" && strings.TrimSpace(svc.DB.GetRobinSetting("robinOrganisation")) != "" {
 			if summary, err := svc.ReconcileLocations(); err != nil {
-				log.Printf("robin location discovery: %v", err)
+				svc.logger().Error("robin location discovery", "err", err)
 			} else {
-				log.Printf("robin location discovery: %s", summary)
+				svc.logger().Info("robin location discovery", "summary", summary)
 			}
 		}
 		ticker := time.NewTicker(interval)
@@ -409,7 +408,7 @@ func (svc *Service) StartLocationScheduler(interval time.Duration) {
 				continue
 			}
 			if _, err := svc.ReconcileLocations(); err != nil {
-				log.Printf("robin location discovery: %v", err)
+				svc.logger().Error("robin location discovery", "err", err)
 			}
 		}
 	}()
@@ -1327,7 +1326,7 @@ func (svc *Service) PollDeskOccupancy(prog *progress.Progress) {
 	}
 	statuses, _ := svc.collectOccupancy(prog, nil, nil)
 	if err := svc.DB.ReplaceRobinDeskStatus(statuses); err != nil {
-		log.Printf("robin desk occupancy: %v", err)
+		svc.logger().Error("robin desk occupancy", "err", err)
 		return
 	}
 	svc.saveDeskSyncResult(RobinDeskSyncResult{

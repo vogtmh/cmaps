@@ -1,7 +1,7 @@
 package web
 
 import (
-	"log"
+	"log/slog"
 	"net/http"
 	"path/filepath"
 	"strconv"
@@ -111,9 +111,9 @@ func (app *Server) StartSchedulers() {
 		app.dir.AnyLdapSourceEnabled,
 		func() {
 			if n, err := app.dir.RunADSync(); err != nil {
-				log.Printf("scheduled AD sync failed: %v", err)
+				slog.Default().Error("scheduled AD sync failed", "err", err)
 			} else {
-				log.Printf("scheduled AD sync: %d placements mirrored", n)
+				slog.Default().Info("scheduled AD sync complete", "placements", n)
 			}
 		},
 		app.dir.SetNextLdapSync,
@@ -125,9 +125,9 @@ func (app *Server) StartSchedulers() {
 		app.dir.EntraHasEnabledSource,
 		func() {
 			if n, err := app.dir.RunEntraSync(); err != nil {
-				log.Printf("scheduled EntraID sync failed: %v", err)
+				slog.Default().Error("scheduled EntraID sync failed", "err", err)
 			} else {
-				log.Printf("scheduled EntraID sync: %d placements mirrored", n)
+				slog.Default().Info("scheduled EntraID sync complete", "placements", n)
 			}
 		},
 		app.dir.SetNextEntraSync,

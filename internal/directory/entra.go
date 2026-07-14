@@ -12,7 +12,6 @@ import (
 	"encoding/pem"
 	"fmt"
 	"io"
-	"log"
 	"math/big"
 	"net/http"
 	"net/url"
@@ -428,7 +427,7 @@ func (s *Syncer) MigrateEntraConfig() {
 		Disabled:     s.DB.GetEntraSetting("entraEnabled") == "0",
 	}
 	if err := s.DB.PutEntraSource(src); err != nil {
-		log.Printf("EntraID config migration failed: %v", err)
+		s.logger().Error("EntraID config migration failed", "err", err)
 	}
 }
 
@@ -494,12 +493,12 @@ func (s *Syncer) RunEntraSyncProg(prog *progress.Progress) (int, error) {
 		}
 		mirror := DeriveMirrorUsers(dir)
 		if err := s.DB.PutSourceMirror("entra", src.ID, mirror); err != nil {
-			log.Printf("EntraID sync: writing source mirror for %q: %v", src.Description, err)
+			s.logger().Error("EntraID sync: write source mirror", "source", src.Description, "err", err)
 		}
 
 		src.LastSync = now
 		if err := s.DB.PutEntraSource(src); err != nil {
-			log.Printf("EntraID sync: updating LastSync for %q: %v", src.Description, err)
+			s.logger().Error("EntraID sync: update LastSync", "source", src.Description, "err", err)
 		}
 		if prog != nil {
 			prog.Logf("   %d user(s), %d desk placement(s).", len(dir), len(mirror))

@@ -7,7 +7,6 @@ import (
 
 	"crypto/tls"
 	"fmt"
-	"log"
 	"os"
 	"strings"
 	"time"
@@ -104,7 +103,7 @@ func (s *Syncer) RunADSyncProg(prog *progress.Progress) (int, error) {
 		dbg.Mirrored = len(users)
 		debug.Sources = append(debug.Sources, dbg)
 		if err != nil {
-			log.Printf("AD sync: source %q: %v", src.Description, err)
+			s.logger().Error("AD sync: source failed", "source", src.Description, "err", err)
 			s.SetSyncDebug(debug)
 			if prog != nil {
 				prog.Logf("   ✗ %s: %s", src.Description, err.Error())
@@ -119,15 +118,15 @@ func (s *Syncer) RunADSyncProg(prog *progress.Progress) (int, error) {
 
 		// Store this source's data in its own bucket (combine-on-write).
 		if err := s.DB.PutSourceDir(src.ID, dirUsers); err != nil {
-			log.Printf("AD sync: writing source directory for %q: %v", src.Description, err)
+			s.logger().Error("AD sync: write source directory", "source", src.Description, "err", err)
 		}
 		if err := s.DB.PutSourceMirror("ldap", src.ID, users); err != nil {
-			log.Printf("AD sync: writing source mirror for %q: %v", src.Description, err)
+			s.logger().Error("AD sync: write source mirror", "source", src.Description, "err", err)
 		}
 
 		src.LastSync = now.Format("2006-01-02 15:04:05")
 		if err := s.DB.PutLdapSource(src); err != nil {
-			log.Printf("AD sync: updating LastSync for %q: %v", src.Description, err)
+			s.logger().Error("AD sync: update LastSync", "source", src.Description, "err", err)
 		}
 		_ = s.DB.AuditLog("LDAP", "System", src.Description+" has been synced.")
 		if prog != nil {
@@ -235,7 +234,7 @@ func (s *Syncer) RebuildLdapMirror(announce bool) (int, error) {
 	}
 
 	if err := s.DB.ReplaceDirectory(allDir); err != nil {
-		log.Printf("AD sync: writing directory: %v", err)
+		s.logger().Error("AD sync: write directory", "err", err)
 	}
 	if err := s.DB.ReplaceLdap(combined); err != nil {
 		return len(combined), fmt.Errorf("writing mirror: %w", err)

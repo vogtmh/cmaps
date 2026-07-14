@@ -1,6 +1,7 @@
 package directory
 
 import (
+	"log/slog"
 	"sync"
 	"time"
 
@@ -13,6 +14,10 @@ import (
 // scheduled run times surfaced in the admin Sync tab.
 type Syncer struct {
 	DB *store.DB
+
+	// Log is the structured logger for sync diagnostics; nil falls back to the
+	// process default logger.
+	Log *slog.Logger
 
 	// AvatarDir is the filesystem path of the avatar cache, used to stamp
 	// HasAvatar onto mirrored users.
@@ -39,6 +44,14 @@ type Syncer struct {
 	nextSyncMu    sync.Mutex
 	nextLdapSync  time.Time
 	nextEntraSync time.Time
+}
+
+// logger returns the configured structured logger, or the process default.
+func (s *Syncer) logger() *slog.Logger {
+	if s.Log != nil {
+		return s.Log
+	}
+	return slog.Default()
 }
 
 // SetSyncDebug stores the most recent sync diagnostics (concurrency-safe).

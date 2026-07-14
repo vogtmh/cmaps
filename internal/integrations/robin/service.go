@@ -4,6 +4,7 @@
 package robin
 
 import (
+	"log/slog"
 	"sync"
 	"time"
 
@@ -18,6 +19,10 @@ import (
 // next scheduled sync time.
 type Service struct {
 	DB *store.DB
+
+	// Log is the structured logger for Robin diagnostics; nil falls back to the
+	// process default logger.
+	Log *slog.Logger
 
 	// Prog tracks the background meeting sync; DeskProg the desk-data
 	// diagnostic; SuggestProg the strip-pattern suggestion scan.
@@ -89,4 +94,12 @@ func (s *Service) SetDump(files []DumpFile, when string) {
 // Configured reports whether a Robin access token has been saved.
 func (s *Service) Configured() bool {
 	return strings.TrimSpace(s.DB.GetRobinSetting("robintoken")) != ""
+}
+
+// logger returns the configured structured logger, or the process default.
+func (s *Service) logger() *slog.Logger {
+	if s.Log != nil {
+		return s.Log
+	}
+	return slog.Default()
 }

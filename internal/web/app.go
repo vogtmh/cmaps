@@ -97,11 +97,11 @@ func NewServer(cfg *config.Config, db *store.DB, dirSvc *directory.Syncer, robin
 }
 
 // Handler returns the fully wired HTTP handler: all routes registered on a
-// fresh mux, wrapped with gzip compression.
+// fresh mux, wrapped with the request-ID and gzip middleware.
 func (app *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	app.routes(mux)
-	return gzipMiddleware(mux)
+	return requestIDMiddleware(gzipMiddleware(mux))
 }
 
 // Session aliases the auth session types for the handlers in this package.

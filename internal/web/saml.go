@@ -10,7 +10,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"net/url"
 	"strings"
@@ -79,7 +78,7 @@ func (app *Server) handleSAMLLogin(w http.ResponseWriter, r *http.Request) {
 	authnReq := saml.BuildAuthnRequest(requestID, issueInstant, entityID, cfg.EntraLoginURL, acsURL, cfg.NameIDFormat)
 	encoded, err := saml.DeflateAndEncode([]byte(authnReq))
 	if err != nil {
-		log.Printf("SAML login: encode AuthnRequest: %v", err)
+		app.reqLogger(r).Error("SAML login: encode AuthnRequest", "err", err)
 		http.Error(w, "failed to initiate SAML login", http.StatusInternalServerError)
 		return
 	}
@@ -182,7 +181,7 @@ h2{color:#2ecc71;margin:0 0 16px}p{color:#666;margin:0 0 24px}a{color:#0a66c2}</
 
 	certStore, err := saml.BuildCertStore(cfg.EntraX509Certificate)
 	if err != nil {
-		log.Printf("SAML ACS: cert store: %v", err)
+		app.reqLogger(r).Error("SAML ACS: cert store", "err", err)
 		fail("Server configuration error (invalid X.509 certificate).")
 		return
 	}
@@ -241,7 +240,7 @@ h2{color:#2ecc71;margin:0 0 16px}p{color:#666;margin:0 0 24px}a{color:#0a66c2}</
 			var rootValidated *etree.Element
 			rootValidated, validationErr = saml.ValidateElement(validationCtx, root)
 			if validationErr != nil {
-				log.Printf("SAML ACS: assertion signature: %v; response signature: %v", assertionErr, validationErr)
+				app.reqLogger(r).Error("SAML ACS: signature validation failed", "assertion_err", assertionErr, "response_err", validationErr)
 				validationErr = fmt.Errorf("assertion signature invalid (%v)", assertionErr)
 			} else {
 				validatedEl = rootValidated
@@ -251,7 +250,7 @@ h2{color:#2ecc71;margin:0 0 16px}p{color:#666;margin:0 0 24px}a{color:#0a66c2}</
 		validatedEl, validationErr = saml.ValidateElement(validationCtx, root)
 	}
 	if validationErr != nil {
-		log.Printf("SAML ACS: signature validation: %v", validationErr)
+		app.reqLogger(r).Error("SAML ACS: signature validation", "err", validationErr)
 		if debugRequestID != "" {
 			msg := "SAML signature validation failed: " + validationErr.Error()
 			if certDiag.ResponseCertFingerprint != "" && !certDiag.CertMatch {
@@ -411,7 +410,7 @@ h2{color:#2ecc71;margin:0 0 16px}p{color:#666;margin:0 0 24px}a{color:#0a66c2}</
 		return
 	}
 	_ = app.db.AuditLog("account", username, fullname+" has been logged in via SAML")
-	log.Printf("SAML ACS: successful login for %s (%s)", username, fullname)
+	app.reqLogger(r).Info("SAML ACS: successful login", "user", username, "fullname", fullname)
 
 	app.setSessionCookie(w, token)
 	app.resetUsermodeCookie(w)
@@ -540,7 +539,7 @@ func (app *Server) handleSAMLSettings(w http.ResponseWriter, r *http.Request) {
 		}
 		app.cfg.SAML = incoming
 		if err := config.Save(app.cfg); err != nil {
-			log.Printf("SAML settings: save: %v", err)
+			app.reqLogger(r).Error("SAML settings: save", "err", err)
 			http.Error(w, "failed to save settings", http.StatusInternalServerError)
 			return
 		}
