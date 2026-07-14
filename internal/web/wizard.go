@@ -1,6 +1,7 @@
 package web
 
 import (
+	"companymaps/internal/store"
 	"fmt"
 	"io"
 	"net/http"
@@ -119,7 +120,7 @@ func (app *Server) handleSetupLdap(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/setup?status="+urlMsg("Skipped AD sync setup."), http.StatusSeeOther)
 		return
 	}
-	src := LdapSource{
+	src := store.LdapSource{
 		ID:          1,
 		Description: orDefault(r.FormValue("description"), "Primary AD"),
 		Server:      r.FormValue("server"),

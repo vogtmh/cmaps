@@ -2,6 +2,7 @@ package web
 
 import (
 	"companymaps/internal/directory"
+	"companymaps/internal/store"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -167,7 +168,7 @@ func (app *Server) handleAdminPostSync(r *http.Request, sess Session) string {
 		if tenant == "" || client == "" {
 			return "Error: tenant id and client id are required."
 		}
-		_ = app.db.PutEntraSource(EntraSource{
+		_ = app.db.PutEntraSource(store.EntraSource{
 			ID:           app.nextEntraID(),
 			Description:  desc,
 			TenantID:     tenant,
@@ -234,7 +235,7 @@ func (app *Server) handleAdminPostSync(r *http.Request, sess Session) string {
 		if err != nil {
 			return "Error: Robin location id must be a number."
 		}
-		_ = app.db.PutRobinSpace(RobinSpace{
+		_ = app.db.PutRobinSpace(store.RobinSpace{
 			Spacename: strings.ToLower(sn),
 			Spaceid:   id,
 			Mapname:   strings.ToLower(strings.TrimSpace(r.FormValue("robinMapname"))),
@@ -317,7 +318,7 @@ func (app *Server) handleAdminPostSync(r *http.Request, sess Session) string {
 	user := r.FormValue("newLdapUser")
 	pass := r.FormValue("newLdapPass")
 	if desc != "" && server != "" && typ != "" && ou != "" && user != "" && pass != "" {
-		_ = app.db.PutLdapSource(LdapSource{
+		_ = app.db.PutLdapSource(store.LdapSource{
 			ID: app.nextLdapID(), Description: desc, Server: server, Type: typ,
 			OU: ou, LdapUser: user, LdapPass: pass, LastSync: "never",
 		})

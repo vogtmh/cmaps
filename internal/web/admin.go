@@ -3,6 +3,7 @@ package web
 import (
 	"companymaps/internal/integrations"
 	"companymaps/internal/integrations/robin"
+	"companymaps/internal/store"
 	"html/template"
 	"io/fs"
 	"net/http"
@@ -15,7 +16,7 @@ import (
 
 // mapRow is a maps-tab table row with derived existence indicators.
 type mapRow struct {
-	MapInfo
+	store.MapInfo
 	HasFile      bool
 	HasDB        bool
 	HasFlag      bool
@@ -115,12 +116,12 @@ type adminData struct {
 	GeneralVars []kv
 	LogoRegular string
 	LogoHover   string
-	LdapSources []LdapSource
+	LdapSources []store.LdapSource
 	// UnifiedSources is the ordered, priority-ranked list of every configured
 	// directory source (each LDAP/EntraID config plus Robin) shown in Sync >
 	// General, where the admin reorders priority and toggles assign / keep-dupes.
 	UnifiedSources          []UnifiedSource
-	RobinSpaces             []RobinSpace
+	RobinSpaces             []store.RobinSpace
 	RobinMapOptions         []string
 	RobinOrg                string
 	RobinSet                bool
@@ -141,13 +142,13 @@ type adminData struct {
 	RobinStripSuffixList    string
 	RobinLastDiscovery      string
 	RobinUnmapped           int
-	RobinDeskReservations   []RobinDeskStatus
+	RobinDeskReservations   []store.RobinDeskStatus
 	RobinDeskHasSync        bool
 	RobinDeskLastSyncTime   string
 	RobinDeskCount          int
 	RobinAdSameDesk         []RobinAdOverlap
 	RobinAdDuplicates       []RobinAdDuplicate
-	EntraSources            []EntraSource
+	EntraSources            []store.EntraSource
 	EntraSet                bool
 	EntraLastSync           string
 	EntraHasSync            bool
@@ -159,10 +160,10 @@ type adminData struct {
 	Maps                    []mapRow
 	DeskMaps                []string
 	Mapadmins               []adminUserRow
-	Roles                   []Role
-	Teams                   []Team
-	CustomTypes             []CustomItemType
-	AuditEntries            []AuditEntry
+	Roles                   []store.Role
+	Teams                   []store.Team
+	CustomTypes             []store.CustomItemType
+	AuditEntries            []store.AuditEntry
 	AuditFilter             string
 	AuditTypes              []string
 	Countryflags            []string

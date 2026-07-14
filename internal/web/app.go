@@ -1,6 +1,7 @@
 package web
 
 import (
+	"companymaps/internal/store"
 	"fmt"
 
 	"companymaps/internal/auth"
@@ -21,7 +22,7 @@ import (
 // and references to the domain services, and hosts every handler as a method.
 type Server struct {
 	cfg        *config.Config
-	db         *DB
+	db         *store.DB
 	sessions   *SessionStore
 	tmpl       *template.Template
 	staticFS   fs.FS
@@ -65,7 +66,7 @@ type Server struct {
 // NewServer builds the web layer: it parses the embedded templates, prepares
 // the static file system and wires the domain services. The returned Server
 // exposes Routes() for mux registration and the scheduler start methods.
-func NewServer(cfg *config.Config, db *DB, dirSvc *directory.Syncer, robinSvc *robin.Service, geoSvc *geo.Service) (*Server, error) {
+func NewServer(cfg *config.Config, db *store.DB, dirSvc *directory.Syncer, robinSvc *robin.Service, geoSvc *geo.Service) (*Server, error) {
 	tmpl, err := template.New("").Funcs(template.FuncMap{
 		"ucfirst":  ucfirst,
 		"assetver": func() string { return assetVersion },

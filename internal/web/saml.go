@@ -5,6 +5,7 @@ package web
 // handlers wire it to the session store, user records and config.
 
 import (
+	"companymaps/internal/store"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -379,7 +380,7 @@ h2{color:#2ecc71;margin:0 0 16px}p{color:#666;margin:0 0 24px}a{color:#0a66c2}</
 	}
 	u, known, _ := app.db.GetUser(username)
 	if !known {
-		u = User{Username: username, Role: 0}
+		u = store.User{Username: username, Role: 0}
 		_ = app.db.AuditLog("users", username, "New SAML user registered: "+username+" ("+fullname+")")
 	}
 	u.Fullname = fullname

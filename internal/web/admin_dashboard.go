@@ -1,6 +1,7 @@
 package web
 
 import (
+	"companymaps/internal/store"
 	"fmt"
 	"net/http"
 	"strings"
@@ -13,14 +14,14 @@ func (app *Server) handleAdminPostDashboard(r *http.Request, sess Session) strin
 	}
 	if delName := r.FormValue("deleteWhitelistName"); delName != "" {
 		delType := r.FormValue("deleteWhitelistType")
-		_ = app.db.DeleteWhitelist(WhitelistEntry{Type: delType, Text: delName})
+		_ = app.db.DeleteWhitelist(store.WhitelistEntry{Type: delType, Text: delName})
 		_ = app.db.AuditLog("Health", sess.Username, "Whitelist entry removed ("+delType+": "+delName+")")
 		return "Whitelist entry removed."
 	}
 	name := r.FormValue("ignoreHealthName")
 	typ := r.FormValue("ignoreHealthType")
 	if name != "" && typ != "" {
-		_ = app.db.AddWhitelist(WhitelistEntry{Type: typ, Text: name})
+		_ = app.db.AddWhitelist(store.WhitelistEntry{Type: typ, Text: name})
 		_ = app.db.AuditLog("Health", sess.Username, "Whitelist entry added ("+typ+": "+name+")")
 		return "Whitelist updated."
 	}

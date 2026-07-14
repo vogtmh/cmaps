@@ -1,6 +1,7 @@
 package web
 
 import (
+	"companymaps/internal/store"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -60,7 +61,7 @@ func (app *Server) handleAdminPostUsers(r *http.Request, sess Session) string {
 			}
 			_ = app.db.PutUser(existing)
 		} else {
-			_ = app.db.PutUser(User{Username: username, Role: roleInt, Fullname: fullname, Mail: mail})
+			_ = app.db.PutUser(store.User{Username: username, Role: roleInt, Fullname: fullname, Mail: mail})
 		}
 		_ = app.db.AuditLog("Users", sess.Username, "New admin created ("+username+", role "+role+")")
 		return "User created."
@@ -184,10 +185,10 @@ func (app *Server) handleRestDirectoryMatch(w http.ResponseWriter, r *http.Reque
 }
 
 // handleRestSetting saves a single base variable and returns the stored value
-func (app *Server) resolveDirectoryEntry(input string) (DirectoryUser, bool) {
+func (app *Server) resolveDirectoryEntry(input string) (store.DirectoryUser, bool) {
 	v := strings.TrimSpace(input)
 	if v == "" {
-		return DirectoryUser{}, false
+		return store.DirectoryUser{}, false
 	}
 	// Strip any DOMAIN\ prefix and try a direct samaccountname lookup.
 	sam := v
@@ -200,10 +201,10 @@ func (app *Server) resolveDirectoryEntry(input string) (DirectoryUser, bool) {
 	// Fall back to an exact (case-insensitive) display-name match.
 	dir, err := app.db.ListDirectory()
 	if err != nil {
-		return DirectoryUser{}, false
+		return store.DirectoryUser{}, false
 	}
 	lv := strings.ToLower(v)
-	var match DirectoryUser
+	var match store.DirectoryUser
 	count := 0
 	for _, d := range dir {
 		if strings.ToLower(d.DisplayName()) == lv {
@@ -214,7 +215,7 @@ func (app *Server) resolveDirectoryEntry(input string) (DirectoryUser, bool) {
 	if count == 1 {
 		return match, true
 	}
-	return DirectoryUser{}, false
+	return store.DirectoryUser{}, false
 }
 
 // handleRestRobinTest runs a full Robin meeting sync and returns the step-by-step

@@ -1,6 +1,7 @@
 package web
 
 import (
+	"companymaps/internal/store"
 	"fmt"
 	"io/fs"
 	"net/http"
@@ -217,7 +218,7 @@ func (app *Server) handleRestChanges(w http.ResponseWriter, r *http.Request) {
 }
 
 // formatChangeTimestamp renders "YYYY.MM.DD HH AM/PM" matching the PHP format.
-func formatChangeTimestamp(e ChangelogEntry) string {
+func formatChangeTimestamp(e store.ChangelogEntry) string {
 	hour := e.Hour
 	suffix := "AM"
 	if hour >= 12 {
@@ -249,14 +250,14 @@ func (app *Server) handleRestStats(w http.ResponseWriter, r *http.Request) {
 
 	// Sum counts into period buckets.
 	sums := make(map[string]int64)
-	var layout func(StatEntry) string
+	var layout func(store.StatEntry) string
 	switch interval {
 	case "year":
-		layout = func(s StatEntry) string { return fmt.Sprintf("%04d", s.Year) }
+		layout = func(s store.StatEntry) string { return fmt.Sprintf("%04d", s.Year) }
 	case "month":
-		layout = func(s StatEntry) string { return fmt.Sprintf("%04d-%02d", s.Year, s.Month) }
+		layout = func(s store.StatEntry) string { return fmt.Sprintf("%04d-%02d", s.Year, s.Month) }
 	default: // day
-		layout = func(s StatEntry) string { return fmt.Sprintf("%04d-%02d-%02d", s.Year, s.Month, s.Day) }
+		layout = func(s store.StatEntry) string { return fmt.Sprintf("%04d-%02d-%02d", s.Year, s.Month, s.Day) }
 	}
 	earliest := stats[0]
 	for _, s := range stats {

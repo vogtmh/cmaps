@@ -2,6 +2,7 @@ package web
 
 import (
 	"companymaps/internal/directory"
+	"companymaps/internal/store"
 
 	"fmt"
 	"net/http"
@@ -83,7 +84,7 @@ func (app *Server) entraValidate(id int) map[string]interface{} {
 	}
 
 	srcs, _ := app.db.ListEntraSources()
-	var src *EntraSource
+	var src *store.EntraSource
 	for i := range srcs {
 		if srcs[i].ID == id {
 			src = &srcs[i]
@@ -145,7 +146,7 @@ func (app *Server) handleRestEntraSyncOne(w http.ResponseWriter, r *http.Request
 		return
 	}
 	srcs, _ := app.db.ListEntraSources()
-	var src *EntraSource
+	var src *store.EntraSource
 	for i := range srcs {
 		if srcs[i].ID == id {
 			src = &srcs[i]
@@ -183,7 +184,7 @@ func (app *Server) handleRestEntraSyncOne(w http.ResponseWriter, r *http.Request
 		http.Error(w, "graph list users: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
-	dir := make([]DirectoryUser, 0, len(users))
+	dir := make([]store.DirectoryUser, 0, len(users))
 	for _, u := range users {
 		if !u.AccountEnabled {
 			continue

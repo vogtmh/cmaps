@@ -1,6 +1,7 @@
 package web
 
 import (
+	"companymaps/internal/store"
 	"fmt"
 	"net/http"
 	"sort"
@@ -85,7 +86,7 @@ func (app *Server) checkLdapConsistency() (int, []map[string]interface{}, []stri
 	whitelist := app.whitelistFor("ldap")
 	mirror, _ := app.db.ListLdap()
 
-	byOffice := map[string][]LdapUser{}
+	byOffice := map[string][]store.LdapUser{}
 	for _, u := range mirror {
 		if u.Office == "" {
 			continue
@@ -128,7 +129,7 @@ func (app *Server) checkLdapConsistency() (int, []map[string]interface{}, []stri
 type deskGroup struct {
 	Map     string
 	Desk    string
-	Members []Desk
+	Members []store.Desk
 }
 
 // duplicateDeskGroups returns every group of desks that share the same desk
@@ -145,7 +146,7 @@ func (app *Server) duplicateDeskGroups() ([]deskGroup, []string) {
 			continue
 		}
 		desks, _ := app.db.ListDesks(m.Mapname)
-		byName := map[string][]Desk{}
+		byName := map[string][]store.Desk{}
 		order := []string{}
 		for _, d := range desks {
 			if _, seen := byName[d.Desknumber]; !seen {

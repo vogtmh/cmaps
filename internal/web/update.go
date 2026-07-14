@@ -1,6 +1,7 @@
 package web
 
 import (
+	"companymaps/internal/store"
 	"encoding/json"
 	"image"
 	_ "image/gif"
@@ -88,7 +89,7 @@ func (app *Server) handleRestUpdate(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		newID, _ := app.db.NextDeskID(mapName)
-		_ = app.db.PutDesk(Desk{
+		_ = app.db.PutDesk(store.Desk{
 			ID: newID, Map: mapName, Desktype: desktype, X: x, Y: y,
 			Desknumber: desknumber, Employee: employee, Avatar: avatar, Department: department,
 		})
@@ -100,7 +101,7 @@ func (app *Server) handleRestUpdate(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "parameters missing", http.StatusBadRequest)
 			return
 		}
-		_ = app.db.PutDesk(Desk{
+		_ = app.db.PutDesk(store.Desk{
 			ID: id, Map: mapName, Desktype: desktype, X: x, Y: y,
 			Desknumber: desknumber, Employee: employee, Avatar: avatar, Department: department,
 		})
@@ -169,7 +170,7 @@ func (app *Server) handleRestUpdate(w http.ResponseWriter, r *http.Request) {
 					continue
 				}
 				newID, _ := app.db.NextDeskID(mapName)
-				_ = app.db.PutDesk(Desk{
+				_ = app.db.PutDesk(store.Desk{
 					ID: newID, Map: mapName, Desktype: op.Desktype, X: op.X, Y: op.Y,
 					Desknumber: op.Desknumber, Employee: op.Employee, Avatar: op.Avatar, Department: dept,
 				})
@@ -213,7 +214,7 @@ func (app *Server) handleRestUpdate(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "mapname already in use", http.StatusConflict)
 			return
 		}
-		newMap := MapInfo{
+		newMap := store.MapInfo{
 			Mapname: mapName, Itemscale: itemscale, Published: published, Country: mapflag,
 			Timezone: timezone, Address: address, MapX: x, MapY: y,
 		}

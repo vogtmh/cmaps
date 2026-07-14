@@ -329,7 +329,7 @@ func (app *Server) stageAdmins(plan *migPlan) (total, changed int, err error) {
 		}
 		c := s.Cursor()
 		for k, v := c.First(); k != nil; k, v = c.Next() {
-			var u User
+			var u store.User
 			if json.Unmarshal(v, &u) != nil {
 				continue
 			}
@@ -404,7 +404,7 @@ func (app *Server) runIdentifierStage(target string) {
 
 	prog.SetStage("Staging audit log")
 	t, c, err := app.stageBucket(bktMigAudit, store.BucketAudit, func(v []byte) ([]byte, bool) {
-		var e AuditEntry
+		var e store.AuditEntry
 		if json.Unmarshal(v, &e) != nil {
 			return nil, false
 		}
@@ -428,7 +428,7 @@ func (app *Server) runIdentifierStage(target string) {
 
 	prog.SetStage("Staging changelog")
 	t, c, err = app.stageBucket(bktMigChangelog, store.BucketChangelog, func(v []byte) ([]byte, bool) {
-		var e ChangelogEntry
+		var e store.ChangelogEntry
 		if json.Unmarshal(v, &e) != nil {
 			return nil, false
 		}
@@ -452,7 +452,7 @@ func (app *Server) runIdentifierStage(target string) {
 
 	prog.SetStage("Staging bookings")
 	t, c, err = app.stageBucket(bktMigBookings, store.BucketBookings, func(v []byte) ([]byte, bool) {
-		var b Booking
+		var b store.Booking
 		if json.Unmarshal(v, &b) != nil {
 			return nil, false
 		}
@@ -476,7 +476,7 @@ func (app *Server) runIdentifierStage(target string) {
 
 	prog.SetStage("Staging desks")
 	t, c, err = app.stageBucket(bktMigDesks, store.BucketDesks, func(v []byte) ([]byte, bool) {
-		var d Desk
+		var d store.Desk
 		if json.Unmarshal(v, &d) != nil {
 			return nil, false
 		}
@@ -587,7 +587,7 @@ func (app *Server) applyStagedAdmins() (int, error) {
 		}
 		c := s.Cursor()
 		for k, v := c.First(); k != nil; k, v = c.Next() {
-			var u User
+			var u store.User
 			if json.Unmarshal(v, &u) != nil {
 				continue
 			}

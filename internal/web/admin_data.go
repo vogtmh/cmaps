@@ -1,6 +1,7 @@
 package web
 
 import (
+	"companymaps/internal/store"
 	"encoding/json"
 	"html/template"
 	"net/http"
@@ -291,7 +292,7 @@ func (app *Server) buildAdminData(r *http.Request, sess Session, tab, msg string
 			entra map[string]bool
 		}
 		cmp := map[string]*entraCmp{}
-		add := func(u LdapUser, fromEntra bool) {
+		add := func(u store.LdapUser, fromEntra bool) {
 			mail := strings.ToLower(strings.TrimSpace(u.Mail))
 			if mail == "" {
 				return

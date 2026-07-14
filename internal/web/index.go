@@ -1,6 +1,7 @@
 package web
 
 import (
+	"companymaps/internal/store"
 	"encoding/json"
 	"html/template"
 	"net/http"
@@ -223,7 +224,7 @@ func (app *Server) renderIndex(w http.ResponseWriter, r *http.Request, sess Sess
 	deptJSON, _ := json.Marshal(deptObj)
 
 	// Admin-defined custom item types, keyed by id, for palette + marker rendering.
-	itemTypeObj := map[string]CustomItemType{}
+	itemTypeObj := map[string]store.CustomItemType{}
 	itemTypes, _ := app.db.ListItemTypes()
 	for _, t := range itemTypes {
 		itemTypeObj[t.ID] = t

@@ -1,6 +1,7 @@
 package web
 
 import (
+	"companymaps/internal/store"
 	"image"
 	"image/png"
 	"mime/multipart"
@@ -76,7 +77,7 @@ func (app *Server) saveItemTypeFromForm(r *http.Request, sess Session) string {
 		return "Error: the label must contain letters or digits."
 	}
 
-	t := CustomItemType{
+	t := store.CustomItemType{
 		ID:          id,
 		Label:       label,
 		Description: strings.TrimSpace(r.FormValue("typeDescription")),

@@ -1,6 +1,7 @@
 package web
 
 import (
+	"companymaps/internal/store"
 	"database/sql"
 	"fmt"
 	"strconv"
@@ -149,7 +150,7 @@ func (app *Server) ImportFromMySQL(c MySQLConfig, report func(stage string, res 
 	mapNames := []string{}
 	if rows, err := sqldb.Query("SELECT `mapname`,`itemscale`,`published`,`country`,`flagsize`,`timezone`,`address`,`mapX`,`mapY` FROM `config_maplist`"); err == nil {
 		for rows.Next() {
-			var m MapInfo
+			var m store.MapInfo
 			// flagsize is a legacy column we no longer store; scan and discard it.
 			var legacyFlagsize string
 			if rows.Scan(&m.Mapname, &m.Itemscale, &m.Published, &m.Country, &legacyFlagsize, &m.Timezone, &m.Address, &m.MapX, &m.MapY) == nil {
@@ -175,7 +176,7 @@ func (app *Server) ImportFromMySQL(c MySQLConfig, report func(stage string, res 
 			continue // table may not exist (e.g. nomap locations)
 		}
 		for rows.Next() {
-			var d Desk
+			var d store.Desk
 			if rows.Scan(&d.ID, &d.Desktype, &d.X, &d.Y, &d.Desknumber, &d.Employee, &d.Avatar, &d.Department) == nil {
 				d.Map = mn
 				if db.PutDesk(d) == nil {
@@ -192,9 +193,9 @@ func (app *Server) ImportFromMySQL(c MySQLConfig, report func(stage string, res 
 
 	// ldap-mirror -> ldapmirror
 	if rows, err := sqldb.Query("SELECT `givenname`,`surname`,`telephonenumber`,`mail`,`physicaldeliveryofficename`,`ipphone`,`description`,`department`,`mobile` FROM `ldap-mirror`"); err == nil {
-		var users []LdapUser
+		var users []store.LdapUser
 		for rows.Next() {
-			var u LdapUser
+			var u store.LdapUser
 			if rows.Scan(&u.Givenname, &u.Surname, &u.Telephonenumber, &u.Mail, &u.Office, &u.Userid, &u.Description, &u.Department, &u.Mobile) == nil {
 				users = append(users, u)
 			}
@@ -209,7 +210,7 @@ func (app *Server) ImportFromMySQL(c MySQLConfig, report func(stage string, res 
 	// bookings -> bookings
 	if rows, err := sqldb.Query("SELECT `date`,`map`,`desk`,`user`,`fullname`,`phone`,`mail` FROM `bookings`"); err == nil {
 		for rows.Next() {
-			var b Booking
+			var b store.Booking
 			if rows.Scan(&b.Date, &b.Map, &b.Desk, &b.User, &b.Fullname, &b.Phone, &b.Mail) == nil {
 				if db.AddBooking(b) == nil {
 					res.Bookings++
@@ -226,7 +227,7 @@ func (app *Server) ImportFromMySQL(c MySQLConfig, report func(stage string, res 
 	// config_teams -> teams
 	if rows, err := sqldb.Query("SELECT `teamname`,`teammembers` FROM `config_teams`"); err == nil {
 		for rows.Next() {
-			var t Team
+			var t store.Team
 			if rows.Scan(&t.Teamname, &t.Members) == nil {
 				if db.PutTeam(t) == nil {
 					res.Teams++
@@ -239,7 +240,7 @@ func (app *Server) ImportFromMySQL(c MySQLConfig, report func(stage string, res 
 	// config_roles -> roles
 	if rows, err := sqldb.Query("SELECT `ID`,`rolename`,`perm_desks`,`perm_dashboard`,`perm_config`,`perm_ldap`,`perm_maps`,`perm_users`,`perm_teams`,`perm_stats`,`perm_auditlog`,`perm_health`,`perm_adminpanel` FROM `config_roles`"); err == nil {
 		for rows.Next() {
-			var r Role
+			var r store.Role
 			p := make([]int, len(permFeatures))
 			dst := []interface{}{&r.ID, &r.Rolename}
 			for i := range p {
@@ -264,7 +265,7 @@ func (app *Server) ImportFromMySQL(c MySQLConfig, report func(stage string, res 
 			var username, role string
 			if rows.Scan(&username, &role) == nil {
 				rid, _ := strconv.Atoi(strings.TrimSpace(role))
-				if db.PutUser(User{Username: username, Role: rid}) == nil {
+				if db.PutUser(store.User{Username: username, Role: rid}) == nil {
 					res.Users++
 				}
 			}
@@ -275,7 +276,7 @@ func (app *Server) ImportFromMySQL(c MySQLConfig, report func(stage string, res 
 	// config_vips -> vips
 	if rows, err := sqldb.Query("SELECT `Parsed Text in Job Title`,`Type`,`Description` FROM `config_vips`"); err == nil {
 		for rows.Next() {
-			var v VIP
+			var v store.VIP
 			if rows.Scan(&v.Title, &v.Type, &v.Description) == nil {
 				if db.AddVip(v) == nil {
 					res.Vips++
@@ -297,9 +298,9 @@ func (app *Server) ImportFromMySQL(c MySQLConfig, report func(stage string, res 
 	}
 
 	// config_ldap -> ldapsources
-	if rows, err := sqldb.Query("SELECT `ID`,`description`,`server`,`type`,`OU`,`LdapUser`,`LdapPass`,`LastSync` FROM `config_ldap`"); err == nil {
+	if rows, err := sqldb.Query("SELECT `ID`,`description`,`server`,`type`,`OU`,`store.LdapUser`,`LdapPass`,`LastSync` FROM `config_ldap`"); err == nil {
 		for rows.Next() {
-			var s LdapSource
+			var s store.LdapSource
 			if rows.Scan(&s.ID, &s.Description, &s.Server, &s.Type, &s.OU, &s.LdapUser, &s.LdapPass, &s.LastSync) == nil {
 				s.LastSync = strings.TrimSpace(s.LastSync)
 				if db.PutLdapSource(s) == nil {
@@ -313,7 +314,7 @@ func (app *Server) ImportFromMySQL(c MySQLConfig, report func(stage string, res 
 	// config_robinspaces -> robinspaces
 	if rows, err := sqldb.Query("SELECT `spacename`,`spaceid` FROM `config_robinspaces`"); err == nil {
 		for rows.Next() {
-			var s RobinSpace
+			var s store.RobinSpace
 			if rows.Scan(&s.Spacename, &s.Spaceid) == nil {
 				if db.PutRobinSpace(s) == nil {
 					res.RobinSpace++
@@ -326,7 +327,7 @@ func (app *Server) ImportFromMySQL(c MySQLConfig, report func(stage string, res 
 	// ldap_changelog -> changelog
 	if rows, err := sqldb.Query("SELECT `year`,`month`,`day`,`hour`,`minute`,`name`,`avatar`,`type`,`oldvalue`,`newvalue` FROM `ldap_changelog` ORDER BY `ID` ASC"); err == nil {
 		for rows.Next() {
-			var e ChangelogEntry
+			var e store.ChangelogEntry
 			if rows.Scan(&e.Year, &e.Month, &e.Day, &e.Hour, &e.Minute, &e.Name, &e.Avatar, &e.Type, &e.Oldvalue, &e.Newvalue) == nil {
 				if db.AddChangelog(e) == nil {
 					res.Changelog++
@@ -343,7 +344,7 @@ func (app *Server) ImportFromMySQL(c MySQLConfig, report func(stage string, res 
 	// stats -> stats
 	if rows, err := sqldb.Query("SELECT `date`,`year`,`month`,`day`,`count` FROM `stats`"); err == nil {
 		for rows.Next() {
-			var s StatEntry
+			var s store.StatEntry
 			if rows.Scan(&s.Date, &s.Year, &s.Month, &s.Day, &s.Count) == nil {
 				if db.PutStat(s) == nil {
 					res.Stats++
@@ -360,7 +361,7 @@ func (app *Server) ImportFromMySQL(c MySQLConfig, report func(stage string, res 
 	// health_whitelist -> whitelist
 	if rows, err := sqldb.Query("SELECT `type`,`text` FROM `health_whitelist`"); err == nil {
 		for rows.Next() {
-			var e WhitelistEntry
+			var e store.WhitelistEntry
 			if rows.Scan(&e.Type, &e.Text) == nil {
 				if db.AddWhitelist(e) == nil {
 					res.Whitelist++
@@ -374,7 +375,7 @@ func (app *Server) ImportFromMySQL(c MySQLConfig, report func(stage string, res 
 	// bolt sequence and the newest stays first in the reverse-cursor listing).
 	if rows, err := sqldb.Query("SELECT `EventTime`,`EventType`,`EventUser`,`EventInfo` FROM `auditlog` ORDER BY `ID` ASC"); err == nil {
 		for rows.Next() {
-			var e AuditEntry
+			var e store.AuditEntry
 			if rows.Scan(&e.Timestamp, &e.Type, &e.User, &e.Info) == nil {
 				e.Timestamp = strings.TrimSpace(e.Timestamp)
 				e.Type = strings.TrimSpace(e.Type)
@@ -421,9 +422,9 @@ func (app *Server) ImportAuditOnly(c MySQLConfig) (int, error) {
 	}
 	defer rows.Close()
 
-	var entries []AuditEntry
+	var entries []store.AuditEntry
 	for rows.Next() {
-		var e AuditEntry
+		var e store.AuditEntry
 		if rows.Scan(&e.Timestamp, &e.Type, &e.User, &e.Info) == nil {
 			e.Timestamp = strings.TrimSpace(e.Timestamp)
 			e.Type = strings.TrimSpace(e.Type)

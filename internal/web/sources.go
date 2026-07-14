@@ -1,6 +1,7 @@
 package web
 
 import (
+	"companymaps/internal/store"
 	"fmt"
 	"net/http"
 	"sort"
@@ -43,11 +44,11 @@ type UnifiedSource struct {
 // live source present, in current priority order, with its flags). Persisting
 // this keeps the stored order authoritative even before the admin has ever
 // reordered anything.
-func (app *Server) currentRules() []SourceRule {
+func (app *Server) currentRules() []store.SourceRule {
 	us := app.listUnifiedSources()
-	rules := make([]SourceRule, 0, len(us))
+	rules := make([]store.SourceRule, 0, len(us))
 	for _, s := range us {
-		rules = append(rules, SourceRule{Ref: s.Ref, KeepDuplicates: s.KeepDuplicates, NoAssign: !s.Assign})
+		rules = append(rules, store.SourceRule{Ref: s.Ref, KeepDuplicates: s.KeepDuplicates, NoAssign: !s.Assign})
 	}
 	return rules
 }
@@ -137,7 +138,7 @@ func (app *Server) listUnifiedSources() []UnifiedSource {
 
 	seen := map[string]bool{}
 	var out []UnifiedSource
-	add := func(r SourceRule) {
+	add := func(r store.SourceRule) {
 		info, ok := live[r.Ref]
 		if !ok || seen[r.Ref] {
 			return
@@ -160,7 +161,7 @@ func (app *Server) listUnifiedSources() []UnifiedSource {
 	// append it at the lowest priority with default flags.
 	for _, ref := range liveRefs {
 		if !seen[ref] {
-			add(SourceRule{Ref: ref})
+			add(store.SourceRule{Ref: ref})
 		}
 	}
 	for i := range out {
@@ -173,14 +174,14 @@ func (app *Server) listUnifiedSources() []UnifiedSource {
 // preserving the previous behavior as closely as possible: the old robinDeskMode
 // of "all"/"allclear" meant Robin overrode LDAP, so Robin goes first in that
 // case; otherwise the directory sources lead and Robin trails.
-func (app *Server) defaultSourceOrder(liveRefs []string) []SourceRule {
+func (app *Server) defaultSourceOrder(liveRefs []string) []store.SourceRule {
 	mode := app.db.GetRobinSetting("robinDeskMode")
 	robinFirst := mode == "all" || mode == "allclear"
-	var rules []SourceRule
+	var rules []store.SourceRule
 	if robinFirst {
 		for _, ref := range liveRefs {
 			if ref == "robin" {
-				rules = append(rules, SourceRule{Ref: ref})
+				rules = append(rules, store.SourceRule{Ref: ref})
 			}
 		}
 	}
@@ -188,12 +189,12 @@ func (app *Server) defaultSourceOrder(liveRefs []string) []SourceRule {
 		if ref == "robin" {
 			continue
 		}
-		rules = append(rules, SourceRule{Ref: ref})
+		rules = append(rules, store.SourceRule{Ref: ref})
 	}
 	if !robinFirst {
 		for _, ref := range liveRefs {
 			if ref == "robin" {
-				rules = append(rules, SourceRule{Ref: ref})
+				rules = append(rules, store.SourceRule{Ref: ref})
 			}
 		}
 	}
@@ -266,7 +267,7 @@ func containsPerson(placed []deskOccupant, o deskOccupant) bool {
 // lowercased desknumber to its desk. Directory sources (LDAP/EntraID) only fill
 // AD-mirrored "addesk" desks, preserving the historical addesk semantics; Robin
 // live occupancy may take over any desk (as the old overlay did).
-func (app *Server) sourceOccupancy(src UnifiedSource, mapName string, deskByNum map[string]Desk, avatarByUser map[string]bool) []deskOccupant {
+func (app *Server) sourceOccupancy(src UnifiedSource, mapName string, deskByNum map[string]store.Desk, avatarByUser map[string]bool) []deskOccupant {
 	var out []deskOccupant
 	switch src.Type {
 	case "ldap", "entra":
@@ -330,8 +331,8 @@ func (app *Server) sourceOccupancy(src UnifiedSource, mapName string, deskByNum 
 // higher-priority source is only placed again when this source has
 // KeepDuplicates enabled. Because this runs per map, deduplication is naturally
 // scoped to a single map (a person with seats on two different maps keeps both).
-func (app *Server) assignMapOccupancy(mapName string, desks []Desk, avatarByUser map[string]bool) map[string][]deskOccupant {
-	deskByNum := map[string]Desk{}
+func (app *Server) assignMapOccupancy(mapName string, desks []store.Desk, avatarByUser map[string]bool) map[string][]deskOccupant {
+	deskByNum := map[string]store.Desk{}
 	for _, d := range desks {
 		dn := strings.TrimSpace(d.Desknumber)
 		if dn == "" {

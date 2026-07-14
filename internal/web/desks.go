@@ -1,6 +1,7 @@
 package web
 
 import (
+	"companymaps/internal/store"
 	"net/http"
 	"sort"
 	"strings"
@@ -97,7 +98,7 @@ func (app *Server) handleRestDesks(w http.ResponseWriter, r *http.Request) {
 // source resolves its avatar availability through this shared index.
 func (app *Server) buildAvatarIndex() map[string]bool {
 	idx := map[string]bool{}
-	add := func(users []LdapUser) {
+	add := func(users []store.LdapUser) {
 		for _, u := range users {
 			if u.HasAvatar {
 				idx[strings.ToLower(strings.TrimSpace(u.Userid))] = true
@@ -117,7 +118,7 @@ func (app *Server) buildAvatarIndex() map[string]bool {
 // priority order, higher-priority sources own a desk outright and the per-source
 // "keep duplicates" flag decides whether a lower-priority source may show a
 // person again on the same map. VIP border colors and bookings are then applied.
-func (app *Server) buildMapDesks(mapName, date, search string, vips []VIP, bookings []Booking, avatarByUser map[string]bool) []deskItem {
+func (app *Server) buildMapDesks(mapName, date, search string, vips []store.VIP, bookings []store.Booking, avatarByUser map[string]bool) []deskItem {
 	desks, _ := app.db.ListDesks(mapName)
 	var items []deskItem
 
@@ -228,7 +229,7 @@ func sourceLabel(sourceType string) string {
 // sameRobinPerson reports whether the Robin desk occupant is the same individual
 // as an AD-mirrored user, comparing the LDAP userid first and then the primary
 // mail or any of its aliases (case-insensitively).
-func sameRobinPerson(rs RobinDeskStatus, u LdapUser) bool {
+func sameRobinPerson(rs store.RobinDeskStatus, u store.LdapUser) bool {
 	if id := strings.ToLower(strings.TrimSpace(rs.Userid)); id != "" {
 		if id == strings.ToLower(strings.TrimSpace(u.Userid)) {
 			return true
@@ -269,7 +270,7 @@ func (app *Server) appendIfMatch(items *[]deskItem, item deskItem, search, extra
 
 // vipColor returns the border color (and optional "parsed" label for Directors)
 // for a job title, honoring the configured VIP rules.
-func vipColor(title string, vips []VIP) (color, parsed string) {
+func vipColor(title string, vips []store.VIP) (color, parsed string) {
 	for _, v := range vips {
 		switch v.Type {
 		case "TeamManager":

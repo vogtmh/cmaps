@@ -50,13 +50,13 @@ func TestPermLevelUnknownUser(t *testing.T) {
 
 func TestPermLevelRoleMatrix(t *testing.T) {
 	app := newTestApp(t)
-	if err := app.db.PutRole(Role{ID: 5, Rolename: "editor", Perms: map[string]int{
+	if err := app.db.PutRole(store.Role{ID: 5, Rolename: "editor", Perms: map[string]int{
 		"desks": 2,
 		"maps":  1,
 	}}); err != nil {
 		t.Fatalf("PutRole: %v", err)
 	}
-	if err := app.db.PutUser(User{Username: "jdoe", Role: 5}); err != nil {
+	if err := app.db.PutUser(store.User{Username: "jdoe", Role: 5}); err != nil {
 		t.Fatalf("PutUser: %v", err)
 	}
 
@@ -78,7 +78,7 @@ func TestPermLevelRoleMatrix(t *testing.T) {
 
 func TestPermLevelUserWithMissingRole(t *testing.T) {
 	app := newTestApp(t)
-	if err := app.db.PutUser(User{Username: "orphan", Role: 99}); err != nil {
+	if err := app.db.PutUser(store.User{Username: "orphan", Role: 99}); err != nil {
 		t.Fatalf("PutUser: %v", err)
 	}
 	if got := app.permLevel(Session{Username: "orphan"}, "desks"); got != 0 {
@@ -88,10 +88,10 @@ func TestPermLevelUserWithMissingRole(t *testing.T) {
 
 func TestIsEditor(t *testing.T) {
 	app := newTestApp(t)
-	if err := app.db.PutRole(Role{ID: 1, Rolename: "viewer", Perms: map[string]int{"desks": 1}}); err != nil {
+	if err := app.db.PutRole(store.Role{ID: 1, Rolename: "viewer", Perms: map[string]int{"desks": 1}}); err != nil {
 		t.Fatalf("PutRole: %v", err)
 	}
-	if err := app.db.PutUser(User{Username: "viewer1", Role: 1}); err != nil {
+	if err := app.db.PutUser(store.User{Username: "viewer1", Role: 1}); err != nil {
 		t.Fatalf("PutUser: %v", err)
 	}
 	if app.isEditor(Session{Username: "viewer1"}) {

@@ -1,6 +1,7 @@
 package web
 
 import (
+	"companymaps/internal/store"
 	"net/http"
 	"strings"
 )
@@ -24,14 +25,14 @@ func (app *Server) handleAdminPostTeams(r *http.Request, sess Session) string {
 		if name != orig {
 			_ = app.db.DeleteTeam(orig)
 		}
-		_ = app.db.PutTeam(Team{Teamname: name, Members: members})
+		_ = app.db.PutTeam(store.Team{Teamname: name, Members: members})
 		_ = app.db.AuditLog("Teams", sess.Username, "Team updated ("+name+")")
 		return "Team updated."
 	}
 	name := strings.TrimSpace(r.FormValue("newTeam"))
 	if name != "" {
 		members := normalizeMembers(r.FormValue("newMembers"))
-		_ = app.db.PutTeam(Team{Teamname: name, Members: members})
+		_ = app.db.PutTeam(store.Team{Teamname: name, Members: members})
 		_ = app.db.AuditLog("Teams", sess.Username, "New team created ("+name+")")
 		return "Team created."
 	}

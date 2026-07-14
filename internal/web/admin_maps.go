@@ -1,6 +1,7 @@
 package web
 
 import (
+	"companymaps/internal/store"
 	"net/http"
 	"os"
 	"strconv"
@@ -54,7 +55,7 @@ func (app *Server) createMapFromForm(r *http.Request, sess Session) string {
 
 	x, _ := strconv.Atoi(r.FormValue("newMapX"))
 	y, _ := strconv.Atoi(r.FormValue("newMapY"))
-	m := MapInfo{
+	m := store.MapInfo{
 		Mapname:     name,
 		DisplayName: strings.TrimSpace(r.FormValue("newMapDisplayName")),
 		Itemscale:   orDefaultStr(r.FormValue("newMapItemscale"), "1"),

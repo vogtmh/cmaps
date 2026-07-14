@@ -1,6 +1,7 @@
 package web
 
 import (
+	"companymaps/internal/store"
 	"net/http"
 )
 
@@ -71,7 +72,7 @@ func (app *Server) handleRestBooking(w http.ResponseWriter, r *http.Request) {
 			case taken:
 				status, message = "error", "Already booked."
 			case bookDate >= currentDate:
-				_ = app.db.AddBooking(Booking{
+				_ = app.db.AddBooking(store.Booking{
 					Date: bookDate, Map: bookMap, Desk: bookDesk,
 					User: bookUser, Fullname: bookFullname, Phone: bookPhone, Mail: bookMail,
 				})
@@ -100,7 +101,7 @@ func (app *Server) handleRestBooking(w http.ResponseWriter, r *http.Request) {
 		}
 
 	case "list":
-		var filtered []Booking
+		var filtered []store.Booking
 		switch {
 		case bookMap != "":
 			for _, b := range bookings {
@@ -138,7 +139,7 @@ func (app *Server) handleRestBooking(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func sortBookingsByDate(b []Booking) {
+func sortBookingsByDate(b []store.Booking) {
 	for i := 1; i < len(b); i++ {
 		for j := i; j > 0 && b[j-1].Date > b[j].Date; j-- {
 			b[j-1], b[j] = b[j], b[j-1]

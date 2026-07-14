@@ -2,6 +2,7 @@ package web
 
 import (
 	"companymaps/internal/directory"
+	"companymaps/internal/store"
 	"fmt"
 	"io/fs"
 	"os"
@@ -48,7 +49,7 @@ func (app *Server) seedDemoData() error {
 	}
 
 	// 4. VIP title rules (for the colored borders).
-	for _, v := range []VIP{
+	for _, v := range []store.VIP{
 		{Title: "CEO", Type: "Board", Description: "really important persons are orange"},
 		{Title: "team manager", Type: "TeamManager", Description: "Team Managers are green"},
 		{Title: "director", Type: "Director", Description: "Directors have blue"},
@@ -103,7 +104,7 @@ func (app *Server) seedDemoData() error {
 		}
 		members = append(members, d.Givenname+" "+d.Surname)
 	}
-	_ = db.PutTeam(Team{Teamname: "Demo Team", Members: strings.Join(members, "|")})
+	_ = db.PutTeam(store.Team{Teamname: "Demo Team", Members: strings.Join(members, "|")})
 
 	if err := db.SetMeta("setup_done", "1"); err != nil {
 		return err
@@ -170,7 +171,7 @@ var mansionLayout = []deskTemplate{
 func (app *Server) putMansionDesks(mapName, prefix string) ([]string, error) {
 	var slots []string
 	for i, t := range mansionLayout {
-		d := Desk{
+		d := store.Desk{
 			ID:         i + 1,
 			Map:        mapName,
 			Desktype:   t.Desktype,
@@ -273,8 +274,8 @@ func seatCounts(n int) []int {
 }
 
 // demoMaps returns the map records for the two demo locations plus the overview.
-func demoMaps() []MapInfo {
-	return []MapInfo{
+func demoMaps() []store.MapInfo {
+	return []store.MapInfo{
 		{Mapname: "overview", Itemscale: "1", Published: "yes", Country: "none", Timezone: "Europe/Berlin", Address: "none", MapX: 0, MapY: 0},
 		{Mapname: "germany", Itemscale: "2", Published: "yes", Country: "de", Timezone: "Europe/Berlin", Address: "CompanyMaps Demo GmbH<br/>Musterstraße 1<br/>12345 Musterstadt<br/>Germany", MapX: 760, MapY: 158},
 		{Mapname: "usa", Itemscale: "2", Published: "yes", Country: "us", Timezone: "America/New_York", Address: "CompanyMaps Demo Inc.<br/>123 Sample Street<br/>Anytown, CA 90210<br/>USA", MapX: 280, MapY: 250},
@@ -302,8 +303,8 @@ func demoSlots(prefix string) []string {
 // person keeps BOTH a samaccountname (DEMOnnn) and a mail address, and their
 // active Userid is computed for the CURRENT identifier mode, so the demo works in
 // either mode and the identifier migration assistant can round-trip it.
-func (app *Server) demoDirectoryUsers() []DirectoryUser {
-	var out []DirectoryUser
+func (app *Server) demoDirectoryUsers() []store.DirectoryUser {
+	var out []store.DirectoryUser
 	seq := 0
 	for _, loc := range []struct{ prefix, region string }{
 		{"DE", "DE"},
@@ -317,7 +318,7 @@ func (app *Server) demoDirectoryUsers() []DirectoryUser {
 				sam := fmt.Sprintf("DEMO%03d", seq)
 				p := demoPerson(seq, loc.region)
 				mail := fmt.Sprintf("%s.%s%d@demo.companymaps.local", lower(p.Given), lower(p.Sur), seq)
-				out = append(out, DirectoryUser{
+				out = append(out, store.DirectoryUser{
 					Userid:         app.userIdentifier(sam, mail),
 					Samaccountname: sam,
 					Givenname:      p.Given,
@@ -348,7 +349,7 @@ func demoSeq(sam string) int {
 // ensureDemoAvatars copies a bundled sample photo for every demo user that does
 // not already have a cached avatar under its active identifier. Best effort: any
 // copy error is ignored so a demo (re)sync can never fail on avatars.
-func (app *Server) ensureDemoAvatars(dir []DirectoryUser) {
+func (app *Server) ensureDemoAvatars(dir []store.DirectoryUser) {
 	for _, d := range dir {
 		id := strings.TrimSpace(d.Userid)
 		if id == "" {
@@ -370,7 +371,7 @@ func (app *Server) ensureDemoAvatars(dir []DirectoryUser) {
 func (app *Server) seedDemoSource() error {
 	dir := app.demoDirectoryUsers()
 	app.ensureDemoAvatars(dir)
-	if err := app.db.PutLdapSource(LdapSource{
+	if err := app.db.PutLdapSource(store.LdapSource{
 		ID: demoSourceID, Description: "Demo data", Type: "DEMO", Demo: true, LastSync: "never",
 	}); err != nil {
 		return err
@@ -447,7 +448,7 @@ func (app *Server) removeDemoData() error {
 
 // seedDefaultRoles installs the standard role set if no roles exist yet.
 func (app *Server) seedDefaultRoles() error {
-	roles := []Role{
+	roles := []store.Role{
 		{ID: 1, Rolename: "superadmin", Perms: fullPerms(2)},
 		{ID: 2, Rolename: "admin", Perms: map[string]int{"desks": 2, "dashboard": 1, "config": 0, "ldap": 1, "maps": 0, "users": 1, "teams": 2, "stats": 1, "auditlog": 0, "health": 1, "adminpanel": 2}},
 		{ID: 3, Rolename: "groupmanager", Perms: map[string]int{"dashboard": 1, "teams": 1}},
