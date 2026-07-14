@@ -8,8 +8,6 @@ import (
 	"os"
 	"strings"
 	"time"
-
-	bolt "go.etcd.io/bbolt"
 )
 
 // This file implements the identifier migration assistant: converting all
@@ -134,14 +132,7 @@ func (p *migPlan) mapUsername(oldUser string) (string, bool) {
 
 // bucketCount returns the number of keys in a bucket.
 func (app *Server) bucketCount(bucket []byte) int {
-	n := 0
-	_ = app.db.Bolt().View(func(tx *bolt.Tx) error {
-		if b := tx.Bucket(bucket); b != nil {
-			n = b.Stats().KeyN
-		}
-		return nil
-	})
-	return n
+	return app.db.CountBucket(bucket)
 }
 
 // avatarCount returns the number of cached avatar files.
@@ -220,47 +211,25 @@ func (info migStageInfo) stageExpired() bool {
 // purgeStaging drops all staging buckets. No avatar files are ever created during
 // staging, so nothing on disk needs cleaning up.
 func (app *Server) purgeStaging() {
-	_ = app.db.Bolt().Update(func(tx *bolt.Tx) error {
-		for _, b := range migStageBuckets {
-			_ = tx.DeleteBucket(b)
-		}
-		return nil
-	})
+	_ = app.db.DropBuckets(migStageBuckets...)
 }
 
 // readStageInfo returns the current staging metadata, if any.
 func (app *Server) readStageInfo() (migStageInfo, bool) {
 	var info migStageInfo
-	found := false
-	_ = app.db.Bolt().View(func(tx *bolt.Tx) error {
-		b := tx.Bucket(bktMigMeta)
-		if b == nil {
-			return nil
-		}
-		v := b.Get([]byte("info"))
-		if v == nil {
-			return nil
-		}
-		if json.Unmarshal(v, &info) == nil {
-			found = true
-		}
-		return nil
-	})
-	return info, found
+	v, found, _ := app.db.GetRaw(bktMigMeta, []byte("info"))
+	if !found || json.Unmarshal(v, &info) != nil {
+		return migStageInfo{}, false
+	}
+	return info, true
 }
 
 func (app *Server) writeStageInfo(info migStageInfo) error {
-	return app.db.Bolt().Update(func(tx *bolt.Tx) error {
-		b, err := tx.CreateBucketIfNotExists(bktMigMeta)
-		if err != nil {
-			return err
-		}
-		data, err := json.Marshal(info)
-		if err != nil {
-			return err
-		}
-		return b.Put([]byte("info"), data)
-	})
+	data, err := json.Marshal(info)
+	if err != nil {
+		return err
+	}
+	return app.db.PutRaw(bktMigMeta, []byte("info"), data)
 }
 
 // purgeStaleStaging drops the staging buckets if they have expired.
@@ -285,31 +254,10 @@ func (app *Server) startMigStageJanitor(interval time.Duration) {
 // changed rows (same key) into a freshly recreated dst staging bucket. It
 // returns the total rows scanned and the number of changed rows staged.
 func (app *Server) stageBucket(dst, src []byte, transform func(v []byte) ([]byte, bool)) (total, changed int, err error) {
-	err = app.db.Bolt().Update(func(tx *bolt.Tx) error {
-		_ = tx.DeleteBucket(dst)
-		d, e := tx.CreateBucket(dst)
-		if e != nil {
-			return e
-		}
-		s := tx.Bucket(src)
-		if s == nil {
-			return nil
-		}
-		c := s.Cursor()
-		for k, v := c.First(); k != nil; k, v = c.Next() {
-			total++
-			nv, ch := transform(v)
-			if !ch {
-				continue
-			}
-			if e := d.Put(append([]byte(nil), k...), nv); e != nil {
-				return e
-			}
-			changed++
-		}
-		return nil
+	return app.db.StageTransform(dst, src, func(_, v []byte) ([]byte, bool, bool) {
+		nv, ch := transform(v)
+		return nv, ch, true
 	})
-	return
 }
 
 // stageAdmins stages the map-admin (directory-derived) user records that need
@@ -317,44 +265,27 @@ func (app *Server) stageBucket(dst, src []byte, transform func(v []byte) ([]byte
 // the new user (carrying the new username), so apply can delete the old key and
 // insert the new one.
 func (app *Server) stageAdmins(plan *migPlan) (total, changed int, err error) {
-	err = app.db.Bolt().Update(func(tx *bolt.Tx) error {
-		_ = tx.DeleteBucket(bktMigAdmins)
-		d, e := tx.CreateBucket(bktMigAdmins)
-		if e != nil {
-			return e
+	return app.db.StageTransform(bktMigAdmins, store.BucketUsers, func(_, v []byte) ([]byte, bool, bool) {
+		var u store.User
+		if json.Unmarshal(v, &u) != nil {
+			return nil, false, false
 		}
-		s := tx.Bucket(store.BucketUsers)
-		if s == nil {
-			return nil
+		if u.IsLocal {
+			return nil, false, false
 		}
-		c := s.Cursor()
-		for k, v := c.First(); k != nil; k, v = c.Next() {
-			var u store.User
-			if json.Unmarshal(v, &u) != nil {
-				continue
-			}
-			if u.IsLocal {
-				continue
-			}
-			total++
-			newName, ok := plan.mapUsername(u.Username)
-			if !ok || newName == u.Username {
-				continue
-			}
-			nu := u
-			nu.Username = newName
-			nb, err := json.Marshal(nu)
-			if err != nil {
-				return err
-			}
-			if e := d.Put(append([]byte(nil), k...), nb); e != nil {
-				return e
-			}
-			changed++
+		// Non-local user: counts toward the total regardless of whether it changes.
+		newName, ok := plan.mapUsername(u.Username)
+		if !ok || newName == u.Username {
+			return nil, false, true
 		}
-		return nil
+		nu := u
+		nu.Username = newName
+		nb, err := json.Marshal(nu)
+		if err != nil {
+			return nil, false, true
+		}
+		return nb, true, true
 	})
-	return
 }
 
 // avatarChangeCount counts avatar files whose base id maps to a different target
@@ -550,60 +481,21 @@ func (app *Server) runIdentifierStage(target string) {
 // applyStagedBucket copies every staged row into the live bucket under the same
 // key (overwrite). Returns the number of rows applied.
 func (app *Server) applyStagedBucket(live, stage []byte) (int, error) {
-	n := 0
-	err := app.db.Bolt().Update(func(tx *bolt.Tx) error {
-		s := tx.Bucket(stage)
-		if s == nil {
-			return nil
-		}
-		l := tx.Bucket(live)
-		if l == nil {
-			return nil
-		}
-		c := s.Cursor()
-		for k, v := c.First(); k != nil; k, v = c.Next() {
-			if e := l.Put(append([]byte(nil), k...), append([]byte(nil), v...)); e != nil {
-				return e
-			}
-			n++
-		}
-		return nil
+	return app.db.ApplyStaged(live, stage, func(k, _ []byte) ([]byte, bool) {
+		return k, true
 	})
-	return n, err
 }
 
 // applyStagedAdmins re-keys the staged map-admin records: the staged key is the
 // old username and the value holds the new user (with the new username).
 func (app *Server) applyStagedAdmins() (int, error) {
-	n := 0
-	err := app.db.Bolt().Update(func(tx *bolt.Tx) error {
-		s := tx.Bucket(bktMigAdmins)
-		if s == nil {
-			return nil
+	return app.db.ApplyStaged(store.BucketUsers, bktMigAdmins, func(_, v []byte) ([]byte, bool) {
+		var u store.User
+		if json.Unmarshal(v, &u) != nil {
+			return nil, false
 		}
-		l := tx.Bucket(store.BucketUsers)
-		if l == nil {
-			return nil
-		}
-		c := s.Cursor()
-		for k, v := c.First(); k != nil; k, v = c.Next() {
-			var u store.User
-			if json.Unmarshal(v, &u) != nil {
-				continue
-			}
-			if e := l.Put([]byte(u.Username), append([]byte(nil), v...)); e != nil {
-				return e
-			}
-			if string(k) != u.Username {
-				if e := l.Delete(append([]byte(nil), k...)); e != nil {
-					return e
-				}
-			}
-			n++
-		}
-		return nil
+		return []byte(u.Username), true
 	})
-	return n, err
 }
 
 // runIdentifierApply commits a previously staged migration: it swaps the staged

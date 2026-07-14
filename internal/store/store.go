@@ -1578,10 +1578,5 @@ func (db *DB) SetSourceOrder(rules []SourceRule) error {
 	return PutJSON(db, BucketMeta, metaSourceOrder, rules)
 }
 
-// Bolt exposes the underlying bolt handle. Transitional: only the backup
-// export/import and the identifier migration engine still need raw
-// transactions; both are scheduled to move into this package.
-func (db *DB) Bolt() *bolt.DB { return db.bolt }
-
 // Location returns the display timezone used for admin-facing timestamps.
 func (db *DB) Location() *time.Location { return db.loc }

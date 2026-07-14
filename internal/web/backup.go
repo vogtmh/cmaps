@@ -15,8 +15,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	bolt "go.etcd.io/bbolt"
 )
 
 // backupGroup describes one selectable unit of data for the import dialog. A
@@ -195,10 +193,7 @@ func (app *Server) buildExport() error {
 		_ = closeAndRemove(tmp, zw, tmpPath)
 		return fmt.Errorf("zip db entry: %w", err)
 	}
-	if err := app.db.Bolt().View(func(tx *bolt.Tx) error {
-		_, werr := tx.WriteTo(dbWriter)
-		return werr
-	}); err != nil {
+	if err := app.db.SnapshotTo(dbWriter); err != nil {
 		_ = closeAndRemove(tmp, zw, tmpPath)
 		return fmt.Errorf("db snapshot: %w", err)
 	}
@@ -343,8 +338,9 @@ func (app *Server) handleRestImport(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Open the archived bolt db once (read-only) if any db group is selected.
-	var srcDB *bolt.DB
+	// Extract the archived bolt db to a temp file once (read on demand) if any
+	// db group is selected.
+	var srcDBPath string
 	if needsDB {
 		dbFile := entries["cmaps.db"]
 		if dbFile == nil {
@@ -364,12 +360,7 @@ func (app *Server) handleRestImport(w http.ResponseWriter, r *http.Request) {
 			_ = rc.Close()
 		}
 		_ = tmp.Close()
-		srcDB, err = bolt.Open(tmpPath, 0600, &bolt.Options{ReadOnly: true, Timeout: 5 * time.Second})
-		if err != nil {
-			writeJSON(w, map[string]interface{}{"ok": false, "message": "Could not read archived database: " + err.Error()})
-			return
-		}
-		defer srcDB.Close()
+		srcDBPath = tmpPath
 	}
 
 	for _, g := range backupGroups {
@@ -386,7 +377,7 @@ func (app *Server) handleRestImport(w http.ResponseWriter, r *http.Request) {
 			results = append(results, res)
 			continue
 		}
-		n, err := app.importBuckets(srcDB, g.Buckets)
+		n, err := app.db.ReplaceBucketsFromFile(srcDBPath, g.Buckets)
 		res := importResult{Group: g.Key, Label: g.Label, Records: n, Status: "ok"}
 		if err != nil {
 			res.Status = "failed"
@@ -401,60 +392,6 @@ func (app *Server) handleRestImport(w http.ResponseWriter, r *http.Request) {
 	}
 	_ = app.db.AuditLog("Settings", sess.Username, "Data import: "+strings.Join(labels, ", "))
 	writeJSON(w, map[string]interface{}{"ok": true, "results": results})
-}
-
-// importBuckets replaces each named bucket in the live database with the
-// contents of the same bucket in the archived database. A bucket missing from
-// the source is cleared (so the import is an exact overwrite, never a merge).
-func (app *Server) importBuckets(srcDB *bolt.DB, buckets [][]byte) (int, error) {
-	// Read all source entries into memory first so we never hold a read tx on the
-	// source while writing the destination.
-	type kv struct{ k, v []byte }
-	staged := make(map[string][]kv, len(buckets))
-	count := 0
-	if err := srcDB.View(func(tx *bolt.Tx) error {
-		for _, name := range buckets {
-			b := tx.Bucket(name)
-			if b == nil {
-				staged[string(name)] = nil
-				continue
-			}
-			var rows []kv
-			_ = b.ForEach(func(k, v []byte) error {
-				if v == nil {
-					return nil // nested buckets are not used in this schema
-				}
-				rows = append(rows, kv{append([]byte(nil), k...), append([]byte(nil), v...)})
-				return nil
-			})
-			staged[string(name)] = rows
-		}
-		return nil
-	}); err != nil {
-		return 0, err
-	}
-
-	if err := app.db.Bolt().Update(func(tx *bolt.Tx) error {
-		for _, name := range buckets {
-			if err := tx.DeleteBucket(name); err != nil && err != bolt.ErrBucketNotFound {
-				return err
-			}
-			nb, err := tx.CreateBucket(name)
-			if err != nil {
-				return err
-			}
-			for _, row := range staged[string(name)] {
-				if err := nb.Put(row.k, row.v); err != nil {
-					return err
-				}
-				count++
-			}
-		}
-		return nil
-	}); err != nil {
-		return 0, err
-	}
-	return count, nil
 }
 
 // importAssetDir clears the named data-dir subfolder and restores its files from
