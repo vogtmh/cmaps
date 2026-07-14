@@ -170,7 +170,7 @@
         dataType: 'json',
         data: { user: user, password: pass }
       }).done(function (res) {
-        if (res && res.status === 'ok') {
+        if (res && res.ok) {
           location.href = '/m/';
         } else {
           $err.text((res && res.message) || 'Login failed.').show();

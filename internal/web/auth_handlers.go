@@ -109,24 +109,24 @@ func (app *Server) handleRestAccount(w http.ResponseWriter, r *http.Request) {
 		if !ok {
 			time.Sleep(2 * time.Second) // throttle brute force, matching the PHP delay
 			app.db.AuditLog("login", username, "failed local login from "+clientIP(r))
-			writeJSON(w, map[string]interface{}{"status": "error", "message": "Invalid username or password."})
+			respondError(w, "Invalid username or password.")
 			return
 		}
 		token, err := app.sessions.Create(sess)
 		if err != nil {
-			writeJSON(w, map[string]interface{}{"status": "error", "message": "Session error."})
+			respondError(w, "Session error.")
 			return
 		}
 		app.setSessionCookie(w, token)
 		app.resetUsermodeCookie(w)
 		app.db.AuditLog("login", sess.Username, "local login from "+clientIP(r))
-		writeJSON(w, map[string]interface{}{"status": "ok", "message": "Login successful."})
+		writeJSON(w, map[string]interface{}{"ok": true, "message": "Login successful."})
 	case "logout":
 		if c, err := r.Cookie(sessionCookie); err == nil {
 			app.sessions.Delete(c.Value)
 		}
 		app.clearSessionCookie(w)
-		writeJSON(w, map[string]interface{}{"status": "ok", "message": "logged out"})
+		writeJSON(w, map[string]interface{}{"ok": true, "message": "logged out"})
 	case "samllogin":
 		http.Redirect(w, r, "/auth/saml/login", http.StatusSeeOther)
 	default:
@@ -149,7 +149,7 @@ func (app *Server) handleRestAccount(w http.ResponseWriter, r *http.Request) {
 		}
 
 		writeJSON(w, map[string]interface{}{
-			"status":   "ok",
+			"ok":       true,
 			"loggedin": ok,
 			"user":     sess.Username,
 			"fullname": sess.Fullname,

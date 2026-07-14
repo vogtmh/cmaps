@@ -230,20 +230,13 @@ function logoutUser(mode) {
       console.log('error');
     },
     success: function(logindata){
-      var logstatus = logindata.status;
-      var logmessage = logindata.message;
-      if (logstatus == 'error') {
-        var color='#D82626'
-      }
-      else if (logstatus == 'ok') {
-        var color='#35842E'
-      }
-      if (logstatus == 'ok') { 
-        if (mode == 'admin') { 
-          location.href='/'; 
+      var logok = logindata && logindata.ok;
+      if (logok) {
+        if (mode == 'admin') {
+          location.href='/';
         }
         else {
-          location.reload(); 
+          location.reload();
         }
       }
     }

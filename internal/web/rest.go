@@ -100,7 +100,7 @@ func (app *Server) handleRestConfig(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, map[string]interface{}{"maps": items})
 
 	default:
-		writeJSON(w, map[string]interface{}{"error": []string{"Please specify a mode"}})
+		respondError(w, "Please specify a mode")
 	}
 }
 
