@@ -1053,8 +1053,8 @@ function importSamlMetadata() {
     url: '../rest/saml/import-metadata', type: 'POST',
     contentType: 'application/json', data: JSON.stringify({url: url}), dataType: 'JSON',
     success: function(res) {
-      if (res.error) {
-        $('#saml_import_status').css('color', '#e74c3c').text('Error: ' + res.error);
+      if (!res || res.ok === false) {
+        $('#saml_import_status').css('color', '#e74c3c').text('Error: ' + ((res && res.message) || 'import failed'));
         return;
       }
       $('#saml_import_status').css('color', '#2ecc71').text('Imported. Review and click Save.');
@@ -1764,7 +1764,7 @@ function maybeGenerateEntraCert() {
     url: '../rest/entra/gencert?token=' + token,
     type: 'GET', dataType: 'JSON',
     success: function (d) {
-      if (d && d.status === 'ok') {
+      if (d && d.ok) {
         // Only fill if still empty (user may have started typing meanwhile).
         if (!certEl.value.trim()) certEl.value = d.cert;
         if (!keyEl.value.trim()) keyEl.value = d.key;
@@ -2158,7 +2158,7 @@ function addRobinStrip(btn, type, pattern) {
         applyStripToForm(type, pattern);
       } else {
         btn.disabled = false; btn.textContent = 'Add';
-        alert((res && res.error) ? res.error : 'Could not add pattern.');
+        alert((res && res.message) ? res.message : 'Could not add pattern.');
       }
     },
     error: function () { btn.disabled = false; btn.textContent = 'Add'; alert('Could not add pattern.'); }

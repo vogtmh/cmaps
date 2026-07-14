@@ -221,8 +221,8 @@ func (app *Server) handleRestEntraGenCert(w http.ResponseWriter, r *http.Request
 	}
 	certPEM, keyPEM, err := directory.GenerateEntraCert()
 	if err != nil {
-		writeJSON(w, map[string]interface{}{"status": "error", "message": err.Error()})
+		respondError(w, err.Error())
 		return
 	}
-	writeJSON(w, map[string]interface{}{"status": "ok", "cert": certPEM, "key": keyPEM})
+	writeJSON(w, map[string]interface{}{"ok": true, "cert": certPEM, "key": keyPEM})
 }

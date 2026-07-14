@@ -13,6 +13,15 @@ func writeJSON(w http.ResponseWriter, v interface{}) {
 	_ = json.NewEncoder(w).Encode(v)
 }
 
+// respondError writes the canonical JSON error body {"ok": false, "message":
+// "..."} at HTTP 200, matching the dominant convention every REST/JSON
+// endpoint and the front-end's d.ok / d.message checks already use. Transport
+// failures (auth, routing) keep their HTTP status via http.Error; this helper
+// is for business-logic errors surfaced inline in the UI.
+func respondError(w http.ResponseWriter, msg string) {
+	writeJSON(w, map[string]interface{}{"ok": false, "message": msg})
+}
+
 // clientIP returns the best-effort client IP, honoring X-Forwarded-For for use
 // behind the nginx reverse proxy.
 func clientIP(r *http.Request) string {

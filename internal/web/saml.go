@@ -604,24 +604,24 @@ func (app *Server) handleSAMLImportMetadata(w http.ResponseWriter, r *http.Reque
 		URL string `json:"url"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.URL == "" {
-		json.NewEncoder(w).Encode(map[string]string{"error": "url required"})
+		respondError(w, "url required")
 		return
 	}
 	client := &http.Client{Timeout: 15 * time.Second}
 	resp, err := client.Get(req.URL)
 	if err != nil {
-		json.NewEncoder(w).Encode(map[string]string{"error": "fetch failed: " + err.Error()})
+		respondError(w, "fetch failed: "+err.Error())
 		return
 	}
 	defer resp.Body.Close()
 	body, err := io.ReadAll(io.LimitReader(resp.Body, 2<<20))
 	if err != nil {
-		json.NewEncoder(w).Encode(map[string]string{"error": "read failed: " + err.Error()})
+		respondError(w, "read failed: "+err.Error())
 		return
 	}
 	parsed, err := saml.ParseIdPMetadata(body)
 	if err != nil {
-		json.NewEncoder(w).Encode(map[string]string{"error": "parse failed: " + err.Error()})
+		respondError(w, "parse failed: "+err.Error())
 		return
 	}
 	app.cfg.SAML.EntraLoginURL = parsed.SSOURL
@@ -632,7 +632,7 @@ func (app *Server) handleSAMLImportMetadata(w http.ResponseWriter, r *http.Reque
 	}
 	app.cfg.SAML.FederationMetadataURL = req.URL
 	if err := config.Save(app.cfg); err != nil {
-		json.NewEncoder(w).Encode(map[string]string{"error": "save failed: " + err.Error()})
+		respondError(w, "save failed: "+err.Error())
 		return
 	}
 	json.NewEncoder(w).Encode(map[string]interface{}{

@@ -261,7 +261,7 @@ func (app *Server) handleRestRobinStripAdd(w http.ResponseWriter, r *http.Reques
 	}
 	pat := r.FormValue("pattern")
 	if strings.TrimSpace(pat) == "" {
-		writeJSON(w, map[string]interface{}{"error": "empty pattern"})
+		respondError(w, "empty pattern")
 		return
 	}
 	var listKey, enKey string
@@ -271,7 +271,7 @@ func (app *Server) handleRestRobinStripAdd(w http.ResponseWriter, r *http.Reques
 	case "suffix":
 		listKey, enKey = "robinStripSuffixList", "robinStripSuffixEnabled"
 	default:
-		writeJSON(w, map[string]interface{}{"error": "invalid type"})
+		respondError(w, "invalid type")
 		return
 	}
 	existing := robin.SplitList(app.db.GetRobinSetting(listKey))
