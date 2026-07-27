@@ -646,8 +646,36 @@ function toggleLdapEnabled(id, cb) {
   });
 }
 
+// resetLdapForm puts the add/edit form back into "create" mode.
+function resetLdapForm() {
+  var form = document.getElementById('ldapForm');
+  if (form) form.reset();
+  var editId = document.getElementById('ldapFormEditID');
+  if (editId) editId.value = '';
+  var pass = document.getElementById('ldapFPass');
+  if (pass) pass.placeholder = 'Password';
+  var submit = document.getElementById('ldapFormSubmit');
+  if (submit) submit.textContent = 'Create connection';
+  var title = document.getElementById('ldapFormTitle');
+  if (title) title.textContent = 'Add a connection';
+}
+
+// openLdapForm opens the add-connection overlay in create mode.
+function openLdapForm() {
+  resetLdapForm();
+  var overlay = document.getElementById('ldapFormOverlay');
+  if (overlay) overlay.style.display = 'block';
+}
+
+// closeLdapForm hides the add/edit overlay and resets it back to create mode.
+function closeLdapForm() {
+  var overlay = document.getElementById('ldapFormOverlay');
+  if (overlay) overlay.style.display = 'none';
+  resetLdapForm();
+}
+
 // editLdapSource pre-fills the add/edit form from a row's data attributes and
-// switches it into edit mode (the password is left blank to keep the stored one).
+// opens it in edit mode (the password is left blank to keep the stored one).
 function editLdapSource(btn) {
   var d = btn.dataset;
   var set = function(elid, val) { var el = document.getElementById(elid); if (el) el.value = val || ''; };
@@ -662,31 +690,10 @@ function editLdapSource(btn) {
   if (pass) { pass.value = ''; pass.placeholder = 'Leave blank to keep current password'; }
   var submit = document.getElementById('ldapFormSubmit');
   if (submit) submit.textContent = 'Save changes';
-  var cancel = document.getElementById('ldapFormCancel');
-  if (cancel) cancel.style.display = '';
-  var collapse = document.getElementById('ldapAddCollapse');
-  if (collapse && !collapse.classList.contains('open')) {
-    toggleCollapse('ldapAddCollapse', document.getElementById('ldapAddToggle'));
-  }
-  if (collapse && collapse.scrollIntoView) collapse.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-}
-
-// cancelEditLdap resets the add/edit form back to "add a connection" mode.
-function cancelEditLdap() {
-  var form = document.getElementById('ldapForm');
-  if (form) form.reset();
-  var editId = document.getElementById('ldapFormEditID');
-  if (editId) editId.value = '';
-  var pass = document.getElementById('ldapFPass');
-  if (pass) pass.placeholder = 'Password';
-  var submit = document.getElementById('ldapFormSubmit');
-  if (submit) submit.textContent = 'Create connection';
-  var cancel = document.getElementById('ldapFormCancel');
-  if (cancel) cancel.style.display = 'none';
-  var collapse = document.getElementById('ldapAddCollapse');
-  if (collapse && collapse.classList.contains('open')) {
-    toggleCollapse('ldapAddCollapse', document.getElementById('ldapAddToggle'));
-  }
+  var title = document.getElementById('ldapFormTitle');
+  if (title) title.textContent = 'Edit connection';
+  var overlay = document.getElementById('ldapFormOverlay');
+  if (overlay) overlay.style.display = 'block';
 }
 
 function showSyncSub(name) {
@@ -1355,6 +1362,24 @@ function toggleCollapse(id, btn) {
   if (btn) btn.classList.toggle('open', open);
 }
 
+// ── Overlay config dialogs (Robin / Geocoding credentials) ──
+function openRobinCred() {
+  var overlay = document.getElementById('robinCredOverlay');
+  if (overlay) overlay.style.display = 'block';
+}
+function closeRobinCred() {
+  var overlay = document.getElementById('robinCredOverlay');
+  if (overlay) overlay.style.display = 'none';
+}
+function openGeoCred() {
+  var overlay = document.getElementById('geoCredOverlay');
+  if (overlay) overlay.style.display = 'block';
+}
+function closeGeoCred() {
+  var overlay = document.getElementById('geoCredOverlay');
+  if (overlay) overlay.style.display = 'none';
+}
+
 // ── Background sync with progress bar + live log ────────────
 function renderSyncProgress(prefix, snap) {
   var wrap = document.getElementById(prefix + 'Progress');
@@ -1922,8 +1947,39 @@ function toggleEntraEnabled(id, cb) {
   });
 }
 
-// editEntraSource loads a connection's details into the add/edit form so it can
-// be updated. Secrets are never sent back to the browser, so the credential
+// resetEntraForm puts the add/edit form back into "create" mode.
+function resetEntraForm() {
+  var form = document.getElementById('entraForm');
+  if (form) form.reset();
+  document.getElementById('entraFormEditID').value = '';
+  var secret = document.getElementById('entraFSecret');
+  if (secret) secret.placeholder = 'Client secret value';
+  var cert = document.getElementById('entraFCert');
+  if (cert) cert.placeholder = '-----BEGIN CERTIFICATE-----';
+  var key = document.getElementById('entraFKey');
+  if (key) key.placeholder = '-----BEGIN PRIVATE KEY-----';
+  document.getElementById('entraFormSubmit').textContent = 'Create connection';
+  var title = document.getElementById('entraFormTitle');
+  if (title) title.textContent = 'Add a connection';
+  updateEntraAuthMethod();
+}
+
+// openEntraForm opens the add-connection overlay in create mode.
+function openEntraForm() {
+  resetEntraForm();
+  var overlay = document.getElementById('entraFormOverlay');
+  if (overlay) overlay.style.display = 'block';
+}
+
+// closeEntraForm hides the add/edit overlay and resets it back to create mode.
+function closeEntraForm() {
+  var overlay = document.getElementById('entraFormOverlay');
+  if (overlay) overlay.style.display = 'none';
+  resetEntraForm();
+}
+
+// editEntraSource loads a connection's details into the add/edit form and opens
+// it in edit mode. Secrets are never sent back to the browser, so the credential
 // fields stay blank ("leave blank to keep current").
 function editEntraSource(btn) {
   var id = btn.getAttribute('data-id');
@@ -1942,35 +1998,10 @@ function editEntraSource(btn) {
   var key = document.getElementById('entraFKey');
   if (key) { key.value = ''; key.placeholder = 'Leave blank to keep current key'; }
   document.getElementById('entraFormSubmit').textContent = 'Save changes';
-  var cancel = document.getElementById('entraFormCancel');
-  if (cancel) cancel.style.display = 'inline-flex';
-  var collapse = document.getElementById('entraAddCollapse');
-  if (collapse && !collapse.classList.contains('open')) {
-    toggleCollapse('entraAddCollapse', document.getElementById('entraAddToggle'));
-  }
-  var form = document.getElementById('entraForm');
-  if (form) form.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-}
-
-// cancelEditEntra resets the add/edit form back to "create" mode.
-function cancelEditEntra() {
-  var form = document.getElementById('entraForm');
-  if (form) form.reset();
-  document.getElementById('entraFormEditID').value = '';
-  var secret = document.getElementById('entraFSecret');
-  if (secret) secret.placeholder = 'Client secret value';
-  var cert = document.getElementById('entraFCert');
-  if (cert) cert.placeholder = '-----BEGIN CERTIFICATE-----';
-  var key = document.getElementById('entraFKey');
-  if (key) key.placeholder = '-----BEGIN PRIVATE KEY-----';
-  document.getElementById('entraFormSubmit').textContent = 'Create connection';
-  var cancel = document.getElementById('entraFormCancel');
-  if (cancel) cancel.style.display = 'none';
-  updateEntraAuthMethod();
-  var collapse = document.getElementById('entraAddCollapse');
-  if (collapse && collapse.classList.contains('open')) {
-    toggleCollapse('entraAddCollapse', document.getElementById('entraAddToggle'));
-  }
+  var title = document.getElementById('entraFormTitle');
+  if (title) title.textContent = 'Edit connection';
+  var overlay = document.getElementById('entraFormOverlay');
+  if (overlay) overlay.style.display = 'block';
 }
 
 // updateEntraAuthMethod toggles the secret vs certificate credential fields

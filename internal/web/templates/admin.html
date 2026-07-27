@@ -834,7 +834,7 @@
       <div class="sync-card-head">
         <h2 class="sync-card-title">Connections</h2>
         {{if gt .PermLdap 1}}
-        <button type="button" class="sync-toggle-btn" id="ldapAddToggle" onclick="toggleCollapse('ldapAddCollapse', this)"><span class="caret">&#9654;</span> Add a connection</button>
+        <button type="button" class="sync-btn sync-btn-primary" id="ldapAddToggle" onclick="openLdapForm()">Add a connection</button>
         {{end}}
       </div>
       <p class="sync-card-hint">
@@ -890,9 +890,15 @@
       {{else}}
       <div class="sync-empty">No LDAP connections configured yet.</div>
       {{end}}
+    </div>
 
-      {{if gt .PermLdap 1}}
-      <div class="sync-collapse" id="ldapAddCollapse">
+    {{if gt .PermLdap 1}}
+    <div id="ldapFormOverlay" class="sync-modal">
+      <div class="sync-modal-box">
+        <div class="sync-modal-head">
+          <h2 id="ldapFormTitle">Add a connection</h2>
+          <button type="button" class="sync-btn sync-btn-sm" onclick="closeLdapForm()">Close</button>
+        </div>
         <form name="AddLdap" id="ldapForm" action="?tab=ldap" method="post">
           <input type="hidden" name="tab" value="ldap">
           <input type="hidden" name="editLdapID" id="ldapFormEditID" value="">
@@ -906,12 +912,12 @@
           </div>
           <div class="sync-form-actions">
             <button type="submit" class="sync-btn sync-btn-primary" id="ldapFormSubmit">Create connection</button>
-            <button type="button" class="sync-btn" id="ldapFormCancel" onclick="cancelEditLdap()" style="display:none;">Cancel</button>
+            <button type="button" class="sync-btn" id="ldapFormCancel" onclick="closeLdapForm()">Cancel</button>
           </div>
         </form>
       </div>
-      {{end}}
     </div>
+    {{end}}
 
     {{if gt .PermLdap 1}}
     <div class="sync-card">
@@ -936,7 +942,7 @@
       <div class="sync-card-head">
         <h2 class="sync-card-title">Connections</h2>
         {{if gt .PermLdap 1}}
-        <button type="button" class="sync-toggle-btn" id="entraAddToggle" onclick="toggleCollapse('entraAddCollapse', this)"><span class="caret">&#9654;</span> Add a connection</button>
+        <button type="button" class="sync-btn sync-btn-primary" id="entraAddToggle" onclick="openEntraForm()">Add a connection</button>
         {{end}}
       </div>
       <p class="sync-card-hint">
@@ -993,9 +999,15 @@
       {{else}}
       <div class="sync-empty">No EntraID connections configured yet.</div>
       {{end}}
+    </div>
 
-      {{if gt .PermLdap 1}}
-      <div class="sync-collapse" id="entraAddCollapse">
+    {{if gt .PermLdap 1}}
+    <div id="entraFormOverlay" class="sync-modal">
+      <div class="sync-modal-box">
+        <div class="sync-modal-head">
+          <h2 id="entraFormTitle">Add a connection</h2>
+          <button type="button" class="sync-btn sync-btn-sm" onclick="closeEntraForm()">Close</button>
+        </div>
         <form name="AddEntra" id="entraForm" action="?tab=ldap" method="post">
           <input type="hidden" name="tab" value="ldap">
           <input type="hidden" name="editEntraID" id="entraFormEditID" value="">
@@ -1020,12 +1032,12 @@
           </div>
           <div class="sync-form-actions">
             <button type="submit" class="sync-btn sync-btn-primary" id="entraFormSubmit">Create connection</button>
-            <button type="button" class="sync-btn" id="entraFormCancel" onclick="cancelEditEntra()" style="display:none;">Cancel</button>
+            <button type="button" class="sync-btn" id="entraFormCancel" onclick="closeEntraForm()">Cancel</button>
           </div>
         </form>
       </div>
-      {{end}}
     </div>
+    {{end}}
 
     {{if gt .PermLdap 1}}
     <div class="sync-card">
@@ -1226,7 +1238,7 @@
           {{end}}
           {{if .RobinSet}}<span class="sync-badge sync-badge-ok">Token configured</span>{{else}}<span class="sync-badge sync-badge-warn">No token</span>{{end}}
           {{if gt .PermLdap 1}}
-          <button type="button" class="sync-toggle-btn" onclick="toggleCollapse('robinCredCollapse', this)"><span class="caret">&#9654;</span> Configure</button>
+          <button type="button" class="sync-btn" onclick="openRobinCred()">Configure</button>
           <button type="button" class="sync-btn" id="robinTestBtn" onClick="showRobinTest()"{{if not .RobinEnabled}} disabled title="Robin integration is disabled"{{end}}>Test</button>
           <button type="button" class="sync-btn sync-btn-primary" id="robinSyncBtn" onClick="startRobinSync()"{{if not .RobinEnabled}} disabled title="Robin integration is disabled"{{end}}>Run sync now</button>
           {{if .RobinSet}}<button type="button" class="sync-btn sync-btn-danger" onClick="deleteRobinConfig()">Delete</button>{{end}}
@@ -1235,18 +1247,25 @@
       </div>
 
       {{if gt .PermLdap 1}}
-      <div class="sync-collapse" id="robinCredCollapse">
-        <form action="?tab=ldap" method="post">
-          <input type="hidden" name="tab" value="ldap">
-          <input type="hidden" name="saveRobin" value="1">
-          <div class="sync-form-grid">
-            <div class="sync-field"><label class="sync-label">Access token</label><input class="sync-input" type="password" name="robintoken" placeholder="{{if .RobinSet}}(configured — leave blank to keep){{else}}Robin access token{{end}}"></div>
-            <div class="sync-field"><label class="sync-label">Organisation id (required)</label><input class="sync-input" type="text" name="robinOrganisation" value="{{.RobinOrg}}" placeholder="Robin organisation id" required></div>
+      <div id="robinCredOverlay" class="sync-modal">
+        <div class="sync-modal-box">
+          <div class="sync-modal-head">
+            <h2>Configure Robin</h2>
+            <button type="button" class="sync-btn sync-btn-sm" onclick="closeRobinCred()">Close</button>
           </div>
-          <div class="sync-form-actions">
-            <button type="submit" class="sync-btn sync-btn-primary">Save credentials</button>
-          </div>
-        </form>
+          <form action="?tab=ldap" method="post">
+            <input type="hidden" name="tab" value="ldap">
+            <input type="hidden" name="saveRobin" value="1">
+            <div class="sync-form-grid">
+              <div class="sync-field"><label class="sync-label">Access token</label><input class="sync-input" type="password" name="robintoken" placeholder="{{if .RobinSet}}(configured — leave blank to keep){{else}}Robin access token{{end}}"></div>
+              <div class="sync-field"><label class="sync-label">Organisation id (required)</label><input class="sync-input" type="text" name="robinOrganisation" value="{{.RobinOrg}}" placeholder="Robin organisation id" required></div>
+            </div>
+            <div class="sync-form-actions">
+              <button type="submit" class="sync-btn sync-btn-primary">Save credentials</button>
+              <button type="button" class="sync-btn" onclick="closeRobinCred()">Cancel</button>
+            </div>
+          </form>
+        </div>
       </div>
       {{end}}
 
@@ -1513,7 +1532,7 @@
           {{end}}
           {{if .GeoapifySet}}<span class="sync-badge sync-badge-ok">API key configured</span>{{else}}<span class="sync-badge sync-badge-warn">No API key</span>{{end}}
           {{if gt .PermLdap 1}}
-          <button type="button" class="sync-toggle-btn" onclick="toggleCollapse('geoCredCollapse', this)"><span class="caret">&#9654;</span> Configure</button>
+          <button type="button" class="sync-btn" onclick="openGeoCred()">Configure</button>
           {{end}}
           <button type="button" class="sync-btn" onClick="testGeoapify()">Test</button>
           {{if gt .PermLdap 1}}
@@ -1528,16 +1547,23 @@
         there is no scheduler.</p>
 
       {{if gt .PermLdap 1}}
-      <div class="sync-collapse" id="geoCredCollapse">
-        <form onsubmit="return saveGeoapify(event)">
-          <div class="sync-form-grid">
-            <div class="sync-field sync-field-wide"><label class="sync-label">Geocoding API key</label><input class="sync-input" type="password" id="geoapifyApiKey" placeholder="{{if .GeoapifySet}}(configured — leave blank to keep){{else}}Geoapify Geocoding API key{{end}}"></div>
+      <div id="geoCredOverlay" class="sync-modal">
+        <div class="sync-modal-box">
+          <div class="sync-modal-head">
+            <h2>Configure geocoding</h2>
+            <button type="button" class="sync-btn sync-btn-sm" onclick="closeGeoCred()">Close</button>
           </div>
-          <div class="sync-form-actions">
-            <button type="submit" class="sync-btn sync-btn-primary">Save API key</button>
-            <span id="geoSaveStatus" class="sync-status-text"></span>
-          </div>
-        </form>
+          <form onsubmit="return saveGeoapify(event)">
+            <div class="sync-form-grid">
+              <div class="sync-field sync-field-wide"><label class="sync-label">Geocoding API key</label><input class="sync-input" type="password" id="geoapifyApiKey" placeholder="{{if .GeoapifySet}}(configured — leave blank to keep){{else}}Geoapify Geocoding API key{{end}}"></div>
+            </div>
+            <div class="sync-form-actions">
+              <button type="submit" class="sync-btn sync-btn-primary">Save API key</button>
+              <button type="button" class="sync-btn" onclick="closeGeoCred()">Cancel</button>
+              <span id="geoSaveStatus" class="sync-status-text"></span>
+            </div>
+          </form>
+        </div>
       </div>
       {{end}}
 
