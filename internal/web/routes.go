@@ -147,6 +147,10 @@ func (app *Server) StartSchedulers() {
 	// Discard abandoned identifier-migration staging (temp buckets) that was
 	// never applied within its 1-hour TTL.
 	app.startMigStageJanitor(10 * time.Minute)
+
+	// Scheduled full-data backups (daily/weekly/monthly). Evaluated once a
+	// minute; a no-op until enabled in the admin Backup subtab.
+	app.StartBackupScheduler()
 }
 
 // startPeriodicSync runs run() first after `first`, then every `interval`. It
@@ -238,6 +242,11 @@ func (app *Server) registerRESTRoutes(mux *http.ServeMux) {
 	rest("/rest/export/progress", app.handleRestExportProgress)
 	rest("/rest/export/download", app.handleRestExportDownload)
 	rest("/rest/import", app.handleRestImport)
+	rest("/rest/backup/schedule", app.handleRestBackupSchedSave)
+	rest("/rest/backup/list", app.handleRestBackupList)
+	rest("/rest/backup/download", app.handleRestBackupDownload)
+	rest("/rest/backup/delete", app.handleRestBackupDelete)
+	rest("/rest/backup/runnow", app.handleRestBackupRunNow)
 	rest("/rest/db/buckets", app.handleRestDBBuckets)
 	rest("/rest/db/entries", app.handleRestDBEntries)
 }

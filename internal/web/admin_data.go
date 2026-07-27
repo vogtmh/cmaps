@@ -77,6 +77,10 @@ func (app *Server) buildAdminData(r *http.Request, sess Session, tab, msg string
 			if k == "internalbooking" {
 				continue
 			}
+			// Scheduled-backup settings have their own card on the Backup subtab.
+			if strings.HasPrefix(k, backupSchedKeyPrefix) {
+				continue
+			}
 			d.GeneralVars = append(d.GeneralVars, kv{Variable: k, Value: v, Description: settingDescriptions[k]})
 		}
 		sort.Slice(d.GeneralVars, func(i, j int) bool { return d.GeneralVars[i].Variable < d.GeneralVars[j].Variable })
@@ -85,6 +89,14 @@ func (app *Server) buildAdminData(r *http.Request, sess Session, tab, msg string
 		d.BackupGroups = backupGroups
 		d.WorldMap = app.db.GetSetting("worldmap") == "1"
 		d.InternalBooking = app.internalBookingEnabled()
+		d.BackupSchedEnabled = app.db.GetSetting(settingBackupSchedEnabled) == "1"
+		d.BackupSchedInterval = app.settingOr(settingBackupSchedInterval, "weekly")
+		d.BackupSchedTime = app.settingOr(settingBackupSchedTime, "03:00")
+		d.BackupSchedDest = app.db.GetSetting(settingBackupSchedDest)
+		d.BackupSchedDestAbs = app.backupDestDir()
+		d.BackupSchedKeep = app.backupKeep()
+		d.BackupSchedNextRun = app.nextRunLabel()
+		d.BackupSchedLastRun = app.lastRunLabel()
 		d.CustomTypes, _ = app.db.ListItemTypes()
 		sort.Slice(d.CustomTypes, func(i, j int) bool {
 			return strings.ToLower(d.CustomTypes[i].Label) < strings.ToLower(d.CustomTypes[j].Label)

@@ -160,6 +160,18 @@
 {{else if eq .ActiveTab "config"}}
   <div class="sync-wrap">
 
+    <!-- Config subtab navigation -->
+    <div class="sync-tabs">
+      <button type="button" class="sync-tab" id="cfgnav_variables" onclick="showCfgSub('variables')"><span class="sync-navdot"></span>Variables</button>
+      <button type="button" class="sync-tab" id="cfgnav_features" onclick="showCfgSub('features')"><span class="sync-navdot"></span>Features</button>
+      {{if gt .PermConfig 1}}
+      <button type="button" class="sync-tab" id="cfgnav_backup" onclick="showCfgSub('backup')"><span class="sync-navdot"></span>Backup</button>
+      {{end}}
+      <button type="button" class="sync-tab" id="cfgnav_customization" onclick="showCfgSub('customization')"><span class="sync-navdot"></span>Customization</button>
+    </div>
+
+    <!-- ===== Variables subtab: base variables, logos, avatar orientation ===== -->
+    <div id="cfgsub_variables" class="syncsub" style="display:none;">
     <div class="sync-cols">
 
       <!-- Base variables (left half) -->
@@ -196,8 +208,68 @@
         {{end}}
       </div>
 
-      <!-- Right column: Dynamic world map + Logos + Backup stacked -->
+      <!-- Right column: Logos + Avatar orientation -->
       <div class="sync-col">
+      <!-- Logos -->
+      <form action="?tab=config" method="post" enctype="multipart/form-data">
+        <input type="hidden" name="tab" value="config">
+        <div class="sync-card">
+          <div class="sync-card-head">
+            <h2 class="sync-card-title">Logos</h2>
+          </div>
+          <p class="sync-card-hint">PNG, JPG or GIF. The hover logo is shown when a user points at the brand in the top bar.</p>
+          <table class="sync-table">
+            <thead>
+              <tr><th>Variable</th><th>Current</th><th>Upload new</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>logo_regular</td>
+                <td><img src="{{.LogoRegular}}" height="45" alt="logo_regular" style="background:#333;padding:4px;border-radius:4px;"></td>
+                <td><input type="file" name="logoRegular" accept="image/png,image/jpeg,image/gif"></td>
+              </tr>
+              <tr>
+                <td>logo_hover</td>
+                <td><img src="{{.LogoHover}}" height="45" alt="logo_hover" style="background:#333;padding:4px;border-radius:4px;"></td>
+                <td><input type="file" name="logoHover" accept="image/png,image/jpeg,image/gif"></td>
+              </tr>
+            </tbody>
+          </table>
+          <div class="sync-form-actions"><button type="submit" class="sync-btn sync-btn-primary">Upload logos</button></div>
+        </div>
+      </form>
+
+      {{if gt .PermConfig 1}}
+      <!-- Avatar orientation -->
+      <div class="sync-card">
+        <div class="sync-card-head">
+          <h2 class="sync-card-title">Avatar orientation</h2>
+        </div>
+        <p class="sync-card-hint">Some avatars were uploaded sideways. Because they are stored as plain cropped
+          squares with no reliable orientation metadata, they can't be detected automatically &mdash; load the full
+          list below, visually spot the sideways ones, rotate each with the arrows, then save. Only rotated avatars
+          are re-written.</p>
+        <div class="sync-form-actions">
+          <button type="button" class="sync-btn sync-btn-primary" id="avatarOrientLoadBtn" onClick="loadAvatars()">Load avatars&hellip;</button>
+          <input type="text" id="avatarOrientFilter" class="sync-input" placeholder="Filter by user id" style="display:none;max-width:220px;margin-left:10px;" oninput="filterAvatars(this.value)">
+          <span id="avatarOrientStatus" class="sync-status-text" style="margin-left:10px;"></span>
+        </div>
+        <div id="avatarOrientResults" style="display:none;margin-top:14px;">
+          <div id="avatarOrientGrid" class="avatar-orient-grid"></div>
+          <div class="sync-form-actions" style="margin-top:12px;">
+            <span id="avatarOrientPending" class="sync-status-text"></span>
+            <button type="button" class="sync-btn sync-btn-primary" id="avatarOrientApplyBtn" onClick="saveAvatarRotations()" disabled>Save rotations</button>
+          </div>
+        </div>
+      </div>
+      {{end}}
+      </div>
+
+    </div>
+    </div>
+
+    <!-- ===== Features subtab: world map, internal booking, VIP desk borders ===== -->
+    <div id="cfgsub_features" class="syncsub" style="display:none;">
       {{if gt .PermConfig 1}}
       <!-- Dynamic world map -->
       <div class="sync-card">
@@ -236,88 +308,94 @@
         </div>
       </div>
       {{end}}
-      <!-- Logos -->
-      <form action="?tab=config" method="post" enctype="multipart/form-data">
-        <input type="hidden" name="tab" value="config">
-        <div class="sync-card">
-          <div class="sync-card-head">
-            <h2 class="sync-card-title">Logos</h2>
-          </div>
-          <p class="sync-card-hint">PNG, JPG or GIF. The hover logo is shown when a user points at the brand in the top bar.</p>
-          <table class="sync-table">
-            <thead>
-              <tr><th>Variable</th><th>Current</th><th>Upload new</th></tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td>logo_regular</td>
-                <td><img src="{{.LogoRegular}}" height="45" alt="logo_regular" style="background:#333;padding:4px;border-radius:4px;"></td>
-                <td><input type="file" name="logoRegular" accept="image/png,image/jpeg,image/gif"></td>
-              </tr>
-              <tr>
-                <td>logo_hover</td>
-                <td><img src="{{.LogoHover}}" height="45" alt="logo_hover" style="background:#333;padding:4px;border-radius:4px;"></td>
-                <td><input type="file" name="logoHover" accept="image/png,image/jpeg,image/gif"></td>
-              </tr>
-            </tbody>
-          </table>
-          <div class="sync-form-actions"><button type="submit" class="sync-btn sync-btn-primary">Upload logos</button></div>
-        </div>
-      </form>
 
-      {{if gt .PermConfig 1}}
-      <!-- Backup & restore (right column, below Logos) -->
+      <!-- VIP desk borders -->
+      <div class="sync-card">
+        <div class="sync-card-head">
+          <h2 class="sync-card-title">VIP desk borders</h2>
+        </div>
+        <p class="sync-card-hint">Add tags that are matched against each person's job title. Matching desks get a colored border on the maps.</p>
+        <div id="vipCategories" class="vip-cats">Loading&hellip;</div>
+      </div>
+    </div>
+
+    {{if gt .PermConfig 1}}
+    <!-- ===== Backup subtab: export/import + schedule + stored backups ===== -->
+    <div id="cfgsub_backup" class="syncsub" style="display:none;">
+      <!-- Backup & restore (manual) -->
       <div class="sync-card">
         <div class="sync-card-head">
           <h2 class="sync-card-title">Backup &amp; restore</h2>
         </div>
         <p class="sync-card-hint">Export the entire data set (database, map images, logos and avatar cache) as a single
-          zip &mdash; the <code>config.json</code> file is never included. Import lets you choose exactly which data sets to
+          zip &mdash; the <code>config.json</code> file is bundled with its admin password redacted. Import lets you choose exactly which data sets to
           restore; imported data overwrites the matching existing data.</p>
         <div class="sync-form-actions">
           <button type="button" class="sync-btn sync-btn-primary" onClick="openExportModal()">Export&hellip;</button>
           <button type="button" class="sync-btn" onClick="openImportModal()">Import&hellip;</button>
         </div>
       </div>
-      {{end}}
 
-      {{if gt .PermConfig 1}}
-      <!-- Avatar orientation -->
+      <!-- Scheduled backups -->
       <div class="sync-card">
         <div class="sync-card-head">
-          <h2 class="sync-card-title">Avatar orientation</h2>
+          <h2 class="sync-card-title">Scheduled backups</h2>
         </div>
-        <p class="sync-card-hint">Some avatars were uploaded sideways. Because they are stored as plain cropped
-          squares with no reliable orientation metadata, they can't be detected automatically &mdash; load the full
-          list below, visually spot the sideways ones, rotate each with the arrows, then save. Only rotated avatars
-          are re-written.</p>
-        <div class="sync-form-actions">
-          <button type="button" class="sync-btn sync-btn-primary" id="avatarOrientLoadBtn" onClick="loadAvatars()">Load avatars&hellip;</button>
-          <input type="text" id="avatarOrientFilter" class="sync-input" placeholder="Filter by user id" style="display:none;max-width:220px;margin-left:10px;" oninput="filterAvatars(this.value)">
-          <span id="avatarOrientStatus" class="sync-status-text" style="margin-left:10px;"></span>
+        <p class="sync-card-hint">Automatically write a full backup archive on a schedule. Each archive is identical to
+          a manual export (database, map images, logos, avatar cache and the redacted <code>config.json</code>). Runs
+          missed while the server is offline are skipped to the next occurrence.</p>
+        <div class="sync-toggle-row">
+          <label class="sync-toggle">
+            <input type="checkbox" id="backupSchedEnabled" {{if .BackupSchedEnabled}}checked{{end}}>
+            <span class="sync-toggle-slider"></span>
+          </label>
+          <span class="sync-toggle-label">Enable scheduled backups</span>
         </div>
-        <div id="avatarOrientResults" style="display:none;margin-top:14px;">
-          <div id="avatarOrientGrid" class="avatar-orient-grid"></div>
-          <div class="sync-form-actions" style="margin-top:12px;">
-            <span id="avatarOrientPending" class="sync-status-text"></span>
-            <button type="button" class="sync-btn sync-btn-primary" id="avatarOrientApplyBtn" onClick="saveAvatarRotations()" disabled>Save rotations</button>
+        <div class="sync-form-grid" style="margin-top:14px;">
+          <div class="sync-field">
+            <label class="sync-label">Interval</label>
+            <select class="sync-input" id="backupSchedInterval">
+              <option value="daily" {{if eq .BackupSchedInterval "daily"}}selected{{end}}>Daily</option>
+              <option value="weekly" {{if eq .BackupSchedInterval "weekly"}}selected{{end}}>Weekly</option>
+              <option value="monthly" {{if eq .BackupSchedInterval "monthly"}}selected{{end}}>Monthly</option>
+            </select>
+          </div>
+          <div class="sync-field">
+            <label class="sync-label">Time (24h, server time)</label>
+            <input class="sync-input" type="time" id="backupSchedTime" value="{{.BackupSchedTime}}">
+          </div>
+          <div class="sync-field">
+            <label class="sync-label">Keep (archives)</label>
+            <input class="sync-input" type="number" id="backupSchedKeep" min="1" value="{{.BackupSchedKeep}}">
+          </div>
+          <div class="sync-field sync-field-wide">
+            <label class="sync-label">Destination directory</label>
+            <input class="sync-input" type="text" id="backupSchedDest" value="{{.BackupSchedDest}}" placeholder="backups">
+            <div class="sync-setting-desc">Saved to: <code id="backupSchedDestAbs">{{.BackupSchedDestAbs}}</code></div>
           </div>
         </div>
-      </div>
-      {{end}}
+        <div class="sync-form-actions">
+          <button type="button" class="sync-btn sync-btn-primary" onclick="saveBackupSched(this)">Save schedule</button>
+          <button type="button" class="sync-btn" onclick="runBackupNow(this)">Run now</button>
+          <span id="backupSchedStatus" class="sync-status-text" style="margin-left:10px;"></span>
+        </div>
+        <p class="sync-card-hint" style="margin-top:10px;">Next run: <span id="backupSchedNextRun">{{.BackupSchedNextRun}}</span>{{if .BackupSchedLastRun}} &middot; Last run: <span id="backupSchedLastRun">{{.BackupSchedLastRun}}</span>{{end}}</p>
       </div>
 
+      <!-- Stored backups -->
+      <div class="sync-card">
+        <div class="sync-card-head">
+          <h2 class="sync-card-title">Stored backups</h2>
+          <button type="button" class="sync-btn sync-btn-sm" onclick="loadBackupList()" style="margin-left:auto;">Refresh</button>
+        </div>
+        <p class="sync-card-hint">Backup archives found in the destination directory. Download or delete only affects files here.</p>
+        <div id="backupListWrap"><div class="sync-empty">Loading&hellip;</div></div>
+      </div>
     </div>
+    {{end}}
 
-    <!-- VIP desk borders -->
-    <div class="sync-card">
-      <div class="sync-card-head">
-        <h2 class="sync-card-title">VIP desk borders</h2>
-      </div>
-      <p class="sync-card-hint">Add tags that are matched against each person's job title. Matching desks get a colored border on the maps.</p>
-      <div id="vipCategories" class="vip-cats">Loading&hellip;</div>
-    </div>
-
+    <!-- ===== Customization subtab: custom item types ===== -->
+    <div id="cfgsub_customization" class="syncsub" style="display:none;">
     <!-- Custom item types -->
     <div class="sync-card">
       <div class="sync-card-head">
@@ -367,6 +445,7 @@
       {{else}}
       <div class="sync-empty">No custom item types configured yet.</div>
       {{end}}
+    </div>
     </div>
 
     {{if gt .PermDesks 1}}
@@ -553,6 +632,7 @@
     }
   </script>
   {{end}}
+  <script>showCfgSub("{{if .SyncSub}}{{.SyncSub}}{{else}}variables{{end}}");</script>
 
 {{else if eq .ActiveTab "ldap"}}
   {{if .IsEditor}}<script>token = "{{.Token}}"; username = "{{.Username}}"; console.log("Token: " + token);</script>{{end}}

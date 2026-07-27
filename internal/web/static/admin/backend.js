@@ -719,6 +719,149 @@ function showSyncSub(name) {
   }
 }
 
+// showCfgSub switches between the Config (General) tab subsections
+// (Variables, Features, Backup, Customization), mirroring showSyncSub. It falls
+// back to the first rendered subsection when the requested one is missing (e.g.
+// the Backup subtab is hidden for read-only config permission) and persists the
+// active subtab in the URL as ?sub=.
+function showCfgSub(name) {
+  var subs = ['variables', 'features', 'backup', 'customization'];
+  if (!document.getElementById('cfgsub_' + name)) {
+    name = null;
+    for (var i = 0; i < subs.length; i++) {
+      if (document.getElementById('cfgsub_' + subs[i])) { name = subs[i]; break; }
+    }
+  }
+  subs.forEach(function (s) {
+    var content = document.getElementById('cfgsub_' + s);
+    var nav = document.getElementById('cfgnav_' + s);
+    if (content) content.style.display = (s === name) ? 'block' : 'none';
+    if (nav) nav.classList.toggle('active', s === name);
+  });
+  // Lazily load the stored-backup list the first time the Backup subtab shows.
+  if (name === 'backup') { loadBackupList(); }
+  if (name) {
+    try {
+      var p = new URLSearchParams(window.location.search);
+      if (p.get('sub') !== name) {
+        p.set('sub', name);
+        history.replaceState(history.state, '', '?' + p.toString());
+      }
+    } catch (e) { /* history API unavailable: ignore */ }
+  }
+}
+
+// ---- Scheduled backups (Config > Backup subtab) ----
+
+// saveBackupSched persists the scheduled-backup settings and updates the inline
+// next-run label and resolved destination path.
+function saveBackupSched(btn) {
+  var status = document.getElementById('backupSchedStatus');
+  var orig = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = 'Saving\u2026'; }
+  if (status) { status.style.color = ''; status.textContent = ''; }
+  var body = new URLSearchParams();
+  body.set('enabled', document.getElementById('backupSchedEnabled').checked ? '1' : '');
+  body.set('interval', document.getElementById('backupSchedInterval').value);
+  body.set('time', document.getElementById('backupSchedTime').value);
+  body.set('keep', document.getElementById('backupSchedKeep').value);
+  body.set('dest', document.getElementById('backupSchedDest').value);
+  fetch('../rest/backup/schedule', {
+    method: 'POST', credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: body.toString()
+  }).then(function (r) { return r.json(); }).then(function (d) {
+    if (btn) { btn.disabled = false; btn.textContent = orig; }
+    if (!d || !d.ok) {
+      if (status) { status.style.color = 'var(--sy-danger)'; status.textContent = (d && d.message) || 'Save failed.'; }
+      return;
+    }
+    var abs = document.getElementById('backupSchedDestAbs');
+    if (abs && d.resolved) abs.textContent = d.resolved;
+    var next = document.getElementById('backupSchedNextRun');
+    if (next && d.nextRun) next.textContent = d.nextRun;
+    if (status) { status.style.color = 'var(--sy-ok)'; status.textContent = 'Saved.'; }
+    loadBackupList();
+  }).catch(function () {
+    if (btn) { btn.disabled = false; btn.textContent = orig; }
+    if (status) { status.style.color = 'var(--sy-danger)'; status.textContent = 'Save request failed.'; }
+  });
+}
+
+// runBackupNow writes a backup immediately without changing the schedule.
+function runBackupNow(btn) {
+  var status = document.getElementById('backupSchedStatus');
+  var orig = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = 'Backing up\u2026'; }
+  if (status) { status.style.color = ''; status.textContent = ''; }
+  fetch('../rest/backup/runnow', { method: 'POST', credentials: 'same-origin' })
+    .then(function (r) { return r.json(); }).then(function (d) {
+      if (btn) { btn.disabled = false; btn.textContent = orig; }
+      if (!d || !d.ok) {
+        if (status) { status.style.color = 'var(--sy-danger)'; status.textContent = (d && d.message) || 'Backup failed.'; }
+        return;
+      }
+      if (status) { status.style.color = 'var(--sy-ok)'; status.textContent = 'Backup created.'; }
+      loadBackupList();
+    }).catch(function () {
+      if (btn) { btn.disabled = false; btn.textContent = orig; }
+      if (status) { status.style.color = 'var(--sy-danger)'; status.textContent = 'Backup request failed.'; }
+    });
+}
+
+// loadBackupList refreshes the stored-backup table for the Backup subtab.
+function loadBackupList() {
+  var wrap = document.getElementById('backupListWrap');
+  if (!wrap) return;
+  $.ajax({
+    url: '../rest/backup/list', type: 'GET', dataType: 'JSON',
+    success: function (d) {
+      if (!d || !d.ok) { wrap.innerHTML = '<div class="sync-empty">Could not load backups.</div>'; return; }
+      var next = document.getElementById('backupSchedNextRun');
+      if (next && d.nextRun) next.textContent = d.nextRun;
+      var files = d.files || [];
+      if (!files.length) { wrap.innerHTML = '<div class="sync-empty">No backups stored yet.</div>'; return; }
+      var html = '<table class="sync-table"><thead><tr><th>Archive</th><th class="sync-td-min">Size</th><th>Created</th><th class="sync-td-min">Actions</th></tr></thead><tbody>';
+      for (var i = 0; i < files.length; i++) {
+        var f = files[i];
+        html += '<tr><td>' + esc(f.name) + '</td>' +
+          '<td class="sync-td-min">' + fmtBytes(f.size) + '</td>' +
+          '<td>' + esc(f.modtime) + '</td>' +
+          '<td class="sync-td-min"><div style="display:flex;gap:6px;">' +
+          '<a class="sync-btn sync-btn-sm" href="../rest/backup/download?name=' + encodeURIComponent(f.name) + '">Download</a>' +
+          '<button type="button" class="sync-btn sync-btn-sm sync-btn-danger" onclick="deleteBackup(\'' + esc(f.name) + '\')">Delete</button>' +
+          '</div></td></tr>';
+      }
+      html += '</tbody></table>';
+      wrap.innerHTML = html;
+    },
+    error: function () { wrap.innerHTML = '<div class="sync-empty">Could not load backups (forbidden or server error).</div>'; }
+  });
+}
+
+// deleteBackup removes one stored backup archive after confirmation.
+function deleteBackup(name) {
+  if (!confirm('Delete backup "' + name + '"? This cannot be undone.')) return;
+  var body = 'name=' + encodeURIComponent(name);
+  fetch('../rest/backup/delete', {
+    method: 'POST', credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: body
+  }).then(function (r) { return r.json(); }).then(function (d) {
+    if (!d || !d.ok) { alert((d && d.message) || 'Delete failed.'); return; }
+    loadBackupList();
+  }).catch(function () { alert('Delete request failed.'); });
+}
+
+// fmtBytes renders a byte count as a human-readable size.
+function fmtBytes(n) {
+  n = Number(n) || 0;
+  var units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  var i = 0;
+  while (n >= 1024 && i < units.length - 1) { n /= 1024; i++; }
+  return (i === 0 ? n : n.toFixed(1)) + ' ' + units[i];
+}
+
 // ---- Read-only database browser (Sync > Database subtab) ----
 var dbState = { loaded: false, offset: 0, limit: 50, total: 0 };
 

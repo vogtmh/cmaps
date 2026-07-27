@@ -172,7 +172,16 @@ type adminData struct {
 	BackupGroups            []backupGroup
 	WorldMap                bool
 	InternalBooking         bool
-	IdentifierMode          string
+	// Scheduled backup settings surfaced on the Config > Backup subtab.
+	BackupSchedEnabled  bool
+	BackupSchedInterval string
+	BackupSchedTime     string
+	BackupSchedDest     string // as entered by the admin (may be relative or empty)
+	BackupSchedDestAbs  string // resolved absolute path shown as a subtitle
+	BackupSchedKeep     int
+	BackupSchedNextRun  string
+	BackupSchedLastRun  string
+	IdentifierMode      string
 	GeoapifyConfigured      bool
 	// HasRealSource is true when a genuine directory source (non-demo LDAP,
 	// EntraID or Robin) is configured. When false, the Sync tab offers a "Demo
@@ -241,9 +250,12 @@ func (app *Server) handleAdmin(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	// Custom item types now live on the Config tab; alias the legacy tab link so
-	// old bookmarks and posts land on the Config tab.
+	// old bookmarks and posts land on the Config tab's Customization subtab.
 	if tab == "itemtypes" {
 		tab = "config"
+		if syncSub == "" {
+			syncSub = "customization"
+		}
 	}
 	// The Health tab has been merged into the Dashboard; alias the legacy link.
 	if tab == "health" {

@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"bytes"
 	"companymaps/internal/config"
+	"companymaps/internal/progress"
 	"companymaps/internal/store"
 	"encoding/json"
 	"fmt"
@@ -158,6 +159,34 @@ func (app *Server) buildExport() error {
 	tmpPath := tmp.Name()
 	zw := zip.NewWriter(tmp)
 
+	if err := app.writeBackupZip(zw, &app.exportProg); err != nil {
+		_ = closeAndRemove(tmp, zw, tmpPath)
+		return err
+	}
+
+	if err := zw.Close(); err != nil {
+		_ = tmp.Close()
+		_ = os.Remove(tmpPath)
+		return fmt.Errorf("finalizing zip: %w", err)
+	}
+	if err := tmp.Close(); err != nil {
+		_ = os.Remove(tmpPath)
+		return fmt.Errorf("closing zip: %w", err)
+	}
+
+	app.exportMu.Lock()
+	app.exportPath = tmpPath
+	app.exportName = "cmaps-backup-" + time.Now().Format("20060102-150405") + ".zip"
+	app.exportMu.Unlock()
+	return nil
+}
+
+// writeBackupZip writes the complete backup archive (manifest, redacted
+// config.json, a consistent bolt database snapshot and every asset directory)
+// into zw. When prog is non-nil the asset-copy loop advances it one step per
+// file so the manual export can show a determinate progress bar; the scheduled
+// backup passes nil.
+func (app *Server) writeBackupZip(zw *zip.Writer, prog *progress.Progress) error {
 	// manifest.json — metadata describing what the archive contains.
 	manifest := map[string]interface{}{
 		"app":       "CompanyMaps",
@@ -190,14 +219,14 @@ func (app *Server) buildExport() error {
 	// cmaps.db — consistent bolt snapshot written straight into the archive.
 	dbWriter, err := zw.Create("cmaps.db")
 	if err != nil {
-		_ = closeAndRemove(tmp, zw, tmpPath)
 		return fmt.Errorf("zip db entry: %w", err)
 	}
 	if err := app.db.SnapshotTo(dbWriter); err != nil {
-		_ = closeAndRemove(tmp, zw, tmpPath)
 		return fmt.Errorf("db snapshot: %w", err)
 	}
-	app.exportProg.Step("Adding files…")
+	if prog != nil {
+		prog.Step("Adding files…")
+	}
 
 	// Asset directories — copied file by file, preserving the dir/<name> layout.
 	for _, dir := range backupAssetDirs {
@@ -223,29 +252,15 @@ func (app *Server) buildExport() error {
 			}
 			_, _ = io.Copy(fw, src)
 			_ = src.Close()
-			app.exportProg.Step("")
+			if prog != nil {
+				prog.Step("")
+			}
 			return nil
 		})
 		if err != nil {
-			_ = closeAndRemove(tmp, zw, tmpPath)
 			return fmt.Errorf("archiving %s: %w", dir, err)
 		}
 	}
-
-	if err := zw.Close(); err != nil {
-		_ = tmp.Close()
-		_ = os.Remove(tmpPath)
-		return fmt.Errorf("finalizing zip: %w", err)
-	}
-	if err := tmp.Close(); err != nil {
-		_ = os.Remove(tmpPath)
-		return fmt.Errorf("closing zip: %w", err)
-	}
-
-	app.exportMu.Lock()
-	app.exportPath = tmpPath
-	app.exportName = "cmaps-backup-" + time.Now().Format("20060102-150405") + ".zip"
-	app.exportMu.Unlock()
 	return nil
 }
 
