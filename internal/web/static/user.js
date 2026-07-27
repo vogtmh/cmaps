@@ -1999,6 +1999,9 @@ function searchDesks() {
 }
 
 function searchLocaldesks() {
+  // On a location without a map there is no desk data loaded, so bail out and
+  // let the global search handle the query.
+  if (!result_old || !result_old.desks) { return; }
   var localdesks = result_old.desks;
   var gotoY = 0
   $.each( localdesks, function( t, localdesk ){
