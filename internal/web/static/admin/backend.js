@@ -870,7 +870,7 @@ function fmtBytes(n) {
 }
 
 // ---- Read-only database browser (Sync > Database subtab) ----
-var dbState = { loaded: false, offset: 0, limit: 50, total: 0 };
+var dbState = { loading: false, offset: 0, limit: 50, total: 0 };
 
 function dbEscape(s) {
   return String(s == null ? '' : s)
@@ -883,17 +883,23 @@ function dbPretty(val) {
   catch (e) { return val; }
 }
 
-// dbInit loads the bucket list once, the first time the tab is opened.
+// dbInit loads the bucket list the first time the Database subtab is shown.
+// The admin tab content is re-created on every AJAX tab swap, so the guard is
+// tied to the actual DOM (an empty <select>) rather than a persistent flag,
+// which would go stale and leave a freshly-rendered dropdown empty until a full
+// page reload.
 function dbInit() {
-  if (dbState.loaded) { return; }
-  dbState.loaded = true;
   var sel = document.getElementById('dbBucketSelect');
+  if (!sel) { return; }
+  if (sel.options.length > 0 || dbState.loading) { return; }
+  dbState.loading = true;
   var status = document.getElementById('dbBrowseStatus');
   if (status) { status.textContent = 'Loading buckets\u2026'; }
   $.ajax({
     url: '../rest/db/buckets?token=' + token,
     async: true, type: 'get', dataType: 'JSON',
     success: function(d) {
+      dbState.loading = false;
       var buckets = (d && d.buckets) || [];
       var html = '<option value="">Select a bucket\u2026</option>';
       buckets.forEach(function(b) {
@@ -903,7 +909,7 @@ function dbInit() {
       if (status) { status.textContent = buckets.length + ' bucket(s). Choose one to browse.'; }
     },
     error: function() {
-      dbState.loaded = false;
+      dbState.loading = false;
       if (status) { status.textContent = 'Failed to load buckets.'; }
     }
   });
