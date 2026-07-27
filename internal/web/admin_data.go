@@ -287,7 +287,7 @@ func (app *Server) buildAdminData(r *http.Request, sess Session, tab, msg string
 					mail = strings.TrimSpace(m)
 				}
 			}
-			d.Mapadmins = append(d.Mapadmins, adminUserRow{Username: u.Username, Name: display, Mail: mail, Role: u.Role, RoleName: name})
+			d.Mapadmins = append(d.Mapadmins, adminUserRow{Username: u.Username, Name: display, Mail: mail, Role: u.Role, RoleName: name, Avatar: sam})
 		}
 		sort.Slice(d.Mapadmins, func(i, j int) bool {
 			return strings.ToLower(d.Mapadmins[i].Name) < strings.ToLower(d.Mapadmins[j].Name)

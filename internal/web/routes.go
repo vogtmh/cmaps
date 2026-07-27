@@ -213,6 +213,7 @@ func (app *Server) registerRESTRoutes(mux *http.ServeMux) {
 	rest("/rest/entra/gencert", app.handleRestEntraGenCert)
 	rest("/rest/directory/search", app.handleRestDirectorySearch)
 	rest("/rest/directory/match", app.handleRestDirectoryMatch)
+	rest("/rest/allusers", app.handleRestAllUsers)
 	rest("/rest/identifier/analyze", app.handleRestIdentifierAnalyze)
 	rest("/rest/identifier/create", app.handleRestIdentifierCreate)
 	rest("/rest/identifier/stageresult", app.handleRestIdentifierStageResult)

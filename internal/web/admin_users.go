@@ -4,6 +4,7 @@ import (
 	"companymaps/internal/store"
 	"fmt"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -155,6 +156,117 @@ func (app *Server) handleRestDirectorySearch(w http.ResponseWriter, r *http.Requ
 	}
 
 	writeJSON(w, out)
+}
+
+// handleRestAllUsers powers the "All users" subtab: it lists every account in
+// the users bucket (including role-0 accounts, e.g. freshly provisioned SAML
+// users) with a resolved display name, mail and role. The list is paged and
+// searchable server-side so large directories load lazily.
+func (app *Server) handleRestAllUsers(w http.ResponseWriter, r *http.Request) {
+	sess, ok := app.currentSession(r)
+	if !ok || app.permLevel(sess, "users") < 1 {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+
+	offset, _ := strconv.Atoi(r.URL.Query().Get("offset"))
+	if offset < 0 {
+		offset = 0
+	}
+	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+	if limit <= 0 || limit > 200 {
+		limit = 100
+	}
+	q := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("q")))
+
+	// Role names for the role column.
+	roleName := map[int]string{}
+	if roles, err := app.db.ListRoles(); err == nil {
+		for _, ro := range roles {
+			roleName[ro.ID] = ro.Rolename
+		}
+	}
+	// Cached directory for name/mail resolution, keyed by lowercased sam.
+	ldapNames := map[string]string{}
+	ldapMails := map[string]string{}
+	if dir, err := app.db.ListDirectory(); err == nil {
+		for _, d := range dir {
+			ldapNames[strings.ToLower(d.Userid)] = d.DisplayName()
+			ldapMails[strings.ToLower(d.Userid)] = d.Mail
+		}
+	}
+
+	type row struct {
+		Avatar    string `json:"avatar"`
+		Name      string `json:"name"`
+		Username  string `json:"username"`
+		Mail      string `json:"mail"`
+		Role      int    `json:"role"`
+		RoleName  string `json:"rolename"`
+		LastLogin string `json:"lastlogin"`
+	}
+
+	users, _ := app.db.ListUsers()
+	rows := make([]row, 0, len(users))
+	for _, u := range users {
+		sam := u.Username
+		if idx := strings.LastIndex(sam, "\\"); idx >= 0 {
+			sam = sam[idx+1:]
+		}
+		display := strings.TrimSpace(u.Fullname)
+		if display == "" {
+			if full, ok := ldapNames[strings.ToLower(sam)]; ok {
+				display = full
+			}
+		}
+		if display == "" {
+			display = u.Username
+		}
+		mail := strings.TrimSpace(u.Mail)
+		if mail == "" {
+			if m, ok := ldapMails[strings.ToLower(sam)]; ok {
+				mail = strings.TrimSpace(m)
+			}
+		}
+		rn := roleName[u.Role]
+		if rn == "" {
+			if u.Role == 0 {
+				rn = "No role"
+			} else {
+				rn = strconv.Itoa(u.Role)
+			}
+		}
+		if q != "" && !strings.Contains(strings.ToLower(display+" "+u.Username+" "+mail), q) {
+			continue
+		}
+		rows = append(rows, row{
+			Avatar:    sam,
+			Name:      display,
+			Username:  u.Username,
+			Mail:      mail,
+			Role:      u.Role,
+			RoleName:  rn,
+			LastLogin: u.LastLogin,
+		})
+	}
+	sort.Slice(rows, func(i, j int) bool {
+		return strings.ToLower(rows[i].Name) < strings.ToLower(rows[j].Name)
+	})
+
+	total := len(rows)
+	end := offset + limit
+	if offset > total {
+		offset = total
+	}
+	if end > total {
+		end = total
+	}
+	page := rows[offset:end]
+	writeJSON(w, map[string]interface{}{
+		"users":   page,
+		"hasMore": end < total,
+		"total":   total,
+	})
 }
 
 // handleRestDirectoryMatch re-resolves the full name (and mail) of every

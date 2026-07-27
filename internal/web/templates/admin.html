@@ -1922,6 +1922,13 @@
 
 {{else if eq .ActiveTab "users"}}
   <div class="sync-wrap">
+  <div class="sync-tabs">
+    <button type="button" class="sync-tab" id="usernav_admins" onclick="showUsersSub('admins')"><span class="sync-navdot"></span>Administrators</button>
+    <button type="button" class="sync-tab" id="usernav_all" onclick="showUsersSub('all')"><span class="sync-navdot"></span>All users</button>
+  </div>
+  <div class="sync-pane">
+
+  <div id="usersub_admins" class="syncsub" style="display:none;">
     <div class="sync-card">
       <div class="sync-card-head">
         <h2 class="sync-card-title">Administrators</h2>
@@ -1935,12 +1942,13 @@
       <table class="sync-table">
         <thead>
           <tr>
-            <th>Name</th><th>Username</th><th>Mail</th><th>Role</th>{{if gt .PermUsers 1}}<th class="sync-td-min"></th>{{end}}
+            <th class="sync-td-min"></th><th>Name</th><th>Username</th><th>Mail</th><th>Role</th>{{if gt .PermUsers 1}}<th class="sync-td-min"></th>{{end}}
           </tr>
         </thead>
         <tbody>
         {{range .Mapadmins}}
           <tr>
+            <td class="sync-td-min"><img class="sync-avatar" src="../avatarcache/{{.Avatar}}.jpg" alt="" loading="lazy" onerror="this.onerror=null;this.src='../images/noavatar2.png'"></td>
             <td>{{.Name}}</td>
             <td>{{.Username}}</td>
             <td>{{if .Mail}}{{.Mail}}{{else}}&mdash;{{end}}</td>
@@ -1993,6 +2001,32 @@
       {{end}}
     </div>
   </div>
+
+  <div id="usersub_all" class="syncsub" style="display:none;">
+    <div class="sync-card">
+      <div class="sync-card-head">
+        <h2 class="sync-card-title">All users</h2>
+        <span class="sync-badge sync-badge-accent" id="allUsersCount">&hellip;</span>
+      </div>
+      <div style="margin-bottom:12px;">
+        <input type="text" class="sync-input" id="allUsersSearch" placeholder="Search name, username or mail&hellip;" style="max-width:360px;" oninput="allUsersFilterChanged()">
+      </div>
+      <table class="sync-table" id="allUsersTable">
+        <thead>
+          <tr>
+            <th class="sync-td-min"></th><th>Name</th><th>Username</th><th>Mail</th><th>Role</th><th>Last login</th>
+          </tr>
+        </thead>
+        <tbody id="allUsersBody"></tbody>
+      </table>
+      <div id="allUsersSentinel" style="height:1px;"></div>
+      <div id="allUsersStatus" class="sync-status-text" style="margin-top:10px;"></div>
+    </div>
+  </div>
+
+  </div>
+  </div>
+  <script>showUsersSub("{{if .SyncSub}}{{.SyncSub}}{{else}}admins{{end}}");</script>
 
 {{else if eq .ActiveTab "teams"}}
   <div class="sync-wrap">

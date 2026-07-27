@@ -758,6 +758,33 @@ function showCfgSub(name) {
   }
 }
 
+// showUsersSub switches between the Users tab subsections (Administrators and
+// All users), mirroring showSyncSub/showCfgSub. It lazily initialises the
+// all-users list the first time that subtab is shown and persists the active
+// subtab in the URL as ?sub=.
+function showUsersSub(name) {
+  var subs = ['admins', 'all'];
+  if (!document.getElementById('usersub_' + name)) {
+    name = 'admins';
+  }
+  subs.forEach(function (s) {
+    var content = document.getElementById('usersub_' + s);
+    var nav = document.getElementById('usernav_' + s);
+    if (content) content.style.display = (s === name) ? 'block' : 'none';
+    if (nav) nav.classList.toggle('active', s === name);
+  });
+  if (name === 'all') { initAllUsers(); }
+  if (name) {
+    try {
+      var p = new URLSearchParams(window.location.search);
+      if (p.get('sub') !== name) {
+        p.set('sub', name);
+        history.replaceState(history.state, '', '?' + p.toString());
+      }
+    } catch (e) { /* history API unavailable: ignore */ }
+  }
+}
+
 // ---- Scheduled backups (Config > Backup subtab) ----
 
 // saveBackupSched persists the scheduled-backup settings and updates the inline
@@ -3436,6 +3463,143 @@ function initAuditLog() {
       if (entries[0].isIntersecting) { loadAuditPage(); }
     }, { threshold: 0 });
     _auditObserver.observe(sentinel);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// All users subtab (Users tab): lazy-loaded, server-side searched list of every
+// account in the users bucket. Cloned from the audit-log pager.
+// ---------------------------------------------------------------------------
+var ALLUSERS_PAGE = 100;
+var _allUsersOffset = 0;
+var _allUsersHasMore = true;
+var _allUsersLoading = false;
+var _allUsersObserver = null;
+var _allUsersDebounce = null;
+var _allUsersGen = 0; // bumped on every filter change; stale responses ignored
+
+// Called on every keystroke in the search box. Debounced; resets the pager and
+// reloads from the top. Bumping the generation discards any in-flight response.
+function allUsersFilterChanged() {
+  clearTimeout(_allUsersDebounce);
+  _allUsersDebounce = setTimeout(function () {
+    _allUsersGen++;
+    _allUsersOffset = 0;
+    _allUsersHasMore = true;
+    _allUsersLoading = false;
+    var body = document.getElementById('allUsersBody');
+    if (body) { body.innerHTML = ''; }
+    loadAllUsersPage();
+  }, 300);
+}
+
+function loadAllUsersPage() {
+  if (_allUsersLoading || !_allUsersHasMore) { return; }
+  _allUsersLoading = true;
+  var gen = _allUsersGen;
+  var q = (document.getElementById('allUsersSearch') || {}).value || '';
+  $.ajax({
+    url: '../rest/allusers/',
+    async: true,
+    type: 'get',
+    dataType: 'JSON',
+    data: { offset: _allUsersOffset, limit: ALLUSERS_PAGE, q: q },
+    success: function (res) {
+      if (gen !== _allUsersGen) { return; } // superseded by a newer filter state
+      var rows = (res && res.users) ? res.users : [];
+      var body = document.getElementById('allUsersBody');
+      if (body) {
+        rows.forEach(function (u) {
+          var tr = document.createElement('tr');
+
+          var tdAv = document.createElement('td');
+          tdAv.className = 'sync-td-min';
+          var img = document.createElement('img');
+          img.className = 'sync-avatar';
+          img.alt = '';
+          img.loading = 'lazy';
+          img.onerror = function () { this.onerror = null; this.src = '../images/noavatar2.png'; };
+          img.src = '../avatarcache/' + encodeURIComponent(u.avatar || '') + '.jpg';
+          tdAv.appendChild(img);
+
+          var tdName = document.createElement('td');
+          tdName.textContent = u.name || '';
+          var tdUser = document.createElement('td');
+          tdUser.textContent = u.username || '';
+          var tdMail = document.createElement('td');
+          tdMail.textContent = u.mail || '\u2014';
+          var tdRole = document.createElement('td');
+          tdRole.textContent = u.rolename || '';
+          var tdLast = document.createElement('td');
+          tdLast.style.whiteSpace = 'nowrap';
+          tdLast.textContent = u.lastlogin || '\u2014';
+
+          tr.appendChild(tdAv);
+          tr.appendChild(tdName);
+          tr.appendChild(tdUser);
+          tr.appendChild(tdMail);
+          tr.appendChild(tdRole);
+          tr.appendChild(tdLast);
+          body.appendChild(tr);
+        });
+      }
+      _allUsersOffset += rows.length;
+      _allUsersHasMore = !!(res && res.hasMore);
+      _allUsersLoading = false;
+      updateAllUsersStatus(res && res.total);
+      if (_allUsersHasMore && allUsersSentinelVisible()) { loadAllUsersPage(); }
+    },
+    error: function () {
+      if (gen !== _allUsersGen) { return; }
+      _allUsersLoading = false;
+      var s = document.getElementById('allUsersStatus');
+      if (s) { s.textContent = 'Could not load users.'; }
+    }
+  });
+}
+
+function allUsersSentinelVisible() {
+  var s = document.getElementById('allUsersSentinel');
+  if (!s) { return false; }
+  var r = s.getBoundingClientRect();
+  return r.top < (window.innerHeight || document.documentElement.clientHeight);
+}
+
+function updateAllUsersStatus(total) {
+  var cnt = document.getElementById('allUsersCount');
+  if (cnt) {
+    if (typeof total === 'number') {
+      cnt.textContent = total + (total === 1 ? ' user' : ' users');
+    } else {
+      cnt.textContent = _allUsersOffset + (_allUsersHasMore ? '+' : '');
+    }
+  }
+  var s = document.getElementById('allUsersStatus');
+  if (!s) { return; }
+  if (_allUsersOffset === 0) {
+    s.textContent = 'No matching users.';
+  } else if (_allUsersHasMore) {
+    s.textContent = 'Showing ' + _allUsersOffset + ' \u2014 scroll for more';
+  } else {
+    s.textContent = 'Showing all ' + _allUsersOffset + ' matching user(s)';
+  }
+}
+
+function initAllUsers() {
+  _allUsersGen++;
+  _allUsersOffset = 0;
+  _allUsersHasMore = true;
+  _allUsersLoading = false;
+  var body = document.getElementById('allUsersBody');
+  if (body) { body.innerHTML = ''; }
+  loadAllUsersPage();
+  var sentinel = document.getElementById('allUsersSentinel');
+  if (sentinel && 'IntersectionObserver' in window) {
+    if (_allUsersObserver) { _allUsersObserver.disconnect(); }
+    _allUsersObserver = new IntersectionObserver(function (entries) {
+      if (entries[0].isIntersecting) { loadAllUsersPage(); }
+    }, { threshold: 0 });
+    _allUsersObserver.observe(sentinel);
   }
 }
 

@@ -30,6 +30,7 @@ type adminUserRow struct {
 	Mail     string
 	Role     int
 	RoleName string
+	Avatar   string // samaccountname/userid used to build the avatarcache path
 }
 
 type kv struct {
