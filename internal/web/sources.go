@@ -262,16 +262,91 @@ func containsPerson(placed []deskOccupant, o deskOccupant) bool {
 	return false
 }
 
+// occCtx memoizes the expensive directory/Robin lookups that the occupancy
+// engine otherwise repeats across every map and source. A single render decodes
+// each source mirror, the Robin occupancy per map, the avatar index and each
+// map's desk list at most once, and assigns each map only once. Building the
+// admin Sync tab (and /rest/desks with no map) walks every map, so without this
+// the full user mirror was JSON-decoded dozens of times per request.
+//
+// Not safe for concurrent use: create one per request via app.newOccCtx().
+type occCtx struct {
+	app *Server
+
+	sources    []UnifiedSource
+	sourcesSet bool
+
+	mirror       map[string][]store.LdapUser        // source ref -> directory mirror
+	robin        map[string][]store.RobinDeskStatus // map name -> Robin occupancy
+	desksByMap   map[string][]store.Desk            // map name -> desks
+	assign       map[string]map[string][]deskOccupant
+	avatarByUser map[string]bool
+}
+
+func (app *Server) newOccCtx() *occCtx {
+	return &occCtx{
+		app:        app,
+		mirror:     map[string][]store.LdapUser{},
+		robin:      map[string][]store.RobinDeskStatus{},
+		desksByMap: map[string][]store.Desk{},
+		assign:     map[string]map[string][]deskOccupant{},
+	}
+}
+
+func (c *occCtx) unifiedSources() []UnifiedSource {
+	if !c.sourcesSet {
+		c.sources = c.app.listUnifiedSources()
+		c.sourcesSet = true
+	}
+	return c.sources
+}
+
+func (c *occCtx) sourceMirror(kind string, id int) []store.LdapUser {
+	key := fmt.Sprintf("%s:%d", kind, id)
+	m, ok := c.mirror[key]
+	if !ok {
+		m, _ = c.app.db.GetSourceMirror(kind, id)
+		c.mirror[key] = m
+	}
+	return m
+}
+
+func (c *occCtx) robinStatus(mapName string) []store.RobinDeskStatus {
+	s, ok := c.robin[mapName]
+	if !ok {
+		s, _ = c.app.db.ListRobinDeskStatus(mapName)
+		c.robin[mapName] = s
+	}
+	return s
+}
+
+func (c *occCtx) avatarIndex() map[string]bool {
+	if c.avatarByUser == nil {
+		c.avatarByUser = c.app.buildAvatarIndex()
+	}
+	return c.avatarByUser
+}
+
+func (c *occCtx) desks(mapName string) []store.Desk {
+	d, ok := c.desksByMap[mapName]
+	if !ok {
+		d, _ = c.app.db.ListDesks(mapName)
+		c.desksByMap[mapName] = d
+	}
+	return d
+}
+
 // sourceOccupancy returns everyone a single source would place on the given map,
 // restricted to desks that actually exist on that map. deskByNum maps a
 // lowercased desknumber to its desk. Directory sources (LDAP/EntraID) only fill
 // AD-mirrored "addesk" desks, preserving the historical addesk semantics; Robin
 // live occupancy may take over any desk (as the old overlay did).
-func (app *Server) sourceOccupancy(src UnifiedSource, mapName string, deskByNum map[string]store.Desk, avatarByUser map[string]bool) []deskOccupant {
+func (c *occCtx) sourceOccupancy(src UnifiedSource, mapName string, deskByNum map[string]store.Desk) []deskOccupant {
+	avatarByUser := c.avatarIndex()
 	var out []deskOccupant
 	switch src.Type {
 	case "ldap", "entra":
-		users, _ := app.db.GetSourceMirror(src.Type, src.ID)
+		users := c.sourceMirror(src.Type, src.ID)
 		for _, u := range users {
 			office := strings.TrimSpace(u.Office)
 			if office == "" {
@@ -298,10 +373,10 @@ func (app *Server) sourceOccupancy(src UnifiedSource, mapName string, deskByNum 
 			})
 		}
 	case "robin":
-		if !app.robin.Enabled() {
+		if !c.app.robin.Enabled() {
 			return nil
 		}
-		sts, _ := app.db.ListRobinDeskStatus(mapName)
+		sts := c.robinStatus(mapName)
 		for _, s := range sts {
 			d, ok := deskByNum[strings.ToLower(strings.TrimSpace(s.Desknumber))]
 			if !ok {
@@ -324,16 +399,20 @@ func (app *Server) sourceOccupancy(src UnifiedSource, mapName string, deskByNum 
 	return out
 }
 
-// assignMapOccupancy runs the priority-ordered assignment for one map and
-// returns, per canonical desknumber, the occupants to display (up to 4 for a
-// shared desk). Higher-priority sources win each desk outright; a lower-priority
-// source may still fill an empty desk. A person already placed on this map by a
+// assignMap runs the priority-ordered assignment for one map and returns, per
+// canonical desknumber, the occupants to display (up to 4 for a shared desk).
+// Higher-priority sources win each desk outright; a lower-priority source may
+// still fill an empty desk. A person already placed on this map by a
 // higher-priority source is only placed again when this source has
 // KeepDuplicates enabled. Because this runs per map, deduplication is naturally
 // scoped to a single map (a person with seats on two different maps keeps both).
-func (app *Server) assignMapOccupancy(mapName string, desks []store.Desk, avatarByUser map[string]bool) map[string][]deskOccupant {
+// The result is memoized per map for the lifetime of the ctx.
+func (c *occCtx) assignMap(mapName string) map[string][]deskOccupant {
+	if a, ok := c.assign[mapName]; ok {
+		return a
+	}
 	deskByNum := map[string]store.Desk{}
-	for _, d := range desks {
+	for _, d := range c.desks(mapName) {
 		dn := strings.TrimSpace(d.Desknumber)
 		if dn == "" {
 			continue
@@ -345,11 +424,11 @@ func (app *Server) assignMapOccupancy(mapName string, desks []store.Desk, avatar
 	deskOwner := map[string]string{}      // lowercased desknumber -> owning source ref
 	var placed []deskOccupant             // people placed by higher-priority sources
 
-	for _, src := range app.listUnifiedSources() {
+	for _, src := range c.unifiedSources() {
 		if src.Disabled || !src.Assign {
 			continue
 		}
-		occ := app.sourceOccupancy(src, mapName, deskByNum, avatarByUser)
+		occ := c.sourceOccupancy(src, mapName, deskByNum)
 		var placedThis []deskOccupant
 		for _, o := range occ {
 			key := strings.ToLower(o.desknumber)
@@ -374,6 +453,7 @@ func (app *Server) assignMapOccupancy(mapName string, desks []store.Desk, avatar
 		// it, so two seats of the SAME source (office="A|B") are never self-deduped.
 		placed = append(placed, placedThis...)
 	}
+	c.assign[mapName] = result
 	return result
 }
 
@@ -383,16 +463,14 @@ func (app *Server) assignMapOccupancy(mapName string, desks []store.Desk, avatar
 // render the maps, so the numbers match exactly what appears on screen. Used by
 // the admin priority list; it is recomputed on every tab render (including after
 // a move/toggle), so the counts always reflect the latest order.
-func (app *Server) sourceSeatCounts() map[string]int {
+func (app *Server) sourceSeatCounts(c *occCtx) map[string]int {
 	counts := map[string]int{}
-	avatarIdx := app.buildAvatarIndex()
 	maps, _ := app.db.ListMaps()
 	for _, m := range maps {
 		if m.Published == "no" || m.Mapname == "overview" {
 			continue
 		}
-		desks, _ := app.db.ListDesks(m.Mapname)
-		occupancy := app.assignMapOccupancy(m.Mapname, desks, avatarIdx)
+		occupancy := c.assignMap(m.Mapname)
 		for _, occ := range occupancy {
 			for _, o := range occ {
 				counts[o.sourceRef]++
@@ -412,16 +490,14 @@ type sourceSeat struct {
 // sourceSeatDetails returns, per source ref, the people that source effectively
 // seats across all published maps (same engine used to render the maps), sorted
 // by name. Powers the popup opened from the admin priority list's seat count.
-func (app *Server) sourceSeatDetails() map[string][]sourceSeat {
+func (app *Server) sourceSeatDetails(c *occCtx) map[string][]sourceSeat {
 	out := map[string][]sourceSeat{}
-	avatarIdx := app.buildAvatarIndex()
 	maps, _ := app.db.ListMaps()
 	for _, m := range maps {
 		if m.Published == "no" || m.Mapname == "overview" {
 			continue
 		}
-		desks, _ := app.db.ListDesks(m.Mapname)
-		occupancy := app.assignMapOccupancy(m.Mapname, desks, avatarIdx)
+		occupancy := c.assignMap(m.Mapname)
 		for _, occ := range occupancy {
 			for _, o := range occ {
 				name := o.name
@@ -460,7 +536,7 @@ func (app *Server) handleRestSourceSeats(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	ref := r.URL.Query().Get("ref")
-	seats := app.sourceSeatDetails()[ref]
+	seats := app.sourceSeatDetails(app.newOccCtx())[ref]
 	if seats == nil {
 		seats = []sourceSeat{}
 	}

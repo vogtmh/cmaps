@@ -61,7 +61,7 @@ func (app *Server) handleRestDesks(w http.ResponseWriter, r *http.Request) {
 
 	vips, _ := app.db.ListVips()
 	bookings, _ := app.db.ListBookings()
-	avatarByUser := app.buildAvatarIndex()
+	ctx := app.newOccCtx()
 
 	out := struct {
 		Desks []deskItem `json:"desks"`
@@ -72,7 +72,7 @@ func (app *Server) handleRestDesks(w http.ResponseWriter, r *http.Request) {
 		if date == "" {
 			date = app.db.MapToday(mapName)
 		}
-		out.Desks = append(out.Desks, app.buildMapDesks(mapName, date, search, vips, bookings, avatarByUser)...)
+		out.Desks = append(out.Desks, app.buildMapDesks(ctx, mapName, date, search, vips, bookings)...)
 		writeJSON(w, out)
 		return
 	}
@@ -87,7 +87,7 @@ func (app *Server) handleRestDesks(w http.ResponseWriter, r *http.Request) {
 		if date == "" {
 			date = app.db.MapToday(m.Mapname)
 		}
-		out.Desks = append(out.Desks, app.buildMapDesks(m.Mapname, date, search, vips, bookings, avatarByUser)...)
+		out.Desks = append(out.Desks, app.buildMapDesks(ctx, m.Mapname, date, search, vips, bookings)...)
 	}
 	writeJSON(w, out)
 }
@@ -113,16 +113,16 @@ func (app *Server) buildAvatarIndex() map[string]bool {
 }
 
 // buildMapDesks expands one map's desks into output items. Desk occupancy is
-// resolved by the unified, priority-ordered source engine (assignMapOccupancy):
+// resolved by the unified, priority-ordered source engine (occCtx.assignMap):
 // each configured source (LDAP/EntraID configs and Robin) fills desks in
 // priority order, higher-priority sources own a desk outright and the per-source
 // "keep duplicates" flag decides whether a lower-priority source may show a
 // person again on the same map. VIP border colors and bookings are then applied.
-func (app *Server) buildMapDesks(mapName, date, search string, vips []store.VIP, bookings []store.Booking, avatarByUser map[string]bool) []deskItem {
-	desks, _ := app.db.ListDesks(mapName)
+func (app *Server) buildMapDesks(ctx *occCtx, mapName, date, search string, vips []store.VIP, bookings []store.Booking) []deskItem {
+	desks := ctx.desks(mapName)
 	var items []deskItem
 
-	occupancy := app.assignMapOccupancy(mapName, desks, avatarByUser)
+	occupancy := ctx.assignMap(mapName)
 
 	for _, d := range desks {
 		// Booking lookup for this desk on the given date.

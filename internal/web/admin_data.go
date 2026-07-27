@@ -106,10 +106,14 @@ func (app *Server) buildAdminData(r *http.Request, sess Session, tab, msg string
 		d.LdapSources = realSources
 		d.HasRealSource = app.hasRealSource()
 		d.UnifiedSources = app.listUnifiedSources()
+		// Shared per-render cache: the seat counts, the Robin overlay check and
+		// the map assignment below all walk every map and every source, so they
+		// reuse one occCtx to decode each source mirror / desk list only once.
+		ctx := app.newOccCtx()
 		// Effective seat counts under the current priority/dedup/assign settings,
 		// recomputed on every render so moving/toggling a source updates them.
 		if len(d.UnifiedSources) > 0 {
-			counts := app.sourceSeatCounts()
+			counts := app.sourceSeatCounts(ctx)
 			for i := range d.UnifiedSources {
 				d.UnifiedSources[i].PopulatedSeats = counts[d.UnifiedSources[i].Ref]
 			}
@@ -159,7 +163,7 @@ func (app *Server) buildAdminData(r *http.Request, sess Session, tab, msg string
 		}
 		// Desk-reservation (people) overlay: the cached occupancy is the source of
 		// truth shown on the map; surface it in the Sync tab too.
-		d.RobinDeskReservations, _ = app.db.ListRobinDeskStatus("")
+		d.RobinDeskReservations = ctx.robinStatus("")
 		sort.Slice(d.RobinDeskReservations, func(i, j int) bool {
 			if d.RobinDeskReservations[i].Map != d.RobinDeskReservations[j].Map {
 				return d.RobinDeskReservations[i].Map < d.RobinDeskReservations[j].Map
@@ -180,7 +184,7 @@ func (app *Server) buildAdminData(r *http.Request, sess Session, tab, msg string
 		// Robin seats them at a different desk on the same map, making them show
 		// up twice. This only reads the two caches, mirroring buildMapDesks.
 		ldapUsers, _ := app.db.ListLdap()
-		robinDesks, _ := app.db.ListRobinDeskStatus("")
+		robinDesks := ctx.robinStatus("")
 		// desk number -> map so an AD placement can be located on the same map as
 		// a Robin reservation.
 		deskToMap := map[string]string{}
@@ -189,8 +193,7 @@ func (app *Server) buildAdminData(r *http.Request, sess Session, tab, msg string
 				if m.Mapname == "overview" {
 					continue
 				}
-				desks, _ := app.db.ListDesks(m.Mapname)
-				for _, dsk := range desks {
+				for _, dsk := range ctx.desks(m.Mapname) {
 					if dsk.Desktype == "addesk" {
 						deskToMap[dsk.Desknumber] = m.Mapname
 					}
@@ -200,17 +203,9 @@ func (app *Server) buildAdminData(r *http.Request, sess Session, tab, msg string
 		seenSame := map[string]bool{}
 		seenDup := map[string]bool{}
 		// Whether a Robin reservation is actually shown on the map now depends on
-		// the unified priority engine, so ask it directly (per map, cached).
-		avatarIdx := app.buildAvatarIndex()
-		assignCache := map[string]map[string][]deskOccupant{}
+		// the unified priority engine, so ask it directly (per map, cached via ctx).
 		robinShownAt := func(m, desknumber string) bool {
-			a, ok := assignCache[m]
-			if !ok {
-				desks, _ := app.db.ListDesks(m)
-				a = app.assignMapOccupancy(m, desks, avatarIdx)
-				assignCache[m] = a
-			}
-			for _, o := range a[strings.ToLower(strings.TrimSpace(desknumber))] {
+			for _, o := range ctx.assignMap(m)[strings.ToLower(strings.TrimSpace(desknumber))] {
 				if o.sourceType == "robin" {
 					return true
 				}
