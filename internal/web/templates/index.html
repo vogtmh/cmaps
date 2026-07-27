@@ -269,16 +269,16 @@
       StartClock();
       updateDesks();
       updateBookings();
-      setInterval(getMeetingStatus, 60000);
-      setInterval(updateDesks, 300000);
-      setInterval(updateBookings, 60000);
+      visPoll(getMeetingStatus, 60000);
+      visPoll(updateDesks, 300000);
+      visPoll(updateBookings, 60000);
     } else {
       StartClock();
     }
 
     updateChangeTracker();
-    setInterval(updateChangeTracker, 300000);
-    setInterval(updateTeams, 300000);
+    visPoll(updateChangeTracker, 300000);
+    visPoll(updateTeams, 300000);
     addStat();
   </script>
 </div>
@@ -328,7 +328,7 @@
       <span class="usermode-toggle-label">Edit</span>
       <span class="usermode-toggle-track"><span class="usermode-toggle-knob"></span></span>
     </div>
-    <script>checkHealthStatus(); setInterval(checkHealthStatus, 300000);</script>
+    <script>checkHealthStatus(); visPoll(checkHealthStatus, 300000);</script>
     {{end}}
   {{end}}
 </div>
@@ -339,7 +339,7 @@
 <div class="loginicon" id="loginicon" onClick="cmapsLogin()" title="Login"></div>
 {{end}}
 
-{{if .DailyVisitors}}<script>updateCounter(); setInterval(updateCounter, 60000)</script>{{end}}
+{{if .DailyVisitors}}<script>updateCounter(); visPoll(updateCounter, 60000)</script>{{end}}
 
 <!-- Teams sidebar -->
 <script>updateTeams()</script>

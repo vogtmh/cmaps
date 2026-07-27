@@ -36,6 +36,57 @@ var editSidebarWidth = 0;
 var FLOOR_RAIL_X = 1597;
 var FLOOR_TAB_HALFH = 13;
 
+// ===================================================================
+//  Visibility-aware polling
+//  Every periodic REST poll on the map page is registered through
+//  visPoll() instead of a bare setInterval(). When the tab is hidden
+//  (switched away / minimised) all intervals are cleared so the page
+//  stops hitting the server and draining the battery; when it becomes
+//  visible again each poll fires once for an instant catch-up refresh
+//  and its interval is restarted. A short staleness threshold avoids a
+//  redundant refresh burst on quick tab flips (Cmd/Alt-Tab).
+// ===================================================================
+var visPolls = [];              // [{ fn, ms, id }]
+var visHiddenSince = 0;         // timestamp (ms) the tab was last hidden
+var VIS_STALE_MS = 10000;       // only catch-up refresh if hidden this long
+
+// visPoll registers fn to run every ms milliseconds while the tab is visible.
+function visPoll(fn, ms) {
+  var entry = { fn: fn, ms: ms, id: null };
+  if (!document.hidden) {
+    entry.id = setInterval(fn, ms);
+  }
+  visPolls.push(entry);
+  return entry;
+}
+
+function visPollPause() {
+  visHiddenSince = Date.now();
+  for (var i = 0; i < visPolls.length; i++) {
+    if (visPolls[i].id !== null) {
+      clearInterval(visPolls[i].id);
+      visPolls[i].id = null;
+    }
+  }
+}
+
+function visPollResume() {
+  var stale = (Date.now() - visHiddenSince) >= VIS_STALE_MS;
+  for (var i = 0; i < visPolls.length; i++) {
+    var entry = visPolls[i];
+    if (entry.id === null) {
+      if (stale) {
+        try { entry.fn(); } catch (e) { console.error('[visPoll] catch-up refresh failed', e); }
+      }
+      entry.id = setInterval(entry.fn, entry.ms);
+    }
+  }
+}
+
+document.addEventListener('visibilitychange', function () {
+  if (document.hidden) { visPollPause(); } else { visPollResume(); }
+});
+
 function toggleUsermode() {
   if (setting_usermode == 'edit') {
     setting_usermode = 'user';
@@ -2949,11 +3000,11 @@ function UpdateClock() {
 
 function StartClock() {
   setTimeout(UpdateClock, 500);
-  clockID = setInterval(UpdateClock, 60000);
+  clockID = visPoll(UpdateClock, 60000);
 }
 
 function KillClock() {
-  clearTimeout(clockID);
+  if (clockID && clockID.id !== null) { clearInterval(clockID.id); clockID.id = null; }
 }
 
 var announceLive;

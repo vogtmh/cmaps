@@ -27,6 +27,15 @@
   // Item to focus (zoom + highlight) after a map (re)loads, set by global search.
   var pendingLocate = null; // {map, id, x, y}
 
+  // The meeting-room poll skips fetching while the tab is hidden (see loadMap);
+  // refresh once immediately when the tab becomes visible again so a returning
+  // user sees current availability without waiting for the next 60s tick.
+  document.addEventListener('visibilitychange', function () {
+    if (!document.hidden && mapState.current) {
+      updateMeetingStatus(mapState.current);
+    }
+  });
+
   // Whether we've pushed a history entry for the open map selector, so the
   // Android/browser back button can dismiss it.
   var mapselPushed = false;
@@ -327,6 +336,7 @@
       renderDesks();
       updateMeetingStatus(name);
       mapState.meetingTimer = setInterval(function () {
+        if (document.hidden) { return; }
         if (mapState.current === name) { updateMeetingStatus(name); }
       }, 60000);
       if (pendingLocate && pendingLocate.map === name) { setTimeout(maybeLocate, 400); }

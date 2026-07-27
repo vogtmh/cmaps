@@ -15,17 +15,49 @@ var departments = {};
 var adminTimers = [];
 
 // adminSetInterval registers a poller that is cleared on the next tab switch,
-// so dashboard/health timers don't stack up as the user navigates.
+// so dashboard/health timers don't stack up as the user navigates. Timers are
+// also paused while the browser tab is hidden (see the visibilitychange handler
+// below) to stop background battery/server drain; on return each poll fires once
+// for an instant catch-up refresh and its interval restarts. Progress-poll
+// timers for running operations (sync/import/export modals) use a raw
+// setInterval on purpose and are NOT registered here, so they keep polling even
+// in a background tab until the operation finishes.
 function adminSetInterval(fn, ms) {
-  var id = setInterval(fn, ms);
-  adminTimers.push(id);
-  return id;
+  var entry = { fn: fn, ms: ms, id: null };
+  if (!document.hidden) {
+    entry.id = setInterval(fn, ms);
+  }
+  adminTimers.push(entry);
+  return entry;
 }
 
 function clearAdminTimers() {
-  for (var i = 0; i < adminTimers.length; i++) { clearInterval(adminTimers[i]); }
+  for (var i = 0; i < adminTimers.length; i++) {
+    if (adminTimers[i].id !== null) { clearInterval(adminTimers[i].id); }
+  }
   adminTimers = [];
 }
+
+// Pause registered pollers while the tab is hidden; resume (with an immediate
+// catch-up refresh) when it becomes visible again.
+document.addEventListener('visibilitychange', function () {
+  if (document.hidden) {
+    for (var i = 0; i < adminTimers.length; i++) {
+      if (adminTimers[i].id !== null) {
+        clearInterval(adminTimers[i].id);
+        adminTimers[i].id = null;
+      }
+    }
+  } else {
+    for (var j = 0; j < adminTimers.length; j++) {
+      var entry = adminTimers[j];
+      if (entry.id === null) {
+        try { entry.fn(); } catch (e) { console.error('[adminSetInterval] catch-up refresh failed', e); }
+        entry.id = setInterval(entry.fn, entry.ms);
+      }
+    }
+  }
+});
 
 // setActiveAdminTab highlights the given tab pill in the header.
 function setActiveAdminTab(tab) {
