@@ -223,6 +223,72 @@ function closeSourceSeats() {
   if (overlay) { overlay.style.display = 'none'; }
 }
 
+// loadSyncExtras fetches the Sync tab's expensive, lazily-computed data
+// (GET /rest/syncextras) after the tab has already rendered, so opening the tab
+// feels instant. It fills the "Seats filled" counts on General, the EntraID
+// placement count, and injects the pre-rendered AD<->Robin and LDAP<->EntraID
+// comparison fragments into their placeholders. Re-run on every Sync render
+// (initial load and after a priority move/toggle) via the inline init script.
+function loadSyncExtras() {
+  // Only meaningful on the Sync tab; bail if its placeholders aren't present.
+  if (!document.querySelector('.seatcount') &&
+      !document.getElementById('robinCheckBody') &&
+      !document.getElementById('entraCmpContainer')) { return; }
+  $.ajax({
+    url: '../rest/syncextras',
+    type: 'get',
+    dataType: 'json',
+    success: function (data) {
+      // Per-source "Seats filled" counts (link to the people popup when > 0).
+      var seats = data.seats || {};
+      var cells = document.querySelectorAll('.seatcount[data-ref]');
+      for (var i = 0; i < cells.length; i++) {
+        (function (cell) {
+          var ref = cell.getAttribute('data-ref');
+          var n = seats[ref] || 0;
+          if (n > 0) {
+            var a = document.createElement('a');
+            a.href = '#';
+            a.title = 'Show the people this source fills';
+            a.textContent = n;
+            a.onclick = function () { openSourceSeats(ref); return false; };
+            cell.innerHTML = '';
+            cell.appendChild(a);
+          } else {
+            cell.textContent = '0';
+          }
+        })(cells[i]);
+      }
+      // EntraID placement count in the Connections card hint.
+      var ec = document.getElementById('entraPlacementCount');
+      if (ec) { ec.textContent = (data.entraCount != null ? data.entraCount : 0); }
+      // AD <-> Robin overlap check body + its nav badge.
+      var rc = document.getElementById('robinCheckBody');
+      if (rc && typeof data.robinCheck === 'string') { rc.innerHTML = data.robinCheck; }
+      var rb = document.getElementById('robinCheckBadge');
+      if (rb) {
+        rb.innerHTML = (data.robinCheckDup > 0)
+          ? ' <span class="sync-badge sync-badge-warn">' + data.robinCheckDup + '</span>'
+          : '';
+      }
+      // LDAP <-> EntraID comparison body (restore its default sub-tab).
+      var ce = document.getElementById('entraCmpContainer');
+      if (ce && typeof data.entraCmp === 'string') {
+        ce.innerHTML = data.entraCmp;
+        if (typeof showEntraCmpTab === 'function') { showEntraCmpTab('diff'); }
+      }
+    },
+    error: function () {
+      var rc = document.getElementById('robinCheckBody');
+      if (rc) { rc.innerHTML = '<div class="sync-empty">Could not load the AD &harr; Robin check.</div>'; }
+      var ce = document.getElementById('entraCmpContainer');
+      if (ce) { ce.innerHTML = '<div class="sync-empty">Could not load the LDAP &harr; EntraID comparison.</div>'; }
+      var cells = document.querySelectorAll('.seatcount[data-ref]');
+      for (var i = 0; i < cells.length; i++) { cells[i].textContent = '?'; }
+    }
+  });
+}
+
 // loadWhitelist fetches the current ignore-list entries (from the same system
 // health endpoint the dashboard already uses) and renders them for editing.
 function loadWhitelist() {

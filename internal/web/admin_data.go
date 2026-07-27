@@ -106,18 +106,9 @@ func (app *Server) buildAdminData(r *http.Request, sess Session, tab, msg string
 		d.LdapSources = realSources
 		d.HasRealSource = app.hasRealSource()
 		d.UnifiedSources = app.listUnifiedSources()
-		// Shared per-render cache: the seat counts, the Robin overlay check and
-		// the map assignment below all walk every map and every source, so they
-		// reuse one occCtx to decode each source mirror / desk list only once.
-		ctx := app.newOccCtx()
-		// Effective seat counts under the current priority/dedup/assign settings,
-		// recomputed on every render so moving/toggling a source updates them.
-		if len(d.UnifiedSources) > 0 {
-			counts := app.sourceSeatCounts(ctx)
-			for i := range d.UnifiedSources {
-				d.UnifiedSources[i].PopulatedSeats = counts[d.UnifiedSources[i].Ref]
-			}
-		}
+		// The per-source "Seats filled" counts are computed lazily by the client
+		// (GET /rest/syncextras -> syncExtrasData) so the Sync tab opens instantly;
+		// PopulatedSeats is left zero here and filled in via JS.
 		d.RobinSpaces, _ = app.db.ListRobinSpaces()
 		sort.Slice(d.RobinSpaces, func(i, j int) bool { return d.RobinSpaces[i].Spacename < d.RobinSpaces[j].Spacename })
 		d.RobinOrg = app.db.GetRobinSetting("robinOrganisation")
@@ -163,7 +154,7 @@ func (app *Server) buildAdminData(r *http.Request, sess Session, tab, msg string
 		}
 		// Desk-reservation (people) overlay: the cached occupancy is the source of
 		// truth shown on the map; surface it in the Sync tab too.
-		d.RobinDeskReservations = ctx.robinStatus("")
+		d.RobinDeskReservations, _ = app.db.ListRobinDeskStatus("")
 		sort.Slice(d.RobinDeskReservations, func(i, j int) bool {
 			if d.RobinDeskReservations[i].Map != d.RobinDeskReservations[j].Map {
 				return d.RobinDeskReservations[i].Map < d.RobinDeskReservations[j].Map
@@ -176,197 +167,13 @@ func (app *Server) buildAdminData(r *http.Request, sess Session, tab, msg string
 			d.RobinDeskCount = dr.Count
 		}
 
-		// --- AD <-> Robin overlap check (cached data only, no fresh sync) ------
-		// Compares the AD mirror (who AD seats where) against the cached Robin
-		// desk occupancy to surface: (1) desks where both systems name the same
-		// person at the same desk, where the AD placement keeps priority and the
-		// Robin overlay is dropped; and (2) people AD seats at one desk while
-		// Robin seats them at a different desk on the same map, making them show
-		// up twice. This only reads the two caches, mirroring buildMapDesks.
-		ldapUsers, _ := app.db.ListLdap()
-		robinDesks := ctx.robinStatus("")
-		// desk number -> map so an AD placement can be located on the same map as
-		// a Robin reservation.
-		deskToMap := map[string]string{}
-		if allMaps, err := app.db.ListMaps(); err == nil {
-			for _, m := range allMaps {
-				if m.Mapname == "overview" {
-					continue
-				}
-				for _, dsk := range ctx.desks(m.Mapname) {
-					if dsk.Desktype == "addesk" {
-						deskToMap[dsk.Desknumber] = m.Mapname
-					}
-				}
-			}
-		}
-		seenSame := map[string]bool{}
-		seenDup := map[string]bool{}
-		// Whether a Robin reservation is actually shown on the map now depends on
-		// the unified priority engine, so ask it directly (per map, cached via ctx).
-		robinShownAt := func(m, desknumber string) bool {
-			for _, o := range ctx.assignMap(m)[strings.ToLower(strings.TrimSpace(desknumber))] {
-				if o.sourceType == "robin" {
-					return true
-				}
-			}
-			return false
-		}
-		for _, rs := range robinDesks {
-			rdesk := strings.TrimSpace(rs.Desknumber)
-			rmap := strings.TrimSpace(rs.Map)
-			for _, u := range ldapUsers {
-				if !sameRobinPerson(rs, u) {
-					continue
-				}
-				adesk := strings.TrimSpace(u.Office)
-				if adesk == "" {
-					continue
-				}
-				name := strings.TrimSpace(rs.Name)
-				if name == "" {
-					name = strings.TrimSpace(u.Givenname + " " + u.Surname)
-				}
-				uid := u.Userid
-				if uid == "" {
-					uid = rs.Userid
-				}
-				if adesk == rdesk {
-					// Same person, same desk: AD keeps priority.
-					key := rmap + "\x00" + rdesk
-					if !seenSame[key] {
-						seenSame[key] = true
-						d.RobinAdSameDesk = append(d.RobinAdSameDesk, RobinAdOverlap{
-							Map: rmap, Desknumber: rdesk, Name: name, Userid: uid,
-						})
-					}
-					continue
-				}
-				// Different desks only count when both land on the same map.
-				if deskToMap[adesk] != rmap {
-					continue
-				}
-				key := rmap + "\x00" + adesk + "\x00" + rdesk + "\x00" + strings.ToLower(uid)
-				if seenDup[key] {
-					continue
-				}
-				seenDup[key] = true
-				rendered := robinShownAt(rmap, rdesk)
-				d.RobinAdDuplicates = append(d.RobinAdDuplicates, RobinAdDuplicate{
-					Map: rmap, Name: name, Userid: uid,
-					AdDesk: adesk, RobinDesk: rdesk, Rendered: rendered,
-				})
-			}
-		}
-		sort.Slice(d.RobinAdSameDesk, func(i, j int) bool {
-			if d.RobinAdSameDesk[i].Map != d.RobinAdSameDesk[j].Map {
-				return d.RobinAdSameDesk[i].Map < d.RobinAdSameDesk[j].Map
-			}
-			return d.RobinAdSameDesk[i].Desknumber < d.RobinAdSameDesk[j].Desknumber
-		})
-		sort.Slice(d.RobinAdDuplicates, func(i, j int) bool {
-			if d.RobinAdDuplicates[i].Map != d.RobinAdDuplicates[j].Map {
-				return d.RobinAdDuplicates[i].Map < d.RobinAdDuplicates[j].Map
-			}
-			return d.RobinAdDuplicates[i].Name < d.RobinAdDuplicates[j].Name
-		})
-
-		// --- EntraID connections + LDAP <-> EntraID mirror comparison --------
+		// EntraID connections. The heavy LDAP<->EntraID comparison and the
+		// placement count are computed lazily via /rest/syncextras so the tab
+		// opens instantly; only the cheap connection metadata is set here.
 		d.EntraSources, _ = app.db.ListEntraSources()
 		d.EntraSet = len(d.EntraSources) > 0
 		d.EntraLastSync = app.db.GetEntraSetting("entraLastSync")
 		d.EntraHasSync = d.EntraLastSync != ""
-		entraUsers, _ := app.db.ListEntraLdap()
-		d.EntraCount = len(entraUsers)
-		// Users are matched between the two mirrors strictly by e-mail
-		// (case-insensitive). People with no e-mail cannot be matched.
-		type entraCmp struct {
-			name  string
-			mail  string
-			ldap  map[string]bool
-			entra map[string]bool
-		}
-		cmp := map[string]*entraCmp{}
-		add := func(u store.LdapUser, fromEntra bool) {
-			mail := strings.ToLower(strings.TrimSpace(u.Mail))
-			if mail == "" {
-				return
-			}
-			row := cmp[mail]
-			if row == nil {
-				row = &entraCmp{mail: strings.TrimSpace(u.Mail), ldap: map[string]bool{}, entra: map[string]bool{}}
-				cmp[mail] = row
-			}
-			if row.name == "" {
-				row.name = strings.TrimSpace(u.Givenname + " " + u.Surname)
-			}
-			off := strings.TrimSpace(u.Office)
-			if off == "" {
-				return
-			}
-			if fromEntra {
-				row.entra[off] = true
-			} else {
-				row.ldap[off] = true
-			}
-		}
-		for _, u := range ldapUsers {
-			add(u, false)
-		}
-		for _, u := range entraUsers {
-			add(u, true)
-		}
-		deskList := func(set map[string]bool) string {
-			out := make([]string, 0, len(set))
-			for k := range set {
-				out = append(out, k)
-			}
-			sort.Strings(out)
-			return strings.Join(out, ", ")
-		}
-		sameSet := func(a, b map[string]bool) bool {
-			if len(a) != len(b) {
-				return false
-			}
-			for k := range a {
-				if !b[k] {
-					return false
-				}
-			}
-			return true
-		}
-		for _, row := range cmp {
-			r := EntraLdapRow{
-				Name:       row.name,
-				Mail:       row.mail,
-				LdapDesks:  deskList(row.ldap),
-				EntraDesks: deskList(row.entra),
-			}
-			inLdap := len(row.ldap) > 0
-			inEntra := len(row.entra) > 0
-			switch {
-			case inLdap && inEntra && sameSet(row.ldap, row.entra):
-				d.EntraMatchedSame = append(d.EntraMatchedSame, r)
-			case inLdap && inEntra:
-				d.EntraMatchedDiff = append(d.EntraMatchedDiff, r)
-			case inLdap:
-				d.EntraOnlyLdap = append(d.EntraOnlyLdap, r)
-			case inEntra:
-				d.EntraOnlyEntra = append(d.EntraOnlyEntra, r)
-			}
-		}
-		byName := func(rows []EntraLdapRow) func(i, j int) bool {
-			return func(i, j int) bool {
-				if rows[i].Name != rows[j].Name {
-					return rows[i].Name < rows[j].Name
-				}
-				return rows[i].Mail < rows[j].Mail
-			}
-		}
-		sort.Slice(d.EntraMatchedSame, byName(d.EntraMatchedSame))
-		sort.Slice(d.EntraMatchedDiff, byName(d.EntraMatchedDiff))
-		sort.Slice(d.EntraOnlyLdap, byName(d.EntraOnlyLdap))
-		sort.Slice(d.EntraOnlyEntra, byName(d.EntraOnlyEntra))
 
 	case "maps":
 		maps, _ := app.db.ListMaps()
@@ -493,4 +300,240 @@ func (app *Server) buildAdminData(r *http.Request, sess Session, tab, msg string
 	}
 
 	return d
+}
+
+// syncExtrasData computes the expensive Sync-tab data that the client fetches
+// lazily after the tab has rendered (GET /rest/syncextras): the per-source
+// effective seat counts, the AD<->Robin overlap check and the LDAP<->EntraID
+// comparison. This logic formerly ran inline in buildAdminData's "ldap" case;
+// deferring it lets the Sync tab (General subtab) open instantly while the
+// heavy numbers/tables stream in a moment later. Returns a partially filled
+// adminData carrying only the fields the deferred fragments/counts need.
+func (app *Server) syncExtrasData() *adminData {
+	d := &adminData{}
+	ctx := app.newOccCtx()
+
+	// Effective seat counts under the current priority/dedup/assign settings.
+	d.UnifiedSources = app.listUnifiedSources()
+	if len(d.UnifiedSources) > 0 {
+		counts := app.sourceSeatCounts(ctx)
+		for i := range d.UnifiedSources {
+			d.UnifiedSources[i].PopulatedSeats = counts[d.UnifiedSources[i].Ref]
+		}
+	}
+
+	// --- AD <-> Robin overlap check (cached data only, no fresh sync) ------
+	// Compares the AD mirror (who AD seats where) against the cached Robin desk
+	// occupancy to surface: (1) desks where both systems name the same person at
+	// the same desk (AD keeps priority, Robin overlay dropped); and (2) people AD
+	// seats at one desk while Robin seats them at a different desk on the same
+	// map, making them show up twice. Reads caches only, mirroring buildMapDesks.
+	ldapUsers, _ := app.db.ListLdap()
+	robinDesks := ctx.robinStatus("")
+	deskToMap := map[string]string{}
+	if allMaps, err := app.db.ListMaps(); err == nil {
+		for _, m := range allMaps {
+			if m.Mapname == "overview" {
+				continue
+			}
+			for _, dsk := range ctx.desks(m.Mapname) {
+				if dsk.Desktype == "addesk" {
+					deskToMap[dsk.Desknumber] = m.Mapname
+				}
+			}
+		}
+	}
+	seenSame := map[string]bool{}
+	seenDup := map[string]bool{}
+	robinShownAt := func(m, desknumber string) bool {
+		for _, o := range ctx.assignMap(m)[strings.ToLower(strings.TrimSpace(desknumber))] {
+			if o.sourceType == "robin" {
+				return true
+			}
+		}
+		return false
+	}
+	for _, rs := range robinDesks {
+		rdesk := strings.TrimSpace(rs.Desknumber)
+		rmap := strings.TrimSpace(rs.Map)
+		for _, u := range ldapUsers {
+			if !sameRobinPerson(rs, u) {
+				continue
+			}
+			adesk := strings.TrimSpace(u.Office)
+			if adesk == "" {
+				continue
+			}
+			name := strings.TrimSpace(rs.Name)
+			if name == "" {
+				name = strings.TrimSpace(u.Givenname + " " + u.Surname)
+			}
+			uid := u.Userid
+			if uid == "" {
+				uid = rs.Userid
+			}
+			if adesk == rdesk {
+				// Same person, same desk: AD keeps priority.
+				key := rmap + "\x00" + rdesk
+				if !seenSame[key] {
+					seenSame[key] = true
+					d.RobinAdSameDesk = append(d.RobinAdSameDesk, RobinAdOverlap{
+						Map: rmap, Desknumber: rdesk, Name: name, Userid: uid,
+					})
+				}
+				continue
+			}
+			// Different desks only count when both land on the same map.
+			if deskToMap[adesk] != rmap {
+				continue
+			}
+			key := rmap + "\x00" + adesk + "\x00" + rdesk + "\x00" + strings.ToLower(uid)
+			if seenDup[key] {
+				continue
+			}
+			seenDup[key] = true
+			rendered := robinShownAt(rmap, rdesk)
+			d.RobinAdDuplicates = append(d.RobinAdDuplicates, RobinAdDuplicate{
+				Map: rmap, Name: name, Userid: uid,
+				AdDesk: adesk, RobinDesk: rdesk, Rendered: rendered,
+			})
+		}
+	}
+	sort.Slice(d.RobinAdSameDesk, func(i, j int) bool {
+		if d.RobinAdSameDesk[i].Map != d.RobinAdSameDesk[j].Map {
+			return d.RobinAdSameDesk[i].Map < d.RobinAdSameDesk[j].Map
+		}
+		return d.RobinAdSameDesk[i].Desknumber < d.RobinAdSameDesk[j].Desknumber
+	})
+	sort.Slice(d.RobinAdDuplicates, func(i, j int) bool {
+		if d.RobinAdDuplicates[i].Map != d.RobinAdDuplicates[j].Map {
+			return d.RobinAdDuplicates[i].Map < d.RobinAdDuplicates[j].Map
+		}
+		return d.RobinAdDuplicates[i].Name < d.RobinAdDuplicates[j].Name
+	})
+
+	// --- LDAP <-> EntraID mirror comparison ------------------------------
+	// Users are matched between the two mirrors strictly by e-mail
+	// (case-insensitive). People with no e-mail cannot be matched.
+	entraUsers, _ := app.db.ListEntraLdap()
+	d.EntraCount = len(entraUsers)
+	type entraCmp struct {
+		name  string
+		mail  string
+		ldap  map[string]bool
+		entra map[string]bool
+	}
+	cmp := map[string]*entraCmp{}
+	add := func(u store.LdapUser, fromEntra bool) {
+		mail := strings.ToLower(strings.TrimSpace(u.Mail))
+		if mail == "" {
+			return
+		}
+		row := cmp[mail]
+		if row == nil {
+			row = &entraCmp{mail: strings.TrimSpace(u.Mail), ldap: map[string]bool{}, entra: map[string]bool{}}
+			cmp[mail] = row
+		}
+		if row.name == "" {
+			row.name = strings.TrimSpace(u.Givenname + " " + u.Surname)
+		}
+		off := strings.TrimSpace(u.Office)
+		if off == "" {
+			return
+		}
+		if fromEntra {
+			row.entra[off] = true
+		} else {
+			row.ldap[off] = true
+		}
+	}
+	for _, u := range ldapUsers {
+		add(u, false)
+	}
+	for _, u := range entraUsers {
+		add(u, true)
+	}
+	deskList := func(set map[string]bool) string {
+		out := make([]string, 0, len(set))
+		for k := range set {
+			out = append(out, k)
+		}
+		sort.Strings(out)
+		return strings.Join(out, ", ")
+	}
+	sameSet := func(a, b map[string]bool) bool {
+		if len(a) != len(b) {
+			return false
+		}
+		for k := range a {
+			if !b[k] {
+				return false
+			}
+		}
+		return true
+	}
+	for _, row := range cmp {
+		r := EntraLdapRow{
+			Name:       row.name,
+			Mail:       row.mail,
+			LdapDesks:  deskList(row.ldap),
+			EntraDesks: deskList(row.entra),
+		}
+		inLdap := len(row.ldap) > 0
+		inEntra := len(row.entra) > 0
+		switch {
+		case inLdap && inEntra && sameSet(row.ldap, row.entra):
+			d.EntraMatchedSame = append(d.EntraMatchedSame, r)
+		case inLdap && inEntra:
+			d.EntraMatchedDiff = append(d.EntraMatchedDiff, r)
+		case inLdap:
+			d.EntraOnlyLdap = append(d.EntraOnlyLdap, r)
+		case inEntra:
+			d.EntraOnlyEntra = append(d.EntraOnlyEntra, r)
+		}
+	}
+	byName := func(rows []EntraLdapRow) func(i, j int) bool {
+		return func(i, j int) bool {
+			if rows[i].Name != rows[j].Name {
+				return rows[i].Name < rows[j].Name
+			}
+			return rows[i].Mail < rows[j].Mail
+		}
+	}
+	sort.Slice(d.EntraMatchedSame, byName(d.EntraMatchedSame))
+	sort.Slice(d.EntraMatchedDiff, byName(d.EntraMatchedDiff))
+	sort.Slice(d.EntraOnlyLdap, byName(d.EntraOnlyLdap))
+	sort.Slice(d.EntraOnlyEntra, byName(d.EntraOnlyEntra))
+
+	return d
+}
+
+// handleRestSyncExtras serves GET /rest/syncextras: the Sync tab's expensive,
+// lazily-loaded data. It returns the effective per-source seat counts (as a
+// ref->count map), the EntraID placement count, and pre-rendered HTML fragments
+// for the AD<->Robin overlap check and the LDAP<->EntraID comparison so the
+// client can drop them straight into the placeholders on the General/Robin/Entra
+// subtabs.
+func (app *Server) handleRestSyncExtras(w http.ResponseWriter, r *http.Request) {
+	sess, ok := app.currentSession(r)
+	if !ok || app.permLevel(sess, "ldap") < 1 {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	d := app.syncExtrasData()
+	seats := map[string]int{}
+	for _, s := range d.UnifiedSources {
+		if s.Assign {
+			seats[s.Ref] = s.PopulatedSeats
+		}
+	}
+	robinHTML, _ := app.renderFragment("syncRobinCheckBody", d)
+	entraHTML, _ := app.renderFragment("syncEntraCmpBody", d)
+	writeJSON(w, map[string]interface{}{
+		"seats":         seats,
+		"entraCount":    d.EntraCount,
+		"robinCheck":    robinHTML,
+		"robinCheckDup": len(d.RobinAdDuplicates),
+		"entraCmp":      entraHTML,
+	})
 }

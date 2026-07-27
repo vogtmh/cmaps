@@ -1,6 +1,7 @@
 package web
 
 import (
+	"bytes"
 	"net/http"
 	"net/url"
 	"strings"
@@ -25,6 +26,16 @@ func (app *Server) render(w http.ResponseWriter, name string, data interface{}) 
 	if err := app.tmpl.ExecuteTemplate(w, name, data); err != nil {
 		http.Error(w, "template error: "+err.Error(), http.StatusInternalServerError)
 	}
+}
+
+// renderFragment executes a named (associated) template into a string. Used to
+// build lazily-loaded admin fragments that are returned inside a JSON response.
+func (app *Server) renderFragment(name string, data interface{}) (string, error) {
+	var buf bytes.Buffer
+	if err := app.tmpl.ExecuteTemplate(&buf, name, data); err != nil {
+		return "", err
+	}
+	return buf.String(), nil
 }
 
 func (app *Server) renderLogin(w http.ResponseWriter, errMsg, next string) {

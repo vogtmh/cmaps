@@ -655,7 +655,7 @@
             </td>
             <td>{{.Description}}</td>
             <td>{{if .Disabled}}<span class="sync-badge sync-badge-warn">Disabled</span>{{else}}<span class="sync-badge sync-badge-ok">Enabled</span>{{end}}</td>
-            <td class="sync-td-min" style="text-align:center;font-weight:600;">{{if .Assign}}{{if .PopulatedSeats}}<a href="#" onclick="openSourceSeats('{{.Ref}}');return false;" title="Show the people this source fills">{{.PopulatedSeats}}</a>{{else}}0{{end}}{{else}}<span class="sync-status-text">&mdash;</span>{{end}}</td>
+            <td class="sync-td-min" style="text-align:center;font-weight:600;">{{if .Assign}}<span class="seatcount" data-ref="{{.Ref}}"><span class="sync-status-text">&hellip;</span></span>{{else}}<span class="sync-status-text">&mdash;</span>{{end}}</td>
             <td class="sync-td-min" style="text-align:center;">
               <form action="?tab=ldap&amp;sub=general" method="post" style="margin:0;">
                 <input type="hidden" name="tab" value="ldap">
@@ -863,7 +863,7 @@
         Sync users from Microsoft Entra ID via one or more app registrations (Microsoft
         Graph). The same office/desk placements as LDAP are mirrored into a separate store
         so the two directories can be compared side by side.
-        {{if .EntraHasSync}}Last sync {{.EntraLastSync}} &middot; {{.EntraCount}} placement(s).{{end}}
+        {{if .EntraHasSync}}Last sync {{.EntraLastSync}} &middot; <span id="entraPlacementCount">&hellip;</span> placement(s).{{end}}
       </p>
       {{if .EntraSources}}
       <table class="sync-table">
@@ -965,56 +965,7 @@
     <div class="sync-card">
       <div class="sync-card-head"><h2 class="sync-card-title">LDAP &harr; EntraID comparison</h2></div>
       <p class="sync-card-hint">Compares the cached LDAP mirror against the cached EntraID mirror. People are matched by e-mail (case-insensitive); no fresh sync is run.</p>
-      <div class="robin-rtabs">
-        <button type="button" class="robin-rtab active" id="entraCmpNav_diff" onclick="showEntraCmpTab('diff')">Different desks{{if .EntraMatchedDiff}} <span class="sync-badge sync-badge-warn">{{len .EntraMatchedDiff}}</span>{{end}}</button>
-        <button type="button" class="robin-rtab" id="entraCmpNav_same" onclick="showEntraCmpTab('same')">Same desks ({{len .EntraMatchedSame}})</button>
-        <button type="button" class="robin-rtab" id="entraCmpNav_ldap" onclick="showEntraCmpTab('ldap')">LDAP only ({{len .EntraOnlyLdap}})</button>
-        <button type="button" class="robin-rtab" id="entraCmpNav_entra" onclick="showEntraCmpTab('entra')">EntraID only ({{len .EntraOnlyEntra}})</button>
-      </div>
-
-      <div id="entraCmp_diff">
-        {{if .EntraMatchedDiff}}
-        <table class="sync-table">
-          <thead><tr><th>Name</th><th>E-mail</th><th>LDAP desks</th><th>EntraID desks</th></tr></thead>
-          <tbody>
-          {{range .EntraMatchedDiff}}<tr><td>{{.Name}}</td><td>{{.Mail}}</td><td>{{.LdapDesks}}</td><td>{{.EntraDesks}}</td></tr>{{end}}
-          </tbody>
-        </table>
-        {{else}}<div class="sync-empty">No people with differing desks between LDAP and EntraID.</div>{{end}}
-      </div>
-
-      <div id="entraCmp_same" style="display:none;">
-        {{if .EntraMatchedSame}}
-        <table class="sync-table">
-          <thead><tr><th>Name</th><th>E-mail</th><th>Desks</th></tr></thead>
-          <tbody>
-          {{range .EntraMatchedSame}}<tr><td>{{.Name}}</td><td>{{.Mail}}</td><td>{{.LdapDesks}}</td></tr>{{end}}
-          </tbody>
-        </table>
-        {{else}}<div class="sync-empty">No people with matching desks in both directories.</div>{{end}}
-      </div>
-
-      <div id="entraCmp_ldap" style="display:none;">
-        {{if .EntraOnlyLdap}}
-        <table class="sync-table">
-          <thead><tr><th>Name</th><th>E-mail</th><th>LDAP desks</th></tr></thead>
-          <tbody>
-          {{range .EntraOnlyLdap}}<tr><td>{{.Name}}</td><td>{{.Mail}}</td><td>{{.LdapDesks}}</td></tr>{{end}}
-          </tbody>
-        </table>
-        {{else}}<div class="sync-empty">No people are placed only in LDAP.</div>{{end}}
-      </div>
-
-      <div id="entraCmp_entra" style="display:none;">
-        {{if .EntraOnlyEntra}}
-        <table class="sync-table">
-          <thead><tr><th>Name</th><th>E-mail</th><th>EntraID desks</th></tr></thead>
-          <tbody>
-          {{range .EntraOnlyEntra}}<tr><td>{{.Name}}</td><td>{{.Mail}}</td><td>{{.EntraDesks}}</td></tr>{{end}}
-          </tbody>
-        </table>
-        {{else}}<div class="sync-empty">No people are placed only in EntraID.</div>{{end}}
-      </div>
+      <div id="entraCmpContainer"><div class="sync-empty">Loading&hellip;</div></div>
     </div>
   </div>
   {{end}}
@@ -1232,7 +1183,7 @@
         {{else}}
         <button type="button" class="robin-rtab" id="robinResNav_people" onclick="showRobinResultTab('people')">Desk reservations{{if .RobinDeskHasSync}} <span class="sync-badge sync-badge-accent">{{.RobinDeskCount}}</span>{{end}}</button>
         {{end}}
-        <button type="button" class="robin-rtab" id="robinResNav_check" onclick="showRobinResultTab('check')">AD &harr; Robin check{{if .RobinAdDuplicates}} <span class="sync-badge sync-badge-warn">{{len .RobinAdDuplicates}}</span>{{end}}</button>
+        <button type="button" class="robin-rtab" id="robinResNav_check" onclick="showRobinResultTab('check')">AD &harr; Robin check<span id="robinCheckBadge"></span></button>
       </div>
 
       <div id="robinRes_rooms" class="robin-rpanel">
@@ -1318,50 +1269,7 @@
 
       <div id="robinRes_check" class="robin-rpanel" style="display:none;">
         <p class="sync-card-hint" style="margin-top:0;">Compares the cached AD mirror with the cached Robin desk occupancy &mdash; no sync is triggered, this just shows how the two data sets overlap on the map. Display priority between sources is configured under <strong>Sync &rarr; General</strong>.</p>
-        <div class="sync-summary">
-          <div class="sync-summary-item"><span class="sync-summary-num" style="color:var(--sy-ok);">{{len .RobinAdSameDesk}}</span><span class="sync-summary-lbl">Same desk, same person</span></div>
-          <div class="sync-summary-item"><span class="sync-summary-num" style="color:var(--sy-warn);">{{len .RobinAdDuplicates}}</span><span class="sync-summary-lbl">Same person, two desks</span></div>
-        </div>
-
-        <h3 class="sync-card-title" style="font-size:1.05em; margin:18px 0 6px;">Same user on the same desk in AD &amp; Robin</h3>
-        <p class="sync-card-hint" style="margin-top:0;">Robin reports the person already seated there by AD, so the AD placement keeps priority and the Robin overlay for this desk is dropped.</p>
-        {{if .RobinAdSameDesk}}
-        <table class="sync-table">
-          <thead><tr><th>Person</th><th>Map</th><th>Desk</th></tr></thead>
-          <tbody>
-          {{range .RobinAdSameDesk}}
-            <tr>
-              <td>{{if .Name}}{{.Name}}{{else}}&mdash;{{end}}</td>
-              <td>{{.Map}}</td>
-              <td><span class="sync-badge sync-badge-ok">{{.Desknumber}}</span></td>
-            </tr>
-          {{end}}
-          </tbody>
-        </table>
-        {{else}}
-        <div class="sync-empty">No desk is claimed by the same person in both AD and Robin.</div>
-        {{end}}
-
-        <h3 class="sync-card-title" style="font-size:1.05em; margin:22px 0 6px;">Same person on two desks &mdash; appears twice on one map</h3>
-        <p class="sync-card-hint" style="margin-top:0;">AD seats the person at one desk while Robin seats them at a different desk on the same map. &ldquo;Shown twice&rdquo; reflects whether the current overlay mode actually renders the Robin desk right now.</p>
-        {{if .RobinAdDuplicates}}
-        <table class="sync-table">
-          <thead><tr><th>Person</th><th>Map</th><th>AD desk</th><th>Robin desk</th><th>Shown twice</th></tr></thead>
-          <tbody>
-          {{range .RobinAdDuplicates}}
-            <tr>
-              <td>{{if .Name}}{{.Name}}{{else}}&mdash;{{end}}</td>
-              <td>{{.Map}}</td>
-              <td><span class="sync-badge sync-badge-ok">{{.AdDesk}}</span></td>
-              <td><span class="sync-badge sync-badge-warn">{{.RobinDesk}}</span></td>
-              <td>{{if .Rendered}}<span class="sync-badge sync-badge-danger">yes</span>{{else}}<span class="sync-badge sync-badge-off">not with current mode</span>{{end}}</td>
-            </tr>
-          {{end}}
-          </tbody>
-        </table>
-        {{else}}
-        <div class="sync-empty">No employee is seated at one desk via AD and another via Robin on the same map.</div>
-        {{end}}
+        <div id="robinCheckBody"><div class="sync-empty">Loading&hellip;</div></div>
       </div>
     </div>
 
@@ -1675,6 +1583,7 @@
     if (typeof showRobinResultTab === 'function') { showRobinResultTab('rooms'); }
     if (typeof updateEntraAuthMethod === 'function') { updateEntraAuthMethod(); }
     if (typeof showEntraCmpTab === 'function') { showEntraCmpTab('diff'); }
+    if (typeof loadSyncExtras === 'function') { loadSyncExtras(); }
     (function(){ var m = document.getElementById('syncMsg'); if (m) { setTimeout(function(){ m.style.opacity = '0'; setTimeout(function(){ m.style.display = 'none'; }, 400); }, 2000); } })();
   </script>
   {{if gt .PermAdminpanel 0}}<script>loadSamlSettings();</script>{{end}}
@@ -2128,3 +2037,111 @@
 </div>
 </body>
 </html>
+
+{{/* ----------------------------------------------------------------------
+  Lazily-loaded Sync-tab fragments. These are rendered on demand by
+  GET /rest/syncextras (handleRestSyncExtras -> renderFragment) and injected
+  by loadSyncExtras() in backend.js, so the Sync tab opens instantly while the
+  heavy AD<->Robin and LDAP<->EntraID computations stream in a moment later.
+  Kept at the top level (outside "admincontent") so they are standalone
+  associated templates addressable by name.
+---------------------------------------------------------------------- */}}
+{{define "syncRobinCheckBody"}}
+        <div class="sync-summary">
+          <div class="sync-summary-item"><span class="sync-summary-num" style="color:var(--sy-ok);">{{len .RobinAdSameDesk}}</span><span class="sync-summary-lbl">Same desk, same person</span></div>
+          <div class="sync-summary-item"><span class="sync-summary-num" style="color:var(--sy-warn);">{{len .RobinAdDuplicates}}</span><span class="sync-summary-lbl">Same person, two desks</span></div>
+        </div>
+
+        <h3 class="sync-card-title" style="font-size:1.05em; margin:18px 0 6px;">Same user on the same desk in AD &amp; Robin</h3>
+        <p class="sync-card-hint" style="margin-top:0;">Robin reports the person already seated there by AD, so the AD placement keeps priority and the Robin overlay for this desk is dropped.</p>
+        {{if .RobinAdSameDesk}}
+        <table class="sync-table">
+          <thead><tr><th>Person</th><th>Map</th><th>Desk</th></tr></thead>
+          <tbody>
+          {{range .RobinAdSameDesk}}
+            <tr>
+              <td>{{if .Name}}{{.Name}}{{else}}&mdash;{{end}}</td>
+              <td>{{.Map}}</td>
+              <td><span class="sync-badge sync-badge-ok">{{.Desknumber}}</span></td>
+            </tr>
+          {{end}}
+          </tbody>
+        </table>
+        {{else}}
+        <div class="sync-empty">No desk is claimed by the same person in both AD and Robin.</div>
+        {{end}}
+
+        <h3 class="sync-card-title" style="font-size:1.05em; margin:22px 0 6px;">Same person on two desks &mdash; appears twice on one map</h3>
+        <p class="sync-card-hint" style="margin-top:0;">AD seats the person at one desk while Robin seats them at a different desk on the same map. &ldquo;Shown twice&rdquo; reflects whether the current overlay mode actually renders the Robin desk right now.</p>
+        {{if .RobinAdDuplicates}}
+        <table class="sync-table">
+          <thead><tr><th>Person</th><th>Map</th><th>AD desk</th><th>Robin desk</th><th>Shown twice</th></tr></thead>
+          <tbody>
+          {{range .RobinAdDuplicates}}
+            <tr>
+              <td>{{if .Name}}{{.Name}}{{else}}&mdash;{{end}}</td>
+              <td>{{.Map}}</td>
+              <td><span class="sync-badge sync-badge-ok">{{.AdDesk}}</span></td>
+              <td><span class="sync-badge sync-badge-warn">{{.RobinDesk}}</span></td>
+              <td>{{if .Rendered}}<span class="sync-badge sync-badge-danger">yes</span>{{else}}<span class="sync-badge sync-badge-off">not with current mode</span>{{end}}</td>
+            </tr>
+          {{end}}
+          </tbody>
+        </table>
+        {{else}}
+        <div class="sync-empty">No employee is seated at one desk via AD and another via Robin on the same map.</div>
+        {{end}}
+{{end}}
+
+{{define "syncEntraCmpBody"}}
+      <div class="robin-rtabs">
+        <button type="button" class="robin-rtab active" id="entraCmpNav_diff" onclick="showEntraCmpTab('diff')">Different desks{{if .EntraMatchedDiff}} <span class="sync-badge sync-badge-warn">{{len .EntraMatchedDiff}}</span>{{end}}</button>
+        <button type="button" class="robin-rtab" id="entraCmpNav_same" onclick="showEntraCmpTab('same')">Same desks ({{len .EntraMatchedSame}})</button>
+        <button type="button" class="robin-rtab" id="entraCmpNav_ldap" onclick="showEntraCmpTab('ldap')">LDAP only ({{len .EntraOnlyLdap}})</button>
+        <button type="button" class="robin-rtab" id="entraCmpNav_entra" onclick="showEntraCmpTab('entra')">EntraID only ({{len .EntraOnlyEntra}})</button>
+      </div>
+
+      <div id="entraCmp_diff">
+        {{if .EntraMatchedDiff}}
+        <table class="sync-table">
+          <thead><tr><th>Name</th><th>E-mail</th><th>LDAP desks</th><th>EntraID desks</th></tr></thead>
+          <tbody>
+          {{range .EntraMatchedDiff}}<tr><td>{{.Name}}</td><td>{{.Mail}}</td><td>{{.LdapDesks}}</td><td>{{.EntraDesks}}</td></tr>{{end}}
+          </tbody>
+        </table>
+        {{else}}<div class="sync-empty">No people with differing desks between LDAP and EntraID.</div>{{end}}
+      </div>
+
+      <div id="entraCmp_same" style="display:none;">
+        {{if .EntraMatchedSame}}
+        <table class="sync-table">
+          <thead><tr><th>Name</th><th>E-mail</th><th>Desks</th></tr></thead>
+          <tbody>
+          {{range .EntraMatchedSame}}<tr><td>{{.Name}}</td><td>{{.Mail}}</td><td>{{.LdapDesks}}</td></tr>{{end}}
+          </tbody>
+        </table>
+        {{else}}<div class="sync-empty">No people with matching desks in both directories.</div>{{end}}
+      </div>
+
+      <div id="entraCmp_ldap" style="display:none;">
+        {{if .EntraOnlyLdap}}
+        <table class="sync-table">
+          <thead><tr><th>Name</th><th>E-mail</th><th>LDAP desks</th></tr></thead>
+          <tbody>
+          {{range .EntraOnlyLdap}}<tr><td>{{.Name}}</td><td>{{.Mail}}</td><td>{{.LdapDesks}}</td></tr>{{end}}
+          </tbody>
+        </table>
+        {{else}}<div class="sync-empty">No people are placed only in LDAP.</div>{{end}}
+      </div>
+
+      <div id="entraCmp_entra" style="display:none;">
+        {{if .EntraOnlyEntra}}
+        <table class="sync-table">
+          <thead><tr><th>Name</th><th>E-mail</th><th>EntraID desks</th></tr></thead>
+          <tbody>
+          {{range .EntraOnlyEntra}}<tr><td>{{.Name}}</td><td>{{.Mail}}</td><td>{{.EntraDesks}}</td></tr>{{end}}
+          </tbody>
+        </table>
+        {{else}}<div class="sync-empty">No people are placed only in EntraID.</div>{{end}}
+      </div>
+{{end}}
