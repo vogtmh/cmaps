@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Map Editor — floorplan cleaner (PoC)</title>
+<link rel="stylesheet" href="/static/editor.css">
+</head>
+<body>
+<div id="app">
+  <div id="topbar">
+    <span class="brand">Map&nbsp;Editor</span>
+    <label class="btn file-btn">Open PDF
+      <input type="file" id="fileInput" accept=".pdf" hidden>
+    </label>
+    <span id="filename" class="filename"></span>
+
+    <span class="sep"></span>
+    <button id="undoBtn" class="btn" disabled title="Undo (Ctrl+Z)">Undo</button>
+    <button id="deleteBtn" class="btn" disabled title="Delete selection (Del)">Delete</button>
+    <span id="selInfo" class="muted"></span>
+
+    <span class="spacer"></span>
+
+    <div class="zoom">
+      <button id="zoomOut" class="btn">&minus;</button>
+      <span id="zoomLabel">100%</span>
+      <button id="zoomIn" class="btn">+</button>
+      <button id="zoomFit" class="btn">Fit</button>
+    </div>
+
+    <span class="sep"></span>
+    <label class="inline">Name <input id="exportName" type="text" placeholder="map" size="12"></label>
+    <label class="inline">Width <input id="exportWidth" type="number" value="3000" min="200" max="16000" step="100"></label>
+    <button id="exportBtn" class="btn primary" disabled>Export PNG</button>
+  </div>
+
+  <div id="main">
+    <div id="viewport">
+      <div id="stage"></div>
+      <div id="rubber"></div>
+      <div id="dropHint">Drop a vector PDF here, or click <b>Open PDF</b>.</div>
+      <div id="loading" hidden><span class="spinner"></span> <span id="loadingText">Rendering…</span></div>
+    </div>
+
+    <aside id="sidebar">
+      <h3>Layers</h3>
+      <div id="layersBox">
+        <p class="muted" id="noLayers">No layers in this PDF.</p>
+        <div id="layers"></div>
+      </div>
+      <div class="layer-actions">
+        <button id="layersAll" class="btn small" disabled>All</button>
+        <button id="layersNone" class="btn small" disabled>None</button>
+      </div>
+      <p class="hint">Uncheck furniture/text layers to hide them from the map. Then click or box-select to erase strays.</p>
+
+      <h3>Help</h3>
+      <ul class="help">
+        <li><b>Click</b> a shape to select it. <b>Shift+click</b> to add.</li>
+        <li><b>Drag</b> a box to select everything fully inside it. <b>Alt+drag</b> also grabs anything the box touches.</li>
+        <li><b>Del</b> removes selection, <b>Ctrl+Z</b> undoes.</li>
+        <li><b>Scroll</b> to zoom, <b>Space+drag</b> or middle-drag to pan.</li>
+      </ul>
+      <p class="hint" id="statsHint"></p>
+    </aside>
+  </div>
+</div>
+<script src="/static/editor.js"></script>
+</body>
+</html>
