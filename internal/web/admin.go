@@ -114,6 +114,11 @@ type adminData struct {
 	PermAuditlog   int
 	PermAdminpanel int
 
+	// AppTools are the application links shown on the Tools tab. CanManageTools
+	// is true for superadmins (adminpanel write), who may add/remove links.
+	AppTools       []store.AppTool
+	CanManageTools bool
+
 	GeneralVars []kv
 	LogoRegular string
 	LogoHover   string
@@ -270,6 +275,10 @@ func (app *Server) handleAdmin(w http.ResponseWriter, r *http.Request) {
 		if tab == "ldap" && app.permLevel(sess, "adminpanel") > 0 {
 			allowed = true
 		}
+		// The Tools tab is visible to anyone who can open the admin panel.
+		if tab == "tools" && app.permLevel(sess, "adminpanel") > 0 {
+			allowed = true
+		}
 		// The custom item-types tab reuses the Desks permission.
 		if tab == "itemtypes" && app.permLevel(sess, "desks") > 0 {
 			allowed = true
@@ -318,6 +327,8 @@ func (app *Server) handleAdminPost(w http.ResponseWriter, r *http.Request, sess 
 		return app.handleAdminPostItemTypes(r, sess)
 	case "config":
 		return app.handleAdminPostConfig(r, sess)
+	case "tools":
+		return app.handleAdminPostTools(r, sess)
 	}
 	return ""
 }

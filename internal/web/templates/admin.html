@@ -83,6 +83,12 @@
       <span class="headeritem_text">AuditLog</span>
     </div>
     {{end}}
+    {{if gt .PermAdminpanel 0}}
+    <div class="headeritem" id="tab_tools" style="width:120px;">
+      <span class="headeritem_picture"><a href="?tab=tools"><img src="../images/openlink.png" width="45" alt="" /></a></span>
+      <span class="headeritem_text">Tools</span>
+    </div>
+    {{end}}
     <div class="headeritem" style="width:150px;float:right;">
       <span class="headeritem_picture" style="float:right; cursor:pointer; margin-top:0px;"><span class="iconbtn-plain iconbtn-logout" style="display:inline-block; width:55px; height:55px; background-size:90%; vertical-align:middle;" title="Logout" onClick='logoutUser("admin")'></span></span>
       <span class="headeritem_picture" style="float:right;"><a href="../" title="go back to the map"><img src="../images/globe.png" width="45" alt="" /></a></span>
@@ -2169,6 +2175,87 @@
     </div>
   </div>
   <script>initAuditLog();</script>
+
+{{else if eq .ActiveTab "tools"}}
+  <div class="sync-wrap">
+    <div class="sync-card">
+      <div class="sync-card-head">
+        <h2 class="sync-card-title">Tools</h2>
+        <span class="sync-badge sync-badge-accent">{{len .AppTools}} link(s)</span>
+        {{if .CanManageTools}}
+        <button type="button" class="sync-btn sync-btn-sm" onclick="openManageTools()" style="margin-left:auto;">Manage links</button>
+        {{end}}
+      </div>
+      {{if .AppTools}}
+      <div class="tool-grid">
+        {{range .AppTools}}
+        <a class="tool-card" href="{{.Path}}" target="_blank" rel="noopener noreferrer">
+          <span class="tool-card-icon">
+            {{if .Icon}}<img src="{{.Icon}}" alt="">{{else}}<img src="../images/openlink.png" alt="">{{end}}
+          </span>
+          <span class="tool-card-name">{{.Name}}</span>
+        </a>
+        {{end}}
+      </div>
+      {{else}}
+      <div class="sync-empty">No links configured yet.{{if .CanManageTools}} Use &ldquo;Manage links&rdquo; to add one.{{end}}</div>
+      {{end}}
+    </div>
+  </div>
+
+  {{if .CanManageTools}}
+  <!-- Manage links modal -->
+  <div id="manageToolsOverlay" class="sync-modal">
+    <div class="sync-modal-box">
+      <div class="sync-modal-head">
+        <h2>Manage links</h2>
+        <button type="button" class="sync-btn sync-btn-sm" onclick="closeToolsModal('manageToolsOverlay')">Close</button>
+      </div>
+      <div class="sync-modal-content">
+        {{if .AppTools}}
+        <table class="sync-table">
+          <thead>
+            <tr><th>Icon</th><th>Name</th><th>Path</th><th class="sync-td-min">Actions</th></tr>
+          </thead>
+          <tbody>
+          {{range .AppTools}}
+            <tr>
+              <td class="sync-td-min">{{if .Icon}}<img src="{{.Icon}}" alt="" style="width:28px;height:28px;object-fit:contain;border-radius:5px;">{{else}}&mdash;{{end}}</td>
+              <td>{{.Name}}</td>
+              <td style="max-width:420px;white-space:normal;word-break:break-all;"><a href="{{.Path}}" target="_blank" rel="noopener noreferrer">{{.Path}}</a></td>
+              <td class="sync-td-min">
+                <form action="?tab=tools" method="post" style="margin:0;" onsubmit="return confirm('Delete link &quot;{{.Name}}&quot;?');">
+                  <input type="hidden" name="tab" value="tools">
+                  <input type="hidden" name="deleteTool" value="{{.ID}}">
+                  <button type="submit" class="sync-btn sync-btn-sm sync-btn-danger">Delete</button>
+                </form>
+              </td>
+            </tr>
+          {{end}}
+          </tbody>
+        </table>
+        {{else}}
+        <div class="sync-empty">No links configured yet.</div>
+        {{end}}
+
+        <h3 class="sync-card-title" style="font-size:1.05em; margin:18px 0 8px;">Add a link</h3>
+        <form action="?tab=tools" method="post" enctype="multipart/form-data">
+          <input type="hidden" name="tab" value="tools">
+          <div class="sync-form-grid">
+            <div class="sync-field"><label class="sync-label">Name</label><input class="sync-input" type="text" name="newName" placeholder="e.g. Map editor" required></div>
+            <div class="sync-field"><label class="sync-label">Path (relative or absolute URL)</label><input class="sync-input" type="text" name="newPath" placeholder="e.g. /admin?tab=maps or https://jira.example.com" required></div>
+            <div class="sync-field"><label class="sync-label">Icon (optional image)</label><input class="sync-input" type="file" name="newIcon" accept="image/*"></div>
+          </div>
+          <div class="sync-form-actions"><button type="submit" class="sync-btn sync-btn-primary">Add link</button></div>
+        </form>
+      </div>
+    </div>
+  </div>
+  <script>
+    function openManageTools() { document.getElementById('manageToolsOverlay').style.display = 'block'; }
+    function closeToolsModal(id) { document.getElementById(id).style.display = 'none'; }
+  </script>
+  {{end}}
 
 {{end}}
 {{end}}

@@ -51,7 +51,7 @@ func main() {
 	}
 
 	// Ensure the data directory and its subfolders exist.
-	for _, d := range []string{cfg.DataDir, cfg.DataPath("maps"), cfg.DataPath("avatarcache"), cfg.DataPath("logos"), cfg.DataPath("itemtypes")} {
+	for _, d := range []string{cfg.DataDir, cfg.DataPath("maps"), cfg.DataPath("avatarcache"), cfg.DataPath("logos"), cfg.DataPath("itemtypes"), cfg.DataPath("toolicons")} {
 		if err := os.MkdirAll(d, 0755); err != nil {
 			log.Fatalf("creating data dir %s: %v", d, err)
 		}

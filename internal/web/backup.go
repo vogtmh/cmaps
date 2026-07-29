@@ -36,7 +36,7 @@ var backupGroups = []backupGroup{
 	{Key: "users", Label: "Users, roles, teams & departments", Buckets: [][]byte{store.BucketUsers, store.BucketRoles, store.BucketTeams, store.BucketDepts, store.BucketVips}},
 	{Key: "ldap", Label: "LDAP directory & sources", Buckets: [][]byte{store.BucketLdap, store.BucketDirectory, store.BucketLdapSrc, store.BucketChangelog, store.BucketSrcMirror, store.BucketSrcDir}},
 	{Key: "bookings", Label: "Bookings", Buckets: [][]byte{store.BucketBookings}},
-	{Key: "settings", Label: "Settings & integrations", Buckets: [][]byte{store.BucketSettings, store.BucketMeta, store.BucketGeoCfg, store.BucketRobinCfg, store.BucketRobin, store.BucketRobinDesk, store.BucketMeeting, store.BucketWhitelist}},
+	{Key: "settings", Label: "Settings & integrations", Buckets: [][]byte{store.BucketSettings, store.BucketMeta, store.BucketGeoCfg, store.BucketRobinCfg, store.BucketRobin, store.BucketRobinDesk, store.BucketMeeting, store.BucketWhitelist, store.BucketAppTools}},
 	{Key: "stats", Label: "Statistics & audit log", Buckets: [][]byte{store.BucketStats, store.BucketTracking, store.BucketAudit}},
 	{Key: "mapimages", Label: "Map images", Dir: "maps"},
 	{Key: "logos", Label: "Logos", Dir: "logos"},
@@ -47,7 +47,7 @@ var backupGroups = []backupGroup{
 // (everything that lives under the data dir besides the bolt database). The
 // config.json file lives outside the data dir and is bundled separately by
 // buildExport with its admin password redacted (see there).
-var backupAssetDirs = []string{"maps", "logos", "avatarcache"}
+var backupAssetDirs = []string{"maps", "logos", "avatarcache", "toolicons"}
 
 // handleRestExportStart kicks off building the export zip in the background so
 // the admin Backup dialog can show a determinate progress bar while everything

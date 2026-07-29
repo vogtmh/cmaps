@@ -44,6 +44,7 @@ var (
 	BucketEntraSrc  = []byte("entraidsources")  // EntraID app registrations, one per connection (key = id)
 	BucketSrcMirror = []byte("sourcemirror")    // per-source desk placements (key = "ldap:<id>"/"entra:<id>" -> JSON []LdapUser)
 	BucketSrcDir    = []byte("sourcedir")       // per-source full directory snapshot (key = "ldap:<id>" -> JSON []DirectoryUser)
+	BucketAppTools  = []byte("apptools")        // admin-defined application links shown on the Tools tab (key = id)
 )
 
 var allBuckets = [][]byte{
@@ -51,7 +52,7 @@ var allBuckets = [][]byte{
 	BucketRoles, BucketUsers, BucketChangelog, BucketStats, BucketTracking, BucketVips,
 	BucketDepts, BucketRobin, BucketMeeting, BucketWhitelist, BucketLdapSrc, BucketAudit,
 	BucketMeta, BucketDirectory, BucketRobinCfg, BucketRobinDesk, BucketGeoCfg, BucketItemTypes,
-	BucketEntraLdap, BucketEntraCfg, BucketEntraSrc, BucketSrcMirror, BucketSrcDir,
+	BucketEntraLdap, BucketEntraCfg, BucketEntraSrc, BucketSrcMirror, BucketSrcDir, BucketAppTools,
 }
 
 type DB struct {
@@ -777,6 +778,42 @@ func (db *DB) PutItemType(t CustomItemType) error {
 
 func (db *DB) DeleteItemType(id string) error {
 	return DeleteKey(db, BucketItemTypes, []byte(id))
+}
+
+// --- Application links (Tools tab) ---
+
+// AppTool is an admin-defined link to another application, rendered as a card on
+// the admin panel's Tools tab. Path may be relative or absolute; it opens in a
+// new tab. Icon is the served URL of an uploaded image (or "").
+type AppTool struct {
+	ID    string `json:"id"`    // url-safe slug, also the icon filename stem
+	Name  string `json:"name"`  // label shown on the card
+	Path  string `json:"path"`  // relative or absolute URL opened in a new tab
+	Icon  string `json:"icon"`  // uploaded icon URL (served from /toolicons/), or ""
+	Order int    `json:"order"` // sort position on the Tools tab
+}
+
+func (db *DB) ListAppTools() ([]AppTool, error) {
+	tools, err := ListJSON[AppTool](db, BucketAppTools, "")
+	sort.Slice(tools, func(i, j int) bool {
+		if tools[i].Order != tools[j].Order {
+			return tools[i].Order < tools[j].Order
+		}
+		return tools[i].Name < tools[j].Name
+	})
+	return tools, err
+}
+
+func (db *DB) GetAppTool(id string) (AppTool, bool, error) {
+	return GetJSON[AppTool](db, BucketAppTools, []byte(id))
+}
+
+func (db *DB) PutAppTool(t AppTool) error {
+	return PutJSON(db, BucketAppTools, []byte(t.ID), t)
+}
+
+func (db *DB) DeleteAppTool(id string) error {
+	return DeleteKey(db, BucketAppTools, []byte(id))
 }
 
 // --- LDAP mirror ---

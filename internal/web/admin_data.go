@@ -57,11 +57,14 @@ func (app *Server) buildAdminData(r *http.Request, sess Session, tab, msg string
 		PermAuditlog:      app.permLevel(sess, "auditlog"),
 		PermAdminpanel:    app.permLevel(sess, "adminpanel"),
 	}
+	d.CanManageTools = d.PermAdminpanel >= 2
 	if d.IsEditor {
 		d.Token = "1"
 	}
 
 	switch tab {
+	case "tools":
+		d.AppTools, _ = app.db.ListAppTools()
 	case "config":
 		settings, _ := app.db.AllSettings()
 		for k, v := range settings {

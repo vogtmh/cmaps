@@ -52,6 +52,7 @@ func (app *Server) routes(mux *http.ServeMux) {
 	mux.HandleFunc("/avatarcache/", app.serveAvatar)
 	mux.Handle("/logos/", cacheControl(24*time.Hour, http.StripPrefix("/logos/", http.FileServer(http.Dir(app.cfg.DataPath("logos"))))))
 	mux.Handle("/itemicons/", cacheControl(24*time.Hour, http.StripPrefix("/itemicons/", http.FileServer(http.Dir(app.cfg.DataPath("itemtypes"))))))
+	mux.Handle("/toolicons/", cacheControl(24*time.Hour, http.StripPrefix("/toolicons/", http.FileServer(http.Dir(app.cfg.DataPath("toolicons"))))))
 
 	// First-run setup wizard.
 	mux.HandleFunc("/setup", app.handleSetup)
