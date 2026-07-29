@@ -28,6 +28,7 @@ body {
 .btn:active:not(:disabled) { background: #eceef1; }
 .btn:disabled { opacity: .45; cursor: default; }
 .btn.small { padding: 4px 9px; font-size: 12px; }
+.btn.icon-btn { padding: 6px 9px; }
 .btn.primary { background: #0a66c2; border-color: #0a66c2; color: #fff; }
 .btn.primary:hover:not(:disabled) { background: #0958a8; }
 .file-btn { display: inline-flex; align-items: center; }
@@ -56,8 +57,15 @@ body {
 #viewport.panning { cursor: grabbing; }
 #viewport.panready { cursor: grab; }
 
-#stage { position: absolute; top: 0; left: 0; transform-origin: 0 0; will-change: transform; }
+#stage { position: absolute; top: 0; left: 0; transform-origin: 0 0; }
 #stage svg { display: block; background: #fff; box-shadow: 0 1px 8px rgba(0,0,0,.18); }
+#stage canvas { display: block; background: #fff; box-shadow: 0 1px 8px rgba(0,0,0,.18); }
+
+#brushCursor {
+  position: fixed; border: 1px solid #ff2d55; background: rgba(255,45,85,.12);
+  border-radius: 50%; transform: translate(-50%, -50%); pointer-events: none;
+  display: none; z-index: 5;
+}
 
 /* selection + hover highlight (CSS beats SVG presentation attributes) */
 #stage svg .me-hover {
@@ -71,10 +79,12 @@ body {
 
 /* layer hover highlight overlay */
 #stage svg g.me-layerhi, #stage svg g.me-layerhi * {
-  stroke: #0a66c2 !important; stroke-opacity: .95 !important; stroke-width: 1.6px !important;
-  fill: #0a66c2 !important; fill-opacity: .28 !important;
+  stroke: var(--hl, #ff2d55) !important; stroke-opacity: .95 !important; stroke-width: 1.6px !important;
+  fill: var(--hl, #ff2d55) !important; fill-opacity: .30 !important;
   vector-effect: non-scaling-stroke !important;
 }
+#stage svg g.me-layerhi { animation: mePulse 1.05s ease-in-out infinite; }
+@keyframes mePulse { 0%, 100% { opacity: 1; } 50% { opacity: .25; } }
 
 #rubber {
   position: absolute; border: 1px solid #0a66c2;
@@ -100,15 +110,20 @@ body {
 @keyframes spin { to { transform: rotate(360deg); } }
 
 /* ---- sidebar ---- */
+#sidebarResizer {
+  flex: 0 0 6px; cursor: col-resize; background: #d9dbe0;
+}
+#sidebarResizer:hover, #sidebarResizer.dragging { background: #0a66c2; }
 #sidebar {
   flex: 0 0 280px; background: #fff; border-left: 1px solid #d9dbe0;
-  padding: 14px; overflow-y: auto;
+  padding: 14px; overflow-y: auto; min-width: 180px;
 }
 #sidebar h3 { margin: 0 0 8px; font-size: 12px; text-transform: uppercase; letter-spacing: .5px; color: #6b7280; }
 #sidebar h3:not(:first-child) { margin-top: 20px; }
 #layers { display: flex; flex-direction: column; gap: 2px; }
 .layer-row { display: flex; align-items: center; gap: 8px; padding: 4px 6px; border-radius: 6px; }
 .layer-row:hover { background: #f5f6f8; }
+.layer-row.active { background: rgba(10,102,194,.14); outline: 1px solid #0a66c2; }
 .layer-row label { flex: 1 1 auto; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .layer-row.hidden label { color: #b0b4bb; }
 
@@ -133,3 +148,10 @@ body {
 .hint { color: #8a8f98; font-size: 12px; margin: 10px 0 0; }
 ul.help { margin: 0; padding-left: 16px; color: #4b5563; }
 ul.help li { margin-bottom: 5px; }
+
+/* raster tools */
+.tool-row { display: flex; align-items: center; gap: 8px; margin: 8px 0; flex-wrap: wrap; }
+.tool-row label { display: inline-flex; align-items: center; gap: 5px; cursor: pointer; }
+.tool-row input[type=range] { flex: 1 1 90px; }
+.swatch { width: 26px; height: 22px; padding: 0; border: 1px solid #cbd0d8; border-radius: 5px; cursor: pointer; background: #fff; }
+#pickColor.active { background: #0a66c2; border-color: #0a66c2; color: #fff; }

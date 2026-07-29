@@ -10,8 +10,8 @@
 <div id="app">
   <div id="topbar">
     <span class="brand">Map&nbsp;Editor</span>
-    <label class="btn file-btn">Open PDF
-      <input type="file" id="fileInput" accept=".pdf" hidden>
+    <label class="btn file-btn">Open file
+      <input type="file" id="fileInput" accept=".pdf,.png,.jpg,.jpeg" hidden>
     </label>
     <span id="filename" class="filename"></span>
 
@@ -30,8 +30,20 @@
     </div>
 
     <span class="sep"></span>
-    <label class="inline">Name <input id="exportName" type="text" placeholder="map" size="12"></label>
     <label class="inline">Width <input id="exportWidth" type="number" value="3000" min="200" max="16000" step="100"></label>
+    <label class="inline">Profile
+      <select id="exportProfile">
+        <option value="original">Original</option>
+        <option value="whiteTransparent">White on transparent</option>
+        <option value="blackTransparent">Black on transparent</option>
+      </select>
+    </label>
+    <button id="profileToggle" class="btn icon-btn" title="Profile settings" hidden>⚙</button>
+    <span id="profileOpts" hidden>
+      <label class="inline" title="Background colour to make transparent">Bg <input type="color" id="keyColor" class="swatch" value="#ffffff"></label>
+      <label class="inline" title="How close to the background colour counts as background">Tol <input type="range" id="keyTol" min="0" max="150" value="45"></label>
+      <label class="inline" title="Line brightness / opacity">Bright <input type="range" id="keyBright" min="100" max="300" value="150"></label>
+    </span>
     <button id="exportBtn" class="btn primary" disabled>Export PNG</button>
   </div>
 
@@ -39,30 +51,64 @@
     <div id="viewport">
       <div id="stage"></div>
       <div id="rubber"></div>
-      <div id="dropHint">Drop a vector PDF here, or click <b>Open PDF</b>.</div>
+      <div id="brushCursor"></div>
+      <div id="dropHint">Drop a vector PDF or an image (PNG/JPG) here, or click <b>Open file</b>.</div>
       <div id="loading" hidden><span class="spinner"></span> <span id="loadingText">Rendering…</span></div>
     </div>
 
-    <aside id="sidebar">
-      <h3>Layers</h3>
-      <div id="layersBox">
-        <p class="muted" id="noLayers">No layers in this PDF.</p>
-        <div id="layers"></div>
-      </div>
-      <div class="layer-actions">
-        <button id="layersAll" class="btn small" disabled>All</button>
-        <button id="layersNone" class="btn small" disabled>None</button>
-      </div>
-      <p class="hint">Uncheck furniture/text layers to hide them from the map. Then click or box-select to erase strays.</p>
+    <div id="sidebarResizer" title="Drag to resize"></div>
 
-      <h3>Help</h3>
-      <ul class="help">
-        <li><b>Click</b> a shape to select it. <b>Shift+click</b> to add.</li>
-        <li><b>Drag</b> a box to select everything fully inside it. <b>Alt+drag</b> also grabs anything the box touches.</li>
-        <li><b>Del</b> removes selection, <b>Ctrl+Z</b> undoes.</li>
-        <li><b>Scroll</b> to zoom, <b>Space+drag</b> or middle-drag to pan.</li>
-      </ul>
-      <p class="hint" id="statsHint"></p>
+    <aside id="sidebar">
+      <div id="vectorPanel">
+        <h3>Layers</h3>
+        <div id="layersBox">
+          <p class="muted" id="noLayers">No layers in this PDF.</p>
+          <div id="layers"></div>
+        </div>
+        <div class="layer-actions">
+          <button id="layersAll" class="btn small" disabled>All</button>
+          <button id="layersNone" class="btn small" disabled>None</button>
+        </div>
+        <div class="tool-row">
+          <label>Highlight colour <input type="color" id="hlColor" class="swatch" value="#ff2d55"></label>
+        </div>
+        <p class="hint">Uncheck furniture/text layers to hide them from the map. Then click or box-select to erase strays.</p>
+
+        <h3>Help</h3>
+        <ul class="help">
+          <li><b>Click</b> a shape to select it. <b>Shift+click</b> to add.</li>
+          <li><b>Drag</b> a box to select everything fully inside it. <b>Alt+drag</b> also grabs anything the box touches.</li>
+          <li><b>Del</b> removes selection, <b>Ctrl+Z</b> undoes.</li>
+          <li><b>Scroll</b> to zoom, <b>Space+drag</b> or middle-drag to pan.</li>
+        </ul>
+        <p class="hint" id="statsHint"></p>
+      </div>
+
+      <div id="rasterPanel" hidden>
+        <h3>Erase tools</h3>
+        <div class="tool-row">
+          <label><input type="radio" name="rtool" value="rect" checked> Rectangle</label>
+          <label><input type="radio" name="rtool" value="brush"> Brush</label>
+        </div>
+        <div class="tool-row">
+          <label>Brush size <input type="range" id="brushSize" min="4" max="300" value="48"></label>
+          <span id="brushSizeVal" class="muted">48</span>
+        </div>
+        <div class="tool-row">
+          <span>Erase colour</span>
+          <input type="color" id="bgColorInput" class="swatch" value="#ffffff">
+          <button id="pickColor" class="btn small" title="Pick a colour from the image">Eyedropper</button>
+        </div>
+        <p class="hint">Drag on the map to erase furniture/text with the chosen colour. Use the eyedropper to match the sheet colour.</p>
+
+        <h3>Help</h3>
+        <ul class="help">
+          <li><b>Rectangle</b>: drag a box to erase everything inside it.</li>
+          <li><b>Brush</b>: drag to paint over details.</li>
+          <li><b>Eyedropper</b>: click the map to set the erase colour.</li>
+          <li><b>Ctrl+Z</b> undoes, <b>Scroll</b> zooms, <b>Space/middle-drag</b> pans.</li>
+        </ul>
+      </div>
     </aside>
   </div>
 </div>

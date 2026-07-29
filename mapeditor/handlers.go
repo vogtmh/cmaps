@@ -68,6 +68,17 @@ func (s *server) handleIndex(w http.ResponseWriter, r *http.Request) {
 	http.ServeFile(w, r, filepath.Join("static", "index.html"))
 }
 
+// handleImage serves the original uploaded raster image (for the raster editor).
+func (s *server) handleImage(w http.ResponseWriter, r *http.Request) {
+	p := s.getProject(r.URL.Query().Get("id"))
+	if p == nil {
+		httpErr(w, http.StatusNotFound, "unknown project")
+		return
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	http.ServeFile(w, r, p.SrcPath)
+}
+
 // handleUpload accepts a multipart "file" (PDF or PNG), stores it, renders the
 // first page to SVG and returns project metadata + the SVG markup.
 func (s *server) handleUpload(w http.ResponseWriter, r *http.Request) {
@@ -119,8 +130,18 @@ func (s *server) handleUpload(w http.ResponseWriter, r *http.Request) {
 
 	p := &project{ID: id, Kind: kind, SrcPath: srcPath, Filename: hdr.Filename}
 
-	if kind != "pdf" {
-		httpErr(w, http.StatusBadRequest, "raster vectorization is not implemented yet (PDF only for now)")
+	if kind == "png" {
+		// Raster images are edited directly (erase tools); no vectorization.
+		p.NumPages = 1
+		s.putProject(p)
+		writeJSON(w, map[string]any{
+			"id":       p.ID,
+			"kind":     p.Kind,
+			"filename": p.Filename,
+			"pages":    1,
+			"page":     0,
+			"layers":   []string{},
+		})
 		return
 	}
 

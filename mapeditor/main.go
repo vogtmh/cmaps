@@ -31,6 +31,7 @@ func main() {
 	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
 	mux.HandleFunc("/api/upload", srv.handleUpload)
 	mux.HandleFunc("/api/svg", srv.handleSVG)
+	mux.HandleFunc("/api/image", srv.handleImage)
 	mux.HandleFunc("/api/layers", srv.handleLayers)
 	mux.HandleFunc("/api/export", srv.handleExport)
 
