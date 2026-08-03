@@ -226,6 +226,22 @@
 .sync-saved-note { font-size: 13px; color: var(--sy-ok); }
 .sync-saved-note.error { color: var(--sy-danger); }
 
+/* Add-map modal: name row with a country-flag chip, and the collapsible
+   "Advanced" section toggle (mirrors the world-map "Add location" form). */
+.sync-namerow { display: flex; align-items: center; gap: 8px; }
+.sync-namerow .sync-input { flex: 1; min-width: 0; }
+.sync-flag {
+  width: 24px; height: 18px; flex-shrink: 0;
+  background-size: cover; background-position: center; background-repeat: no-repeat;
+  border-radius: 3px; border: 1px solid var(--sy-border);
+}
+.sync-advanced-toggle {
+  appearance: none; background: transparent; border: none; cursor: pointer;
+  color: var(--sy-accent); font-size: 13px; font-weight: 600;
+  padding: 10px 0 0; font-family: inherit;
+}
+.sync-advanced-toggle:hover { text-decoration: underline; }
+
 /* ── Robin result tabs (Meeting rooms / Desk reservations) ── */
 .robin-rtabs { display: flex; gap: 6px; margin: 4px 0 14px; border-bottom: 1px solid var(--sy-border); }
 .robin-rtab {

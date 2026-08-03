@@ -1785,27 +1785,38 @@
         <h2>Add map</h2>
         <button type="button" class="sync-btn sync-btn-sm" onclick="closeMapModal('addMapOverlay')">Close</button>
       </div>
-      <form action="?tab=maps" method="post" enctype="multipart/form-data">
+      <form action="?tab=maps" method="post" enctype="multipart/form-data" onsubmit="return validateAddMap();">
         <input type="hidden" name="tab" value="maps">
         <div class="sync-form-grid">
-          <div class="sync-field"><label class="sync-label">Map name (identifier) *</label><input class="sync-input" type="text" name="newMapName" placeholder="e.g. goeppingen2" required></div>
-          <div class="sync-field"><label class="sync-label">Itemscale *</label><input class="sync-input" type="text" name="newMapItemscale" value="1" required></div>
-          <div class="sync-field"><label class="sync-label">Published *</label><select class="sync-select" name="newMapPublished"><option value="yes" selected>Yes</option><option value="no">No</option></select></div>
-          <div class="sync-field"><label class="sync-label">Country (map flag) *</label><select class="sync-select" name="newMapCountry" required>{{range .Countryflags}}<option value="{{.}}">{{.}}</option>{{end}}</select></div>
-          <div class="sync-field"><label class="sync-label">Timezone *</label><select class="sync-select" name="newMapTimezone" required>{{range .Timezones}}<option value="{{.}}"{{if eq . "Europe/Berlin"}} selected{{end}}>{{.}}</option>{{end}}</select></div>
-          {{if .WorldMap}}
-          <div class="sync-field"><label class="sync-label">Latitude *</label><input class="sync-input" type="text" id="newMapLat" name="newMapLat" placeholder="e.g. 48.7758" required></div>
-          <div class="sync-field"><label class="sync-label">Longitude *</label><input class="sync-input" type="text" id="newMapLon" name="newMapLon" placeholder="e.g. 9.1829" required></div>
           <div class="sync-field sync-field-wide">
-            <button type="button" class="sync-btn sync-btn-sm" onclick="geocodeAddMap()">Get coordinates from address</button>
-            <span id="addMapGeoMsg" class="sync-status-text" style="margin-left:10px;"></span>
+            <label class="sync-label">Address</label>
+            <textarea class="sync-textarea sync-textarea-text" id="newMapAddress" name="newMapAddress" placeholder="e.g. Friedrichstrasse 1, Berlin, Germany" onblur="geocodeAddMap()"></textarea>
+            <span id="addMapGeoMsg" class="sync-status-text"></span>
           </div>
-          {{else}}
-          <div class="sync-field"><label class="sync-label">X *</label><input class="sync-input" type="text" name="newMapX" value="0" required></div>
-          <div class="sync-field"><label class="sync-label">Y *</label><input class="sync-input" type="text" name="newMapY" value="0" required></div>
-          {{end}}
-          <div class="sync-field sync-field-wide"><label class="sync-label">Address</label><textarea class="sync-textarea sync-textarea-text" id="newMapAddress" name="newMapAddress" placeholder="One line per row (optional; used by the geocode button)"></textarea></div>
+          <div class="sync-field sync-field-wide">
+            <label class="sync-label">Map name (identifier) *</label>
+            <div class="sync-namerow">
+              <span id="addMapFlag" class="sync-flag" style="display:none;"></span>
+              <input class="sync-input" type="text" id="newMapName" name="newMapName" placeholder="auto-filled from address" autocomplete="off">
+            </div>
+          </div>
           <div class="sync-field sync-field-wide"><label class="sync-label">Map image</label><input class="sync-input" type="file" name="image" accept="image/*"></div>
+        </div>
+        <button type="button" class="sync-advanced-toggle" id="addMapAdvancedToggle" onclick="toggleAddMapAdvanced()">Advanced &#9656;</button>
+        <div id="addMapAdvanced" class="sync-form-grid" style="display:none; margin-top:12px;">
+          {{if .WorldMap}}
+          <div class="sync-field"><label class="sync-label">Latitude *</label><input class="sync-input" type="text" id="newMapLat" name="newMapLat" placeholder="auto-filled from address"></div>
+          <div class="sync-field"><label class="sync-label">Longitude *</label><input class="sync-input" type="text" id="newMapLon" name="newMapLon" placeholder="auto-filled from address"></div>
+          {{else}}
+          <div class="sync-field"><label class="sync-label">X *</label><input class="sync-input" type="text" name="newMapX" value="0"></div>
+          <div class="sync-field"><label class="sync-label">Y *</label><input class="sync-input" type="text" name="newMapY" value="0"></div>
+          <input type="hidden" id="newMapLat" name="newMapLat">
+          <input type="hidden" id="newMapLon" name="newMapLon">
+          {{end}}
+          <div class="sync-field"><label class="sync-label">Itemscale *</label><input class="sync-input" type="text" id="newMapItemscale" name="newMapItemscale" value="1"></div>
+          <div class="sync-field"><label class="sync-label">Published *</label><select class="sync-select" name="newMapPublished"><option value="yes" selected>Yes</option><option value="no">No</option></select></div>
+          <div class="sync-field"><label class="sync-label">Country (map flag) *</label><select class="sync-select" id="newMapCountry" name="newMapCountry" onchange="updateAddMapFlagPreview()">{{range .Countryflags}}<option value="{{.}}">{{.}}</option>{{end}}</select></div>
+          <div class="sync-field"><label class="sync-label">Timezone *</label><select class="sync-select" id="newMapTimezone" name="newMapTimezone">{{range .Timezones}}<option value="{{.}}"{{if eq . "Europe/Berlin"}} selected{{end}}>{{.}}</option>{{end}}</select></div>
         </div>
         <div class="sync-form-actions"><button type="submit" class="sync-btn sync-btn-primary">Create map</button></div>
       </form>
@@ -1855,28 +1866,123 @@
   </div>
 
   <script>
-    function openAddMap() { document.getElementById('addMapOverlay').style.display = 'block'; }
-    function closeMapModal(id) { document.getElementById(id).style.display = 'none'; }
     var ADMIN_GEOAPIFY_CONFIGURED = {{if .GeoapifyConfigured}}true{{else}}false{{end}};
-    // geocodeAddMap fills the Latitude/Longitude fields of the Add map modal from
-    // the entered address via Geoapify, or shows a hint when it isn't configured.
+    function closeMapModal(id) { document.getElementById(id).style.display = 'none'; }
+
+    // addMapSlugify turns a free-form name (e.g. a city) into a lowercase map id.
+    function addMapSlugify(name) {
+      return (name || '').toString()
+        .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // strip accents
+        .toLowerCase().replace(/[^a-z0-9]+/g, '');
+    }
+    function setAddMapAdvanced(show) {
+      var box = document.getElementById('addMapAdvanced');
+      var toggle = document.getElementById('addMapAdvancedToggle');
+      if (!box || !toggle) { return; }
+      box.style.display = show ? 'grid' : 'none';
+      toggle.classList.toggle('open', show);
+      toggle.innerHTML = show ? 'Advanced \u25BE' : 'Advanced \u25B8';
+    }
+    function toggleAddMapAdvanced() {
+      var box = document.getElementById('addMapAdvanced');
+      setAddMapAdvanced(box.style.display === 'none');
+    }
+    // updateAddMapFlagPreview reflects the chosen country flag next to the name.
+    function updateAddMapFlagPreview() {
+      var sel = document.getElementById('newMapCountry');
+      var flag = document.getElementById('addMapFlag');
+      if (!flag) { return; }
+      var cc = sel ? sel.value : '';
+      if (cc && cc !== 'none' && cc !== '') {
+        flag.style.backgroundImage = 'url(../countryflags/' + cc + '.svg)';
+        flag.style.display = 'inline-block';
+      } else {
+        flag.style.backgroundImage = '';
+        flag.style.display = 'none';
+      }
+    }
+
+    // openAddMap resets the modal, loads the full timezone list (so a geocoded
+    // timezone can always be matched) and shows the panel.
+    function openAddMap() {
+      var byId = function (id) { return document.getElementById(id); };
+      if (byId('newMapAddress')) { byId('newMapAddress').value = ''; }
+      if (byId('newMapName')) { byId('newMapName').value = ''; }
+      if (byId('newMapLat')) { byId('newMapLat').value = ''; }
+      if (byId('newMapLon')) { byId('newMapLon').value = ''; }
+      if (byId('newMapItemscale')) { byId('newMapItemscale').value = '1'; }
+      var msg = byId('addMapGeoMsg');
+      if (msg) { msg.textContent = ''; msg.style.color = ''; }
+      updateAddMapFlagPreview();
+
+      var tz = byId('newMapTimezone');
+      if (tz) {
+        fetch('../tools/timezones.json', { credentials: 'same-origin' })
+          .then(function (r) { return r.json(); })
+          .then(function (list) {
+            var cur = tz.value || 'Europe/Berlin';
+            var html = '';
+            for (var i = 0; i < list.length; i++) {
+              html += '<option value="' + list[i] + '"' + (list[i] === cur ? ' selected' : '') + '>' + list[i] + '</option>';
+            }
+            tz.innerHTML = html;
+          })
+          .catch(function () { /* keep the server-rendered fallback list */ });
+      }
+
+      // Collapse Advanced when geocoding is available; otherwise open it so the
+      // coordinates can be entered by hand.
+      setAddMapAdvanced(!ADMIN_GEOAPIFY_CONFIGURED);
+      if (!ADMIN_GEOAPIFY_CONFIGURED && msg) {
+        msg.style.color = 'var(--sy-warn)';
+        msg.textContent = 'Geocoding is not configured. Enter coordinates manually under Advanced.';
+      }
+      byId('addMapOverlay').style.display = 'block';
+    }
+
+    // geocodeAddMap resolves the entered address and auto-fills the coordinates,
+    // the country flag, the timezone and a suggested map name.
     function geocodeAddMap() {
       var msg = document.getElementById('addMapGeoMsg');
-      var configured = (typeof ADMIN_GEOAPIFY_CONFIGURED !== 'undefined') && ADMIN_GEOAPIFY_CONFIGURED;
-      if (!configured) {
+      if (!ADMIN_GEOAPIFY_CONFIGURED) {
         msg.style.color = 'var(--sy-warn)';
-        msg.textContent = 'Geoapify is not set up. Add an API key under Sync \u2192 Geocoding, or enter coordinates manually.';
+        msg.textContent = 'Geocoding is not configured. Enter coordinates manually under Advanced.';
+        setAddMapAdvanced(true);
         return;
       }
       var addr = (document.getElementById('newMapAddress').value || '').replace(/\s+/g, ' ').trim();
-      if (!addr) { msg.style.color = 'var(--sy-warn)'; msg.textContent = 'Enter an address first.'; return; }
+      if (!addr) { return; }
       msg.style.color = ''; msg.textContent = 'Looking up\u2026';
       fetch('../rest/geo/test?address=' + encodeURIComponent(addr), { credentials: 'same-origin' })
         .then(function (r) { return r.json(); })
         .then(function (d) {
           if (d && d.ok) {
-            document.getElementById('newMapLat').value = Number(d.lat).toFixed(4);
-            document.getElementById('newMapLon').value = Number(d.lon).toFixed(4);
+            var lat = document.getElementById('newMapLat');
+            var lon = document.getElementById('newMapLon');
+            if (lat) { lat.value = Number(d.lat).toFixed(4); }
+            if (lon) { lon.value = Number(d.lon).toFixed(4); }
+            // Country flag, if we have a matching option.
+            if (d.country) {
+              var mf = document.getElementById('newMapCountry');
+              if (mf) {
+                for (var i = 0; i < mf.options.length; i++) {
+                  if (mf.options[i].value === d.country) { mf.value = d.country; break; }
+                }
+                updateAddMapFlagPreview();
+              }
+            }
+            // Timezone, if returned and present in the select.
+            if (d.timezone) {
+              var tz = document.getElementById('newMapTimezone');
+              if (tz) {
+                for (var j = 0; j < tz.options.length; j++) {
+                  if (tz.options[j].value === d.timezone) { tz.value = d.timezone; break; }
+                }
+              }
+            }
+            // Suggest a map name from the city when the user has not typed one.
+            var nm = document.getElementById('newMapName');
+            if (nm && nm.value.trim() === '' && d.city) { nm.value = addMapSlugify(d.city); }
             msg.style.color = 'var(--sy-ok)';
             msg.textContent = 'Found: ' + (d.formatted || (Number(d.lat).toFixed(4) + ', ' + Number(d.lon).toFixed(4)));
           } else {
@@ -1886,7 +1992,34 @@
         })
         .catch(function () { msg.style.color = 'var(--sy-danger)'; msg.textContent = 'Lookup failed (request error).'; });
     }
-    function openEditMap(btn) {
+
+    // validateAddMap checks the required fields before submit and expands the
+    // Advanced section (where most of them live) if anything is missing.
+    function validateAddMap() {
+      var msg = document.getElementById('addMapGeoMsg');
+      var setErr = function (text, expand) {
+        if (expand) { setAddMapAdvanced(true); }
+        if (msg) { msg.style.color = 'var(--sy-danger)'; msg.textContent = text; }
+        return false;
+      };
+      var nm = document.getElementById('newMapName');
+      var name = addMapSlugify(nm ? nm.value : '');
+      if (nm) { nm.value = name; }
+      if (name === '') { if (nm) { nm.focus(); } return setErr('Please enter a map name.', false); }
+      {{if .WorldMap}}
+      var lat = document.getElementById('newMapLat');
+      var lon = document.getElementById('newMapLon');
+      if (!lat.value.trim() || !lon.value.trim()) {
+        return setErr('Coordinates are missing. Enter an address to look them up, or set them under Advanced.', true);
+      }
+      {{end}}
+      var tz = document.getElementById('newMapTimezone');
+      if (tz && tz.value === '') { return setErr('Please choose a timezone under Advanced.', true); }
+      var cc = document.getElementById('newMapCountry');
+      if (cc && (cc.value === '' || cc.value === 'none')) { return setErr('Please choose a country (map flag) under Advanced.', true); }
+      return true;
+    }
+
       var d = btn.dataset;
       document.getElementById('editMapOrigName').value = d.name;
       document.getElementById('editMapName').value = d.name;
